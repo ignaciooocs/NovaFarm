@@ -1,0 +1,43 @@
+# dependencies
+node_modules/
+
+# env files
+.env
+.env.local
+.env.*.local
+
+# logs
+*.log
+npm-debug.*
+yarn-debug.*
+yarn-error.*
+pnpm-debug.log*
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/*
+!.vscode/extensions.json
+.idea/
+
+# --- server-app (NestJS) ---
+server-app/dist/
+
+# --- ui-app (Expo) ---
+ui-app/.expo/
+ui-app/dist/
+ui-app/web-build/
+ui-app/expo-env.d.ts
+ui-app/.kotlin/
+ui-app/*.orig.*
+ui-app/*.jks
+ui-app/*.p8
+ui-app/*.p12
+ui-app/*.key
+ui-app/*.mobileprovision
+ui-app/.metro-health-check*
+ui-app/*.tsbuildinfo
+ui-app/ios/
+ui-app/android/

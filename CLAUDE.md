@@ -59,6 +59,35 @@ Adapted from the original relational DDL in REQUIREMENTS.md §4 — same busines
 - `harvesterWorkday` — `{ _id, farmId, workdayId, harvesterId, workdayNumber, addedAt, syncedOffline }` — the day's roster (which harvesters are working that workday), decoupled from `harvestEntries` so someone shows up in the recorder's list before their first delivery. `workdayNumber` is a per-workday correlative (1, 2, 3...) assigned locally on-device (not a server-issued global sequence) so it works fully offline — unique per `workdayId`, never a global worker ID. `farmId` is denormalized from the workday (cheap — already in memory on-device) so tenant-filtered queries never need a `$lookup`.
 - `harvestEntries` — `{ _id, farmId, workdayId, harvesterId, measurementUnitId, unitCount, totalKg, recordedAt, syncedOffline }` — references `harvesterId`+`workdayId` directly (not via `harvesterWorkday._id`) to avoid an extra lookup in the local write hot path. `farmId` denormalized for the same reason as above — this is the highest-volume collection in the system, so every query here needs tenant scoping without a join.
 
+### DTO structure (server-app)
+
+Every entity module owns a `dto/` folder, structured by direction first, then by action — only create the files an implemented endpoint actually needs, don't pre-generate the full set:
+
+```
+src/<entity>/
+  dto/
+    request/
+      create-<entity>-request.dto.ts        # export class Create<Entity>RequestDto
+      find-<entity>-request.dto.ts          # export class Find<Entity>RequestDto
+      find-by-id-<entity>-request.dto.ts    # export class FindById<Entity>RequestDto
+    response/
+      create-<entity>-response.dto.ts       # export class Create<Entity>ResponseDto
+      find-<entity>-response.dto.ts         # export class Find<Entity>ResponseDto
+      find-by-id-<entity>-response.dto.ts   # export class FindById<Entity>ResponseDto
+    types/                                   # optional — only if the module needs a standalone type/interface that doesn't fit the entity/request/response split
+    <entity>.dto.ts                          # export class <Entity>Dto — the entity's canonical shape
+    index.ts                                 # barrel — re-exports everything under dto/
+  schemas/<entity>.schema.ts
+  <entity>.module.ts
+```
+
+Rules:
+- One DTO class per file. The filename is kebab-case and matches the exported class name 1:1 (e.g. `create-farm-response.dto.ts` exports `CreateFarmResponseDto`).
+- Split by direction first (`request/` = what the client sends, `response/` = what the endpoint returns), then by action inside each (`create`, `find`, `find-by-id`, `update`, ...), mirroring the controller's operations.
+- `<entity>.dto.ts` (e.g. `farm.dto.ts` → `FarmDto`) is the module's canonical DTO: the entity's shape independent of any specific action. Request/response DTOs for individual actions are typed against it (extend or compose from `<Entity>Dto`) instead of re-declaring the same fields and `class-validator` decorators per action — a field added to the entity's shape shouldn't require hunting down every action's DTO separately.
+- `types/` is optional — add it only when a module needs a standalone type/interface that isn't itself a request, a response, or the entity shape.
+- Other layers (controller, service, other modules) import from `<entity>/dto` (the barrel), never by reaching into `dto/response/...` or `dto/request/...` directly.
+
 ### Key behavioral constraints that should drive design decisions
 
 - **Offline-first is non-negotiable**: all writes during a workday happen locally first in `ui-app`'s SQLite store; server sync is a distinct, explicit action.

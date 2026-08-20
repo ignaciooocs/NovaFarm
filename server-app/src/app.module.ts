@@ -1,9 +1,30 @@
 import { Module } from '@nestjs/common';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
+import { ConfigModule } from '@nestjs/config';
+import { DatabaseModule } from './database/database.module';
+import { FarmsModule } from './farms/farms.module';
+import { UsersModule } from './users/users.module';
+import { HarvestersModule } from './harvesters/harvesters.module';
+import { FruitsModule } from './fruits/fruits.module';
+import { MeasurementUnitsModule } from './measurement-units/measurement-units.module';
+import { WorkdaysModule } from './workdays/workdays.module';
+import { HarvesterWorkdayModule } from './harvester-workday/harvester-workday.module';
+import { HarvestEntriesModule } from './harvest-entries/harvest-entries.module';
 
 @Module({
-  imports: [],
+  imports: [
+    ConfigModule.forRoot({ isGlobal: true, envFilePath: '.env' }),
+    DatabaseModule,
+    FarmsModule,
+    UsersModule,
+    HarvestersModule,
+    FruitsModule,
+    MeasurementUnitsModule,
+    WorkdaysModule,
+    HarvesterWorkdayModule,
+    HarvestEntriesModule,
+  ],
   controllers: [AppController],
   providers: [AppService],
 })

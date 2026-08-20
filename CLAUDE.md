@@ -4,11 +4,11 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Status
 
-The tech stack has been chosen and both apps are scaffolded (initial boilerplate only, no domain features implemented yet). Full requirements: [docs/REQUIREMENTS.md](docs/REQUIREMENTS.md) (written in Spanish). The Mongo-based domain model below supersedes the SQL DDL in that document — REQUIREMENTS.md still describes the original relational proposal and hasn't been updated yet.
+The tech stack has been chosen and both apps are scaffolded. `server-app` has one real end-to-end vertical slice implemented — `POST /farms` (schema → DTOs → service → controller, Swagger-documented) — as the reference implementation of the conventions below; every other entity module still has only a schema + a module exporting `MongooseModule`, no DTOs or controllers yet. `ui-app` is still boilerplate only (Expo Router entry + root layout), no domain screens.
+
+Full requirements: [docs/REQUIREMENTS.md](docs/REQUIREMENTS.md) (written in Spanish). The Mongo-based domain model below supersedes the SQL DDL in that document — REQUIREMENTS.md still describes the original relational proposal and hasn't been updated yet. [docs/diagrams/arquitectura.md](docs/diagrams/arquitectura.md) records architectural decisions beyond REQUIREMENTS.md — module boundaries, API versioning, offline-sync/idempotency design, deployment posture — treat it as decided direction, not current state; several of its decisions aren't implemented yet (see below).
 
 **Naming convention**: entity/collection names, field names, enum values, function/variable names — everything at the code level — is in English. This is a deliberate split from `ui-app`'s field-facing copy, which stays in Spanish (RNF-02: the terminology field workers actually use — "Anotar", "Tarro", "Vuelta" — not generic technical terms). Code in English, UI copy localized to the end user; don't let one leak into the other (e.g. don't name a collection `cosechadores`, and don't hardcode an English button label a Chilean field worker would read).
-
-There is no git repository initialized yet.
 
 ## Project Overview
 
@@ -23,6 +23,8 @@ Two independent apps, no shared workspace/monorepo tooling between them:
 
 Both apps use **pnpm** (pinned via `packageManager` in each `package.json`, currently `pnpm@10.17.0`), not npm — no `package-lock.json`, use `pnpm-lock.yaml`.
 
+`server-app` is a modular monolith (one deployable, feature modules talking in-process via Nest DI — not microservices) — see [arquitectura.md §1](docs/diagrams/arquitectura.md) for why. One seam to watch: every entity module today exports raw `MongooseModule` (e.g. `FarmsModule`), which lets any importer bypass the owning module's business rules via direct `@InjectModel`. The intended convention going forward is each module exports its own `*Service` with purpose-built methods instead — cross-module reads/writes should go through that service, not a shared Mongoose model.
+
 ### Commands
 
 **server-app** (NestJS):
@@ -34,6 +36,7 @@ pnpm test           # jest unit tests
 pnpm test:e2e        # jest e2e tests (test/*.e2e-spec.ts)
 pnpm test -- <path>   # run a single test file
 ```
+`server-app` needs a reachable MongoDB before `start:dev`/`start` finishes booting — `MongooseModule.forRootAsync` in `src/database/database.module.ts` blocks startup until it connects. Set `MONGODB_URI_ATLAS` in `server-app/.env` (gitignored), or run the local Mongo defined in `server-app/docker-compose.yml`.
 
 **ui-app** (Expo):
 ```
@@ -45,6 +48,8 @@ pnpm web
 `ui-app/.npmrc` sets `node-linker=hoisted` — required for Metro's module resolution to work correctly with pnpm's non-flat `node_modules` layout; don't remove it without testing the Metro bundler still resolves everything.
 
 `ui-app/AGENTS.md` (referenced from `ui-app/CLAUDE.md`) flags that Expo APIs have changed recently — check the versioned docs at the SDK version in `ui-app/package.json` (`expo` dependency) before writing Expo-specific code.
+
+`pnpm generate:api` (in `ui-app/`) regenerates the typed API client from `server-app`'s live OpenAPI spec via `orval` (`orval.config.js`) — **requires `server-app` running locally** (reads `http://localhost:3000/api-docs-json`, overridable via `ANOTAYA_API_SPEC_URL`). Generates axios-based client functions into `ui-app/api/generated/` (one file per controller tag, e.g. `farms.ts`), routed through the shared instance in `ui-app/api/axios-instance.ts` (`AXIOS_INSTANCE` — configure `baseURL`/auth interceptors there, not per call site). Generated output is committed to git, not gitignored — regenerating requires a running server, so a fresh clone would otherwise have no usable client until someone stands up `server-app` + Mongo first. Re-run it after any DTO/controller change in `server-app`.
 
 ### Data model (MongoDB collections, server-app)
 
@@ -59,6 +64,41 @@ Adapted from the original relational DDL in REQUIREMENTS.md §4 — same busines
 - `harvesterWorkday` — `{ _id, farmId, workdayId, harvesterId, workdayNumber, addedAt, syncedOffline }` — the day's roster (which harvesters are working that workday), decoupled from `harvestEntries` so someone shows up in the recorder's list before their first delivery. `workdayNumber` is a per-workday correlative (1, 2, 3...) assigned locally on-device (not a server-issued global sequence) so it works fully offline — unique per `workdayId`, never a global worker ID. `farmId` is denormalized from the workday (cheap — already in memory on-device) so tenant-filtered queries never need a `$lookup`.
 - `harvestEntries` — `{ _id, farmId, workdayId, harvesterId, measurementUnitId, unitCount, totalKg, recordedAt, syncedOffline }` — references `harvesterId`+`workdayId` directly (not via `harvesterWorkday._id`) to avoid an extra lookup in the local write hot path. `farmId` denormalized for the same reason as above — this is the highest-volume collection in the system, so every query here needs tenant scoping without a join.
 
+### API layer (server-app)
+
+`main.ts` wires two things globally rather than per-controller: a `ValidationPipe` (`whitelist`, `transform`, `forbidNonWhitelisted` — a client can't smuggle in a server-assigned field, e.g. `farms.invitationCode`), and `@nestjs/swagger`, which auto-documents any DTO decorated with `@ApiProperty()` at `/api-docs` (mounted only when `NODE_ENV !== 'production'`).
+
+Per [arquitectura.md §2](docs/diagrams/arquitectura.md), the API is meant to be versioned from the first real endpoint (`/api/v1/...`) — not yet applied (`farms.controller.ts` currently mounts unversioned at `/farms`). Fix this before adding a second controller; retrofitting a prefix after `ui-app` starts calling unversioned routes is exactly the pain the decision exists to avoid.
+
+### DTO structure (server-app)
+
+Every entity module owns a `dto/` folder, structured by direction first, then by action — only create the files an implemented endpoint actually needs, don't pre-generate the full set. `server-app/src/farms/` is a working reference implementation of this structure end to end (schema → DTOs → service → controller) — copy its shape for the next module rather than re-deriving it:
+
+```
+src/<entity>/
+  dto/
+    request/
+      create-<entity>-request.dto.ts        # export class Create<Entity>RequestDto
+      find-<entity>-request.dto.ts          # export class Find<Entity>RequestDto
+      find-by-id-<entity>-request.dto.ts    # export class FindById<Entity>RequestDto
+    response/
+      create-<entity>-response.dto.ts       # export class Create<Entity>ResponseDto
+      find-<entity>-response.dto.ts         # export class Find<Entity>ResponseDto
+      find-by-id-<entity>-response.dto.ts   # export class FindById<Entity>ResponseDto
+    types/                                   # optional — only if the module needs a standalone type/interface that doesn't fit the entity/request/response split
+    <entity>.dto.ts                          # export class <Entity>Dto — the entity's canonical shape
+    index.ts                                 # barrel — re-exports everything under dto/
+  schemas/<entity>.schema.ts
+  <entity>.module.ts
+```
+
+Rules:
+- One DTO class per file. The filename is kebab-case and matches the exported class name 1:1 (e.g. `create-farm-response.dto.ts` exports `CreateFarmResponseDto`).
+- Split by direction first (`request/` = what the client sends, `response/` = what the endpoint returns), then by action inside each (`create`, `find`, `find-by-id`, `update`, ...), mirroring the controller's operations.
+- `<entity>.dto.ts` (e.g. `farm.dto.ts` → `FarmDto`) is the module's canonical DTO: the entity's shape independent of any specific action. Request/response DTOs for individual actions are typed against it (extend or compose from `<Entity>Dto`) instead of re-declaring the same fields and `class-validator` decorators per action — a field added to the entity's shape shouldn't require hunting down every action's DTO separately.
+- `types/` is optional — add it only when a module needs a standalone type/interface that isn't itself a request, a response, or the entity shape.
+- Other layers (controller, service, other modules) import from `<entity>/dto` (the barrel), never by reaching into `dto/response/...` or `dto/request/...` directly.
+
 ### Key behavioral constraints that should drive design decisions
 
 - **Offline-first is non-negotiable**: all writes during a workday happen locally first in `ui-app`'s SQLite store; server sync is a distinct, explicit action.
@@ -66,8 +106,8 @@ Adapted from the original relational DDL in REQUIREMENTS.md §4 — same busines
 - **Everything configurable at runtime**: fruits, units of measure, and their kg conversion factors are data-driven (Mongo documents), never hardcoded — adding a new fruit or container type must not require code changes in `server-app`.
 - **Dual recording modes**: container-counting (converted via `kgFactor`) vs. direct-weighing (weight entered straight from a scale) — the same workday/UI should support switching modes. In the field UI these are "conteo de envases" / "pesaje directo" (Spanish copy, see below); at the code level they're just `unitCount` × `kgFactor` vs. a unit with `kgFactor = 1`.
 - **Field UX** (`ui-app`): large touch targets usable one-handed and in direct sunlight, high-contrast display, terminology matching field workers' actual Spanish vocabulary ("Anotar", "Tarro", "Vuelta") rather than generic technical terms — see the naming-convention note above: this is UI copy, not a reason to name entities/fields in Spanish.
-- **Multi-tenant isolation is non-negotiable**: every collection carries `farmId`, and every `server-app` query must filter by it directly — never rely on a transitive join (e.g. through `recorderId`) to scope by tenant, since nullable fields like `workdays.recorderId` (guest mode) break that path. A forgotten `farmId` filter is a cross-tenant data leak, not just a bug.
+- **Multi-tenant isolation is non-negotiable**: every collection carries `farmId`, and every `server-app` query must filter by it directly — never rely on a transitive join (e.g. through `recorderId`) to scope by tenant, since nullable fields like `workdays.recorderId` (guest mode) break that path. A forgotten `farmId` filter is a cross-tenant data leak, not just a bug. Planned enforcement mechanism (not built yet, no `AuthModule` exists): a `FarmScopeGuard` reading `farmId` off the JWT + a `@CurrentFarm()` param decorator applied to every controller, so a missing guard is visible at the route level instead of a bug buried in a service method — see [arquitectura.md §1](docs/diagrams/arquitectura.md).
 
 ### Deployment target (not yet configured)
 
-`server-app` is intended for a managed PaaS (Railway or Render) with MongoDB Atlas as the database — no infra/CI is set up yet, and no Atlas cluster or connection string has been wired into the app.
+`server-app` is intended for a managed PaaS (Railway or Render), on an always-on paid tier (not sleep/free — sync traffic is bursty and infrequent, so a cold start would hit exactly when a user needs the one network-dependent moment in their workflow). A real MongoDB Atlas connection string is now wired for local development via `MONGODB_URI_ATLAS` in `server-app/.env` (gitignored); hosting, a `Dockerfile`, and CI/CD are still not set up. Full reasoning — security posture, secrets handling, CORS for `ui-app`'s web target, known gaps — in [arquitectura.md §3–5](docs/diagrams/arquitectura.md).

@@ -1,0 +1,540 @@
+<!doctype html>
+<title>Harvest Pipeline</title>
+<style>
+  :root {
+    --bg: #EAEFDF;
+    --surface: #FBFCF7;
+    --surface-2: #F1F5E7;
+    --border: #CBD6B4;
+    --text: #1C2317;
+    --text-muted: #5E6B54;
+    --text-faint: #8B9781;
+    --accent: #5C8A00;
+    --accent-strong: #3F6300;
+    --accent-soft: #E3EFC4;
+    --warm: #B5650B;
+    --warm-soft: #F5E2C4;
+    --ruled: rgba(92, 138, 0, 0.06);
+    --shadow: 0 1px 2px rgba(28, 35, 23, 0.07), 0 10px 28px -14px rgba(28, 35, 23, 0.22);
+    --font-display: "Arial Black", "Helvetica Neue", Arial, sans-serif;
+    --font-body: -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    --font-mono: "Cascadia Code", "SF Mono", Consolas, "Liberation Mono", Menlo, monospace;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #10140B;
+      --surface: #171C10;
+      --surface-2: #1C2214;
+      --border: #313B22;
+      --text: #EDF1E3;
+      --text-muted: #A3AE92;
+      --text-faint: #707C61;
+      --accent: #9FD639;
+      --accent-strong: #B8ED4E;
+      --accent-soft: #26330F;
+      --warm: #E3A552;
+      --warm-soft: #3A2A14;
+      --ruled: rgba(159, 214, 57, 0.05);
+      --shadow: 0 1px 2px rgba(0, 0, 0, 0.45), 0 14px 34px -16px rgba(0, 0, 0, 0.65);
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #10140B;
+    --surface: #171C10;
+    --surface-2: #1C2214;
+    --border: #313B22;
+    --text: #EDF1E3;
+    --text-muted: #A3AE92;
+    --text-faint: #707C61;
+    --accent: #9FD639;
+    --accent-strong: #B8ED4E;
+    --accent-soft: #26330F;
+    --warm: #E3A552;
+    --warm-soft: #3A2A14;
+    --ruled: rgba(159, 214, 57, 0.05);
+    --shadow: 0 1px 2px rgba(0, 0, 0, 0.45), 0 14px 34px -16px rgba(0, 0, 0, 0.65);
+  }
+
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body {
+    background:
+      repeating-linear-gradient(var(--bg), var(--bg) 27px, var(--ruled) 27px, var(--ruled) 28px),
+      var(--bg);
+    color: var(--text);
+    font-family: var(--font-body);
+    -webkit-font-smoothing: antialiased;
+  }
+  @media (prefers-reduced-motion: no-preference) {
+    .page { animation: rise 0.5s ease-out both; }
+  }
+  @keyframes rise {
+    from { opacity: 0; transform: translateY(6px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  .page {
+    max-width: 1180px;
+    margin: 0 auto;
+    padding: 56px 28px 72px;
+  }
+
+  header.hero { margin-bottom: 40px; }
+  .eyebrow {
+    font-family: var(--font-mono);
+    font-size: 12px;
+    font-weight: 600;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--accent-strong);
+    margin: 0 0 14px;
+  }
+  h1 {
+    font-family: var(--font-display);
+    font-size: clamp(34px, 5vw, 52px);
+    line-height: 1.02;
+    letter-spacing: -0.01em;
+    margin: 0 0 14px;
+    text-wrap: balance;
+    color: var(--text);
+  }
+  .lede {
+    font-size: 16.5px;
+    line-height: 1.55;
+    color: var(--text-muted);
+    max-width: 66ch;
+    margin: 0 0 22px;
+  }
+  .stats { display: flex; flex-wrap: wrap; gap: 10px; }
+  .stat {
+    font-family: var(--font-mono);
+    font-size: 12.5px;
+    color: var(--text-muted);
+    background: var(--surface-2);
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    padding: 6px 13px;
+  }
+  .stat b { color: var(--text); font-weight: 600; }
+
+  .diagram-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    box-shadow: var(--shadow);
+    padding: 8px;
+    margin-bottom: 14px;
+  }
+  .diagram-scroll { overflow-x: auto; border-radius: 10px; }
+  .diagram-scroll svg { display: block; width: 100%; height: auto; }
+  .diagram-scroll.topo svg { min-width: 980px; }
+  .diagram-caption {
+    font-size: 12.5px;
+    color: var(--text-faint);
+    margin: 0 0 28px;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 14px;
+    align-items: center;
+  }
+  .swatch { display: inline-flex; align-items: center; gap: 6px; }
+  .swatch svg { display: block; }
+
+  svg text { font-family: var(--font-mono); }
+  .topo-title { font-family: var(--font-display); font-size: 14px; letter-spacing: 0.03em; fill: var(--accent); }
+  .topo-title.gap { fill: var(--warm); }
+  .topo-line { font-size: 12px; fill: var(--text-muted); font-family: var(--font-body); }
+  .topo-line.gap { fill: var(--warm); font-weight: 600; }
+  .topo-label { font-size: 10.5px; fill: var(--text-faint); font-family: var(--font-mono); }
+  .rel-label { font-size: 12px; fill: var(--text-muted); font-family: var(--font-body); font-weight: 500; }
+  .box-outer { fill: var(--surface); stroke: var(--border); stroke-width: 1.4; }
+  .box-outer.live { stroke: var(--accent); stroke-width: 1.6; }
+  .box-outer.gap { stroke: var(--warm); stroke-width: 1.4; stroke-dasharray: 5,4; }
+  .box-divider { stroke: var(--border); stroke-width: 1; }
+  .conn-line { stroke: var(--text-faint); stroke-width: 1.4; fill: none; }
+  .conn-mark { stroke: var(--text-faint); stroke-width: 1.4; fill: none; stroke-linecap: round; }
+  .label-pill { fill: var(--bg); }
+
+  .legend {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    padding: 20px 26px;
+    margin-bottom: 28px;
+    box-shadow: var(--shadow);
+  }
+  .legend h2, .notes h2 {
+    font-family: var(--font-body);
+    font-size: 11.5px;
+    font-weight: 700;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--text-faint);
+    margin: 0 0 16px;
+  }
+  .legend-row { display: flex; flex-wrap: wrap; gap: 12px 26px; align-items: center; }
+  .legend-item { display: flex; align-items: center; gap: 9px; font-size: 13px; color: var(--text-muted); }
+
+  section.block { margin-bottom: 36px; }
+  section.block > h2 {
+    font-family: var(--font-body);
+    font-size: 11.5px;
+    font-weight: 700;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--text-faint);
+    margin: 0 0 6px;
+  }
+  section.block > p.block-lede {
+    font-size: 14px;
+    color: var(--text-muted);
+    margin: 0 0 18px;
+    max-width: 66ch;
+  }
+
+  .guard-bar {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    background: var(--accent-soft);
+    border: 1px solid var(--accent);
+    border-radius: 10px;
+    padding: 12px 18px;
+    margin-bottom: 16px;
+    font-size: 13px;
+    color: var(--accent-strong);
+  }
+  .guard-bar b { font-family: var(--font-mono); font-weight: 700; }
+
+  .entity-guide { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 14px; }
+  .entity-guide-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 16px 18px;
+    box-shadow: var(--shadow);
+  }
+  .entity-guide-card h3 {
+    font-family: var(--font-display);
+    font-size: 15px;
+    letter-spacing: 0.02em;
+    color: var(--accent);
+    margin: 0 0 8px;
+  }
+  .entity-guide-card.future h3 { color: var(--warm); }
+  .entity-guide-card p { font-size: 13.5px; line-height: 1.55; color: var(--text-muted); margin: 0; }
+  .entity-guide-card code { font-family: var(--font-mono); font-size: 0.92em; color: var(--accent-strong); }
+
+  .flow { position: relative; padding-left: 4px; }
+  .flow::before {
+    content: "";
+    position: absolute;
+    left: 19px;
+    top: 8px;
+    bottom: 8px;
+    width: 2px;
+    background: var(--border);
+  }
+  .flow-step { position: relative; padding-left: 52px; padding-bottom: 26px; }
+  .flow-step:last-child { padding-bottom: 0; }
+  .flow-num {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    background: var(--surface);
+    border: 1.5px solid var(--accent);
+    color: var(--accent-strong);
+    font-family: var(--font-display);
+    font-size: 15px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .flow-step h3 { font-size: 15.5px; font-weight: 700; margin: 6px 0 5px; color: var(--text); }
+  .flow-step p { font-size: 13.5px; line-height: 1.5; color: var(--text-muted); margin: 0 0 9px; max-width: 64ch; }
+  .flow-chips { display: flex; flex-wrap: wrap; gap: 7px; }
+  .chip-entity { font-family: var(--font-mono); font-size: 11px; color: var(--accent-strong); background: var(--accent-soft); border-radius: 5px; padding: 3px 8px; }
+
+  .notes { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 14px; margin-bottom: 32px; }
+  .note-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-left: 3px solid var(--warm);
+    border-radius: 10px;
+    padding: 16px 18px;
+    box-shadow: var(--shadow);
+  }
+  .note-card.decided { border-left-color: var(--accent); }
+  .note-card h3 { font-family: var(--font-body); font-size: 14.5px; font-weight: 700; margin: 0 0 6px; color: var(--text); }
+  .note-card p { font-size: 13.5px; line-height: 1.5; color: var(--text-muted); margin: 0; }
+  .note-card code { font-family: var(--font-mono); font-size: 0.92em; color: var(--accent-strong); }
+
+  footer {
+    font-size: 12.5px;
+    color: var(--text-faint);
+    border-top: 1px solid var(--border);
+    padding-top: 16px;
+    display: flex;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+  footer code { font-family: var(--font-mono); background: var(--surface-2); border-radius: 4px; padding: 1px 6px; }
+</style>
+
+<div class="page">
+
+  <header class="hero">
+    <p class="eyebrow">AnotaYa · system architecture</p>
+    <h1>Harvest Pipeline</h1>
+    <p class="lede">How <code>ui-app</code> and <code>server-app</code> actually talk to each other, why the backend stays one deployable instead of several, and what has to be true for a week of offline capture to sync cleanly the moment a signal bar shows up. Companion reasoning doc: <code>docs/diagrams/arquitectura.md</code>.</p>
+    <div class="stats">
+      <span class="stat"><b>1</b> backend service — modular monolith</span>
+      <span class="stat">REST + JWT, versioned <b>/api/v1</b></span>
+      <span class="stat">offline capture, <b>explicit</b> sync only</span>
+      <span class="stat"><b>9</b> modules behind one guard</span>
+    </div>
+  </header>
+
+  <section class="block">
+    <h2>System &amp; deployment</h2>
+    <p class="block-lede">The full path from a tap in the field to a row in the database — and everything that has to build, test, and ship it there.</p>
+
+    <div class="diagram-card">
+      <div class="diagram-scroll topo">
+        <svg viewBox="0 0 1160 460" role="img" aria-label="System diagram: ui-app with local SQLite sends chunked, idempotent HTTPS/REST/JWT sync requests to server-app, a NestJS modular monolith in Docker, which writes over TLS to MongoDB Atlas. EAS Build and EAS Update feed ui-app; GitHub Actions runs CI on pull requests and hands off to Railway or Render, which deploys server-app. Only ui-app and server-app exist in the repo today — Atlas, CI, the PaaS, and EAS are all not yet provisioned.">
+
+          <g class="conn-line">
+            <path d="M300,145 H420" />
+            <path d="M740,145 H860" />
+            <path d="M170,310 V230" />
+            <path d="M570,375 H610" />
+            <path d="M695,310 V230" />
+          </g>
+          <g class="conn-mark">
+            <path d="M420,145 L406,137 M420,145 L406,153" />
+            <path d="M860,145 L846,137 M860,145 L846,153" />
+            <path d="M170,230 L161,246 M170,230 L179,246" />
+            <path d="M610,375 L596,367 M610,375 L596,383" />
+            <path d="M695,230 L686,246 M695,230 L704,246" />
+          </g>
+
+          <rect class="label-pill" x="278" y="112" width="164" height="20" rx="5" />
+          <text class="rel-label" x="360" y="126" text-anchor="middle">HTTPS · REST/JSON · JWT</text>
+          <text class="topo-label" x="360" y="163" text-anchor="middle">chunked · idempotent sync</text>
+
+          <rect class="label-pill" x="745" y="112" width="110" height="20" rx="5" />
+          <text class="rel-label" x="800" y="126" text-anchor="middle">TLS · Mongoose</text>
+
+          <text class="topo-label" x="184" y="272">deploys</text>
+          <text class="topo-label" x="709" y="272">deploys</text>
+
+          <!-- ui-app -->
+          <g>
+            <rect class="box-outer live" x="40" y="60" width="260" height="170" rx="10" />
+            <rect x="40" y="60" width="4" height="170" fill="var(--accent)" />
+            <text class="topo-title" x="56" y="84">ui-app</text>
+            <line class="box-divider" x1="40" y1="96" x2="300" y2="96" />
+            <text class="topo-line" x="56" y="114">React Native · Expo Router</text>
+            <text class="topo-line" x="56" y="134">Local SQLite — offline capture</text>
+            <text class="topo-line" x="56" y="154">&lt;100ms writes, no network dep.</text>
+            <text class="topo-line" x="56" y="174">zustand · axios</text>
+          </g>
+
+          <!-- server-app -->
+          <g>
+            <rect class="box-outer live" x="420" y="60" width="320" height="170" rx="10" />
+            <rect x="420" y="60" width="4" height="170" fill="var(--accent)" />
+            <text class="topo-title" x="436" y="84">server-app</text>
+            <line class="box-divider" x1="420" y1="96" x2="740" y2="96" />
+            <text class="topo-line" x="436" y="114">NestJS · modular monolith</text>
+            <text class="topo-line" x="436" y="134">8 feature modules + FarmScopeGuard</text>
+            <text class="topo-line" x="436" y="154">REST /api/v1 · JWT bearer</text>
+            <text class="topo-line gap" x="436" y="174">needs: Dockerfile</text>
+          </g>
+
+          <!-- MongoDB Atlas -->
+          <g>
+            <rect class="box-outer gap" x="860" y="60" width="260" height="170" rx="10" />
+            <text class="topo-title gap" x="876" y="84">MongoDB Atlas</text>
+            <line class="box-divider" x1="860" y1="96" x2="1120" y2="96" />
+            <text class="topo-line" x="876" y="114">Shared tier · TLS enforced</text>
+            <text class="topo-line" x="876" y="134">Access-from-anywhere +</text>
+            <text class="topo-line" x="876" y="154">least-privilege DB user</text>
+            <text class="topo-line gap" x="876" y="174">not provisioned yet</text>
+          </g>
+
+          <!-- EAS -->
+          <g>
+            <rect class="box-outer gap" x="40" y="310" width="260" height="130" rx="10" />
+            <text class="topo-title gap" x="56" y="334">EAS Build / EAS Update</text>
+            <line class="box-divider" x1="40" y1="346" x2="300" y2="346" />
+            <text class="topo-line" x="56" y="364">Native Android/iOS binaries</text>
+            <text class="topo-line" x="56" y="384">OTA updates for JS changes</text>
+            <text class="topo-line gap" x="56" y="404">not configured yet</text>
+          </g>
+
+          <!-- GitHub Actions -->
+          <g>
+            <rect class="box-outer gap" x="420" y="310" width="170" height="130" rx="10" />
+            <text class="topo-title gap" x="436" y="334">GitHub Actions</text>
+            <line class="box-divider" x1="420" y1="346" x2="590" y2="346" />
+            <text class="topo-line" x="436" y="364">lint, build, test</text>
+            <text class="topo-line" x="436" y="384">on every PR</text>
+            <text class="topo-line gap" x="436" y="404">not set up yet</text>
+          </g>
+
+          <!-- Railway / Render -->
+          <g>
+            <rect class="box-outer gap" x="610" y="310" width="170" height="130" rx="10" />
+            <text class="topo-title gap" x="626" y="334">Railway / Render</text>
+            <line class="box-divider" x1="610" y1="346" x2="780" y2="346" />
+            <text class="topo-line" x="626" y="364">Always-on tier</text>
+            <text class="topo-line" x="626" y="384">on merge → main</text>
+            <text class="topo-line gap" x="626" y="404">not chosen yet</text>
+          </g>
+
+        </svg>
+      </div>
+    </div>
+    <p class="diagram-caption">
+      <span class="swatch"><svg width="18" height="12" viewBox="0 0 18 12" aria-hidden="true"><rect x="1" y="1" width="16" height="10" rx="3" fill="none" stroke="var(--accent)" stroke-width="1.6"/></svg> exists in the repo today</span>
+      <span class="swatch"><svg width="18" height="12" viewBox="0 0 18 12" aria-hidden="true"><rect x="1" y="1" width="16" height="10" rx="3" fill="none" stroke="var(--warm)" stroke-width="1.4" stroke-dasharray="3,2.5"/></svg> decided, not provisioned yet</span>
+    </p>
+  </section>
+
+  <section class="block">
+    <h2>Backend module boundaries</h2>
+    <p class="block-lede">One NestJS process, not several services. Every controller sits behind the same tenant guard, and modules only ever reach each other through a published service method — never by importing another module's raw Mongoose model.</p>
+
+    <div class="guard-bar">
+      <b>FarmScopeGuard + @CurrentFarm()</b> — applied to every controller below. Tenant scoping is enforced once, structurally, not re-derived per query.
+    </div>
+
+    <div class="entity-guide">
+      <div class="entity-guide-card future">
+        <h3>AuthModule <span style="font-family:var(--font-mono);font-size:11px;color:var(--warm);">· planned</span></h3>
+        <p>Login, JWT issuance, password hashing (library not chosen yet). Calls into <code>UsersService</code> to verify credentials — the only module allowed to touch <code>User.passwordHash</code>.</p>
+      </div>
+      <div class="entity-guide-card">
+        <h3>FarmsModule</h3>
+        <p>Owns the tenant. Exports <code>FarmsService</code> — create a farm, validate an <code>invitationCode</code>. No other module reads its schema directly.</p>
+      </div>
+      <div class="entity-guide-card">
+        <h3>UsersModule</h3>
+        <p>Owns authenticated users. Exports <code>UsersService</code>. Consumed by <code>AuthModule</code> only.</p>
+      </div>
+      <div class="entity-guide-card">
+        <h3>HarvestersModule</h3>
+        <p>Owns the per-farm worker catalog. Exports <code>HarvestersService.findActiveByFarm()</code>. Consumed by <code>HarvesterWorkdayModule</code> and <code>HarvestEntriesModule</code>.</p>
+      </div>
+      <div class="entity-guide-card">
+        <h3>FruitsModule</h3>
+        <p>Owns the fruit catalog. Exports <code>FruitsService</code>. Consumed by <code>WorkdaysModule</code> to validate <code>fruitId</code> on open.</p>
+      </div>
+      <div class="entity-guide-card">
+        <h3>MeasurementUnitsModule</h3>
+        <p>Owns containers/weighing methods and their <code>kgFactor</code>. Exports <code>MeasurementUnitsService</code>. Consumed by <code>WorkdaysModule</code> and <code>HarvestEntriesModule</code>.</p>
+      </div>
+      <div class="entity-guide-card">
+        <h3>WorkdaysModule</h3>
+        <p>Owns the day's fruit, default unit, and open/closed state. Exports <code>WorkdaysService</code>. Calls into <code>FruitsService</code> and <code>MeasurementUnitsService</code>; consumed by <code>HarvesterWorkdayModule</code> and <code>HarvestEntriesModule</code>.</p>
+      </div>
+      <div class="entity-guide-card">
+        <h3>HarvesterWorkdayModule</h3>
+        <p>Owns the day's roster. Exports <code>HarvesterWorkdayService</code>. Calls into <code>HarvestersService</code> and <code>WorkdaysService</code>.</p>
+      </div>
+      <div class="entity-guide-card">
+        <h3>HarvestEntriesModule</h3>
+        <p>Owns each delivery record — the highest write volume in the system. Exports <code>HarvestEntriesService</code>. Calls into <code>HarvestersService</code>, <code>WorkdaysService</code>, <code>MeasurementUnitsService</code>.</p>
+      </div>
+    </div>
+  </section>
+
+  <section class="block">
+    <h2>Offline-sync flow</h2>
+    <p class="block-lede">The one part of this system that doesn't get to be a normal always-online API. From a tap in the field to a durably-synced row.</p>
+    <div class="flow">
+      <div class="flow-step">
+        <div class="flow-num">1</div>
+        <h3>Capture locally</h3>
+        <p>"Anotar" (+1 / +2 / +5) writes straight to SQLite. Sub-100ms, zero network dependency — the interaction can't wait on a request that might not have anywhere to go (RNF-01).</p>
+        <div class="flow-chips"><span class="chip-entity">SQLite write</span></div>
+      </div>
+      <div class="flow-step">
+        <div class="flow-num">2</div>
+        <h3>Queue grows offline</h3>
+        <p>Nothing blocks on connectivity. The only feedback is a pending-annotations count — "15 anotaciones pendientes de subir" (RF-04.2).</p>
+      </div>
+      <div class="flow-step">
+        <div class="flow-num">3</div>
+        <h3>Recorder triggers sync</h3>
+        <p>Explicit tap on "Sincronizar Jornada." Never automatic, never on a timer (RF-04.3).</p>
+      </div>
+      <div class="flow-step">
+        <div class="flow-num">4</div>
+        <h3>Chunked, idempotent upload</h3>
+        <p>~500 entries per request, each tagged with a client-generated <code>clientEntryId</code>. The server upserts on <code>{workdayId, clientEntryId}</code> — a chunk retried after a dropped connection can't create a duplicate.</p>
+        <div class="flow-chips"><span class="chip-entity">clientEntryId (new field)</span></div>
+      </div>
+      <div class="flow-step">
+        <div class="flow-num">5</div>
+        <h3>Per-item acknowledgment</h3>
+        <p>The response reports created / already-synced / rejected+reason per row — not all-or-nothing. A row against a <code>CLOSED</code> workday is rejected with a specific error the app surfaces to the recorder, not silently dropped or recomputed.</p>
+      </div>
+      <div class="flow-step">
+        <div class="flow-num">6</div>
+        <h3>Local state reconciled</h3>
+        <p>Synced rows are marked <code>syncedOffline: true</code>; rejected rows stay queued for the recorder to see and resolve.</p>
+      </div>
+    </div>
+  </section>
+
+  <section class="block">
+    <h2>Security &amp; open items</h2>
+    <p class="block-lede">Decisions made now, stated plainly — and the gaps that shouldn't be discovered mid-integration instead of here.</p>
+    <div class="notes">
+      <div class="note-card decided">
+        <h3>Atlas stays open, on purpose</h3>
+        <p>"Access from anywhere" + enforced TLS + a least-privilege DB user is the accepted MVP posture — PrivateLink needs an M10+ cluster this project doesn't have yet. Not an oversight; a documented tradeoff.</p>
+      </div>
+      <div class="note-card decided">
+        <h3>nationalId is opt-in, like passwordHash</h3>
+        <p>Worker PII should never ride along on a default roster query — same <code>select: false</code> treatment <code>passwordHash</code> already gets on <code>users</code>.</p>
+      </div>
+      <div class="note-card">
+        <h3>Password hashing — not picked yet</h3>
+        <p>No <code>argon2</code> or <code>bcrypt</code> installed. Needs deciding before <code>AuthModule</code> work starts, not mid-way through it.</p>
+      </div>
+      <div class="note-card">
+        <h3>No rate limiting yet</h3>
+        <p><code>/auth/login</code> is the one endpoint doing password auth over the open internet on a PII-bearing, multi-tenant system — <code>@nestjs/throttler</code> before launch.</p>
+      </div>
+      <div class="note-card">
+        <h3>Decimal128 doesn't serialize for free</h3>
+        <p><code>unitCount</code>, <code>totalKg</code>, <code>kgFactor</code> are BSON <code>Decimal128</code> — without an explicit <code>@Transform</code> on response DTOs, the client receives <code>{"$numberDecimal":"12.34"}</code>, not a plain value.</p>
+      </div>
+      <div class="note-card">
+        <h3>No global ValidationPipe yet</h3>
+        <p><code>main.ts</code> is still just <code>create()</code> + <code>listen()</code>. "DTO-validated" is the target, not the current state.</p>
+      </div>
+      <div class="note-card">
+        <h3>No health check</h3>
+        <p>Both Railway and Render gate deploy/restart on one. Without <code>/health</code>, a broken deploy can be marked healthy.</p>
+      </div>
+      <div class="note-card">
+        <h3>No migration tool decided</h3>
+        <p>Mongoose is schemaless at the DB level, but the <code>clientEntryId</code> addition above is itself a schema change — worth deciding a tool (e.g. <code>migrate-mongo</code>) before real data exists.</p>
+      </div>
+    </div>
+  </section>
+
+  <footer>
+    <span>Full source and reasoning: <code>docs/diagrams/arquitectura.md</code></span>
+    <span>AnotaYa · system architecture</span>
+  </footer>
+
+</div>

@@ -36,7 +36,7 @@ erDiagram
         ObjectId farmId FK
         string name
         string email UK
-        string passwordHash
+        string firebaseUid UK
         string nationalId "optional/nullable"
         string role "recorder | admin"
         boolean active
@@ -116,7 +116,7 @@ No `adminId` field: who administers a farm is derived from `users` where `farmId
 Every user always has a `farmId` — "working independently" simply creates a single-member farm (`type: 'independent'`), nobody is ever left without one. This is different from why `workdays.recorderId` can be null: one is attribution (who recorded it), the other is data isolation (whose data is this) — leaving `farmId` null anywhere would open the door to two "farm-less" users seeing each other's data.
 
 ### `users`
-The **recorder** (or an admin) who uses `ui-app`: logs in with email/password, and that session is then persisted locally on the device — the token is only needed at sync time (RF-04.3), never for local capture (RNF-01). This lets "being logged in" keep working offline indefinitely, since the initial login (which does require connectivity) only happens once per device.
+The **recorder** (or an admin) who uses `ui-app`: authentication is delegated to **Firebase Authentication** — `ui-app` logs in directly against Firebase's client SDK (not against `server-app`), and `server-app` never sees or stores a password, only verifies the resulting Firebase ID token via `firebase-admin`. `farmId`/`role` travel as custom claims on that token. `firebaseUid` is the link from this document back to the corresponding Firebase user. That session is then persisted locally on the device — the token is only needed at sync time (RF-04.3), never for local capture (RNF-01). This lets "being logged in" keep working offline indefinitely: the initial login (which does require connectivity) only happens once per device, and the Firebase SDK refreshes the token in the background afterward, which reinforces this argument rather than weakening it.
 
 `workdays.recorderId` is **optional/nullable**: the app also supports a no-account guest mode, so field registration is never blocked. A workday with no `recorderId` simply stays unattributed until that recorder logs in — analogous to how `harvesters` tolerates creating new records when in doubt (see note below): here too, not blocking the field workflow takes priority over having perfect attribution from the first moment.
 
@@ -199,7 +199,7 @@ Changing farms or roles after creation doesn't require any schema change (they'r
 ## Pending / out of scope for this diagram
 
 - Local SQLite store model in `ui-app` (not implemented yet) — once it exists, it should be documented separately since it may include additional sync columns (e.g. `dirty`, `syncedAt`, retry queue) with no 1:1 equivalent in the server's Mongo model.
-- Concrete token mechanism (access JWT + refresh, expiration times, where the refresh token is stored in `ui-app`) — the data model already accounts for `users`, but the session/token design itself isn't defined yet.
+- ~~Concrete token mechanism (access JWT + refresh, expiration times, where the refresh token is stored in `ui-app`)~~ — **resolved**: authentication moved to Firebase Authentication (see `users` above). `ui-app` authenticates directly against Firebase's client SDK, which owns token issuance/refresh/local storage; `server-app` only verifies the ID token via `firebase-admin` at sync time. `users.firebaseUid` is the resulting link field.
 - Role-specific permissions (what an `admin` can do that a `recorder` can't) — only the field exists, not the authorization logic.
 - Whether several devices can share the same workday (today it's assumed one device per workday, see the `workdayNumber` note).
 - Multi-admin per farm — the schema already allows it implicitly (several `users` with the same `farmId` and `role: 'admin'`), but the invite/manage UI for it doesn't exist.

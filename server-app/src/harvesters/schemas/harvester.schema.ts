@@ -17,7 +17,7 @@ export class Harvester {
   @Prop()
   nickname?: string;
 
-  @Prop()
+  @Prop({ select: false })
   nationalId?: string;
 
   @Prop({ required: true, default: true })

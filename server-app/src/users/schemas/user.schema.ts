@@ -14,9 +14,10 @@ export class User {
   @Prop({ required: true, unique: true, trim: true, lowercase: true })
   email!: string;
 
-  // select: false — never returned by default queries; opt in explicitly (.select('+passwordHash')) for auth checks
-  @Prop({ required: true, select: false })
-  passwordHash!: string;
+  // Firebase Authentication uid — identity lives in Firebase, this is the
+  // link back to this user's document. server-app never stores credentials.
+  @Prop({ required: true, unique: true, index: true })
+  firebaseUid!: string;
 
   @Prop()
   nationalId?: string;

@@ -14,11 +14,20 @@ async function bootstrap() {
     }),
   );
 
+  // Per arquitectura.md §2, the API is versioned from the first real
+  // endpoint: every controller route is served under /api/v1/...
+  // Note: SwaggerModule.setup() below mounts its routes directly on the
+  // underlying HTTP adapter rather than through Nest's controller-routing
+  // pipeline, so this prefix never applies to it — /api-docs keeps working
+  // unprefixed without needing an explicit exclude here.
+  app.setGlobalPrefix('api/v1');
+
   if (process.env.NODE_ENV !== 'production') {
     const config = new DocumentBuilder()
       .setTitle('AnotaYa API')
       .setDescription('API del backend de AnotaYa (server-app)')
       .setVersion('1.0')
+      .addBearerAuth()
       .build();
     const document = SwaggerModule.createDocument(app, config);
     SwaggerModule.setup('api-docs', app, document);

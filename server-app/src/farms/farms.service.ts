@@ -6,8 +6,7 @@ import { Farm, FarmDocument } from './schemas/farm.schema';
 import { CreateFarmRequestDto, FarmDto } from './dto';
 
 const INVITATION_CODE_LENGTH = 8;
-const INVITATION_CODE_ALPHABET =
-  'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; // no 0/O/1/I to avoid ambiguity when read aloud/typed
+const INVITATION_CODE_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; // no 0/O/1/I to avoid ambiguity when read aloud/typed
 const MAX_INVITATION_CODE_ATTEMPTS = 5;
 
 // Mongo duplicate-key error code.
@@ -22,11 +21,7 @@ export class FarmsService {
   async create(dto: CreateFarmRequestDto): Promise<FarmDto> {
     let lastError: unknown;
 
-    for (
-      let attempt = 0;
-      attempt < MAX_INVITATION_CODE_ATTEMPTS;
-      attempt++
-    ) {
+    for (let attempt = 0; attempt < MAX_INVITATION_CODE_ATTEMPTS; attempt++) {
       const invitationCode = this.generateInvitationCode();
 
       try {
@@ -54,12 +49,19 @@ export class FarmsService {
     );
   }
 
+  async findActiveByInvitationCode(code: string): Promise<FarmDto | null> {
+    const found = await this.farmModel
+      .findOne({ invitationCode: code, active: true })
+      .exec();
+
+    return found ? this.toDto(found) : null;
+  }
+
   private generateInvitationCode(): string {
     let code = '';
     for (let i = 0; i < INVITATION_CODE_LENGTH; i++) {
-      code += INVITATION_CODE_ALPHABET[
-        randomInt(INVITATION_CODE_ALPHABET.length)
-      ];
+      code +=
+        INVITATION_CODE_ALPHABET[randomInt(INVITATION_CODE_ALPHABET.length)];
     }
     return code;
   }

@@ -3,6 +3,7 @@ import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { ConfigModule } from '@nestjs/config';
 import { DatabaseModule } from './database/database.module';
+import { AuthModule } from './auth/auth.module';
 import { FarmsModule } from './farms/farms.module';
 import { UsersModule } from './users/users.module';
 import { HarvestersModule } from './harvesters/harvesters.module';
@@ -16,6 +17,7 @@ import { HarvestEntriesModule } from './harvest-entries/harvest-entries.module';
   imports: [
     ConfigModule.forRoot({ isGlobal: true, envFilePath: '.env' }),
     DatabaseModule,
+    AuthModule,
     FarmsModule,
     UsersModule,
     HarvestersModule,

@@ -25,6 +25,7 @@ Thumbs.db
 
 # --- server-app (NestJS) ---
 server-app/dist/
+server-app/*firebase-adminsdk*.json
 
 # --- ui-app (Expo) ---
 ui-app/.expo/

@@ -10,6 +10,6 @@ import { FarmsService } from './farms.service';
   ],
   controllers: [FarmsController],
   providers: [FarmsService],
-  exports: [MongooseModule],
+  exports: [MongooseModule, FarmsService],
 })
 export class FarmsModule {}

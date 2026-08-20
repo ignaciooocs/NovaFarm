@@ -36,7 +36,9 @@ pnpm test           # jest unit tests
 pnpm test:e2e        # jest e2e tests (test/*.e2e-spec.ts)
 pnpm test -- <path>   # run a single test file
 ```
-`server-app` needs a reachable MongoDB before `start:dev`/`start` finishes booting — `MongooseModule.forRootAsync` in `src/database/database.module.ts` blocks startup until it connects. Set `MONGODB_URI_ATLAS` in `server-app/.env` (gitignored), or run the local Mongo defined in `server-app/docker-compose.yml`.
+`server-app` needs a reachable MongoDB before `start:dev`/`start` finishes booting — `MongooseModule.forRootAsync` in `src/database/database.module.ts` blocks startup until it connects. Either set `MONGODB_URI_ATLAS` in `server-app/.env` (gitignored, see `.env.example`) and run `pnpm start:dev` on the host, or run `docker compose up` in `server-app/` — this builds the `dev` stage of `Dockerfile` (hot-reload via `nest start --watch`, source bind-mounted) alongside a local Mongo container, and always points at that local Mongo regardless of what `.env` has (never touches a real Atlas cluster). `server-app/Dockerfile` also has a `runtime` target (the default, used by `docker build .` with no `--target`) — a minimal multi-stage production image (no devDependencies, non-root user) for Railway/Render.
+
+Watch mode (both bare `pnpm start:dev` and the `dev` Docker target) relies on `tsconfig.json`'s `watchOptions` (polling-based) — needed because native filesystem-change events don't reliably cross a Docker Desktop bind mount on Windows; don't remove it without confirming hot-reload still works inside the container.
 
 **ui-app** (Expo):
 ```
@@ -110,4 +112,4 @@ Rules:
 
 ### Deployment target (not yet configured)
 
-`server-app` is intended for a managed PaaS (Railway or Render), on an always-on paid tier (not sleep/free — sync traffic is bursty and infrequent, so a cold start would hit exactly when a user needs the one network-dependent moment in their workflow). A real MongoDB Atlas connection string is now wired for local development via `MONGODB_URI_ATLAS` in `server-app/.env` (gitignored); hosting, a `Dockerfile`, and CI/CD are still not set up. Full reasoning — security posture, secrets handling, CORS for `ui-app`'s web target, known gaps — in [arquitectura.md §3–5](docs/diagrams/arquitectura.md).
+`server-app` is intended for a managed PaaS (Railway or Render), on an always-on paid tier (not sleep/free — sync traffic is bursty and infrequent, so a cold start would hit exactly when a user needs the one network-dependent moment in their workflow). A real MongoDB Atlas connection string is now wired for local development via `MONGODB_URI_ATLAS` in `server-app/.env` (gitignored). `server-app/Dockerfile` exists and is verified working (production `runtime` target boots against real Atlas; `dev` target boots via `docker-compose` against local Mongo) — hosting and CI/CD are still not set up. Full reasoning — security posture, secrets handling, CORS for `ui-app`'s web target, known gaps — in [arquitectura.md §3–5](docs/diagrams/arquitectura.md).

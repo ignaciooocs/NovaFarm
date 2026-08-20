@@ -53,7 +53,7 @@ ui-app (Expo)                    server-app (NestJS, Docker)          MongoDB At
   (offline capture)   JWT          Railway or Render, always-on
 ```
 
-- **`server-app` hosting**: containerize (a `Dockerfile` doesn't exist yet — that's a near-term gap, not solved by this document) and deploy to Railway or Render **on an always-on paid tier, not a sleep/free tier**. Sync traffic is bursty and infrequent — roughly once per farm per day — so a cold start (Render's free tier sleeps after ~15 min idle) would hit exactly when a user is relying on the one network-dependent moment in their workflow. That property matters more than the Railway-vs-Render brand comparison: the app itself is a plain Dockerfile service with no platform-specific code, so the platform choice is low-stakes and reversible — pick either paid always-on tier and move on.
+- **`server-app` hosting**: containerized (`server-app/Dockerfile`, multi-stage: `deps` → `dev`/`build` → `prod-deps` → `runtime`, non-root user, `node:22-alpine`) and deployed to Railway or Render **on an always-on paid tier, not a sleep/free tier**. Sync traffic is bursty and infrequent — roughly once per farm per day — so a cold start (Render's free tier sleeps after ~15 min idle) would hit exactly when a user is relying on the one network-dependent moment in their workflow. That property matters more than the Railway-vs-Render brand comparison: the app itself is a plain Dockerfile service with no platform-specific code, so the platform choice is low-stakes and reversible — pick either paid always-on tier and move on.
 - **Database**: MongoDB Atlas, shared/free tier to start. Network posture: "Access from Anywhere" (`0.0.0.0/0`) + Atlas's enforced TLS + a least-privilege (`readWrite`-scoped, not admin) DB user. This is a deliberate MVP tradeoff, not an oversight — Atlas PrivateLink needs an M10+ dedicated cluster, and neither Railway nor Render exposes a static egress IP on their base tiers, so a real IP allowlist isn't practical yet either.
 - **Secrets**: PaaS-native secret manager (Railway/Render env vars), never committed (`.env` is already gitignored). Explicit rule: local `docker-compose` dev credentials must never be reused as production values — an easy copy-paste mistake under solo-dev time pressure.
 - **CI**: GitHub Actions running lint + build + test on every PR. Labeled honestly: there's essentially no real test coverage yet beyond the Nest scaffold's spec file, so this pipeline is scaffolding that grows meaningful as services/controllers land — not proof of coverage today.
@@ -71,10 +71,9 @@ ui-app (Expo)                    server-app (NestJS, Docker)          MongoDB At
 ## 5. Known gaps (stated honestly — not solved by this document)
 
 - **`Decimal128` JSON serialization**: `unitCount`, `totalKg`, `finalTotalKg`, `kgFactor` are `Decimal128` in the schema (correct — see [modelo-datos.md](modelo-datos.md), avoids float drift on season totals) but Mongoose returns BSON `Decimal128` objects. Without an explicit `@Transform` on response DTOs, the mobile client receives `{"$numberDecimal": "12.34"}` instead of a plain value. This will surface as a real bug the first time a response DTO gets built, not before.
-- **No global `ValidationPipe`** wired up in `main.ts` yet — the "DTO-validated" claim above is the target, not the current state.
 - **No migration/schema-evolution tool** decided (e.g. `migrate-mongo`) — worth deciding before real data exists, since the `clientEntryId` addition above is itself a schema change that will need to run against whatever data exists by then.
-- **No Mongo connection resilience** configured (`serverSelectionTimeoutMS`/retry options) in `MongooseModule.forRootAsync` — relevant given PaaS cold starts and Atlas shared-tier pauses.
-- **No `Dockerfile` yet** for `server-app`, despite the deployment section above assuming one.
+- **No Mongo connection resilience** configured (`serverSelectionTimeoutMS`/retry options) in `DatabaseModule` — relevant given PaaS cold starts and Atlas shared-tier pauses.
+- **No CI** actually running the `Dockerfile` build yet (see §3) — it's proven to build and boot locally (both the `runtime` target against real Atlas, and the `dev` target via `docker-compose`), but nothing in the repo enforces that on every PR.
 
 ## Diagrams
 

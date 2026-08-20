@@ -1,0 +1,54 @@
+import { Body, Controller, Get, Post, Query, UseGuards } from '@nestjs/common';
+import {
+  ApiBearerAuth,
+  ApiOperation,
+  ApiResponse,
+  ApiTags,
+} from '@nestjs/swagger';
+import { CurrentFarm } from '../auth/decorators/current-farm.decorator';
+import { FarmScopeGuard } from '../auth/guards/farm-scope.guard';
+import { HarvestersService } from './harvesters.service';
+import {
+  CreateHarvesterRequestDto,
+  CreateHarvesterResponseDto,
+  FindHarvesterRequestDto,
+  FindHarvesterResponseDto,
+} from './dto';
+
+@ApiTags('harvesters')
+@ApiBearerAuth()
+@UseGuards(FarmScopeGuard)
+@Controller('harvesters')
+export class HarvestersController {
+  constructor(private readonly harvestersService: HarvestersService) {}
+
+  @Post()
+  @ApiOperation({
+    summary: 'Register a new harvester in the caller farm roster',
+  })
+  @ApiResponse({
+    status: 201,
+    description: 'The harvester was created successfully.',
+    type: CreateHarvesterResponseDto,
+  })
+  async create(
+    @CurrentFarm() farmId: string,
+    @Body() dto: CreateHarvesterRequestDto,
+  ): Promise<CreateHarvesterResponseDto> {
+    return this.harvestersService.create(farmId, dto);
+  }
+
+  @Get()
+  @ApiOperation({ summary: 'List the harvesters in the caller farm roster' })
+  @ApiResponse({
+    status: 200,
+    description: 'The list of harvesters for the caller farm.',
+    type: [FindHarvesterResponseDto],
+  })
+  async findAll(
+    @CurrentFarm() farmId: string,
+    @Query() filter: FindHarvesterRequestDto,
+  ): Promise<FindHarvesterResponseDto[]> {
+    return this.harvestersService.findAll(farmId, filter);
+  }
+}

@@ -10,6 +10,7 @@ describe('HarvestersService', () => {
   const harvesterModel = {
     create: jest.fn(),
     find: jest.fn(),
+    findOne: jest.fn(),
   };
 
   const farmId = '507f1f77bcf86cd799439011';
@@ -176,6 +177,62 @@ describe('HarvestersService', () => {
       const result = await harvestersService.findAll(farmId, {});
 
       expect(result[0]).not.toHaveProperty('nationalId');
+    });
+  });
+
+  describe('findActiveById', () => {
+    it('returns the harvester when it is active and belongs to the farm', async () => {
+      const harvesterId = new Types.ObjectId();
+      const doc = {
+        _id: harvesterId,
+        farmId: new Types.ObjectId(farmId),
+        firstName: 'Juan',
+        lastName: 'Perez',
+        active: true,
+      };
+      const exec = jest.fn().mockResolvedValue(doc);
+      harvesterModel.findOne.mockReturnValue({ exec });
+
+      const result = await harvestersService.findActiveById(
+        farmId,
+        harvesterId.toString(),
+      );
+
+      expect(harvesterModel.findOne).toHaveBeenCalledWith({
+        _id: harvesterId.toString(),
+        farmId: new Types.ObjectId(farmId),
+        active: true,
+      });
+      expect(result).toEqual({
+        _id: harvesterId.toString(),
+        farmId,
+        firstName: 'Juan',
+        lastName: 'Perez',
+        nickname: undefined,
+        active: true,
+      });
+    });
+
+    it('returns null when no matching active harvester exists for the farm', async () => {
+      const exec = jest.fn().mockResolvedValue(null);
+      harvesterModel.findOne.mockReturnValue({ exec });
+
+      const result = await harvestersService.findActiveById(
+        farmId,
+        new Types.ObjectId().toString(),
+      );
+
+      expect(result).toBeNull();
+    });
+
+    it('returns null without querying when the id is not a valid ObjectId', async () => {
+      const result = await harvestersService.findActiveById(
+        farmId,
+        'not-an-id',
+      );
+
+      expect(harvesterModel.findOne).not.toHaveBeenCalled();
+      expect(result).toBeNull();
     });
   });
 });

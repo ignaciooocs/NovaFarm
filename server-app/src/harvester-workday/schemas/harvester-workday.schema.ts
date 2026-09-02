@@ -17,6 +17,11 @@ export class HarvesterWorkday {
   @Prop({ required: true })
   workdayNumber!: number;
 
+  // Client-generated id (the SQLite row's own id) — makes offline-sync
+  // retries idempotent via the unique {workdayId, clientEntryId} index below.
+  @Prop({ required: true })
+  clientEntryId!: string;
+
   @Prop({ required: true, default: Date.now })
   addedAt!: Date;
 
@@ -32,5 +37,9 @@ HarvesterWorkdaySchema.index(
 );
 HarvesterWorkdaySchema.index(
   { workdayId: 1, harvesterId: 1 },
+  { unique: true },
+);
+HarvesterWorkdaySchema.index(
+  { workdayId: 1, clientEntryId: 1 },
   { unique: true },
 );

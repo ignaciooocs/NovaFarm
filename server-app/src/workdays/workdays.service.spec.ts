@@ -285,4 +285,49 @@ describe('WorkdaysService', () => {
       expect(workdayModel.findOne).not.toHaveBeenCalled();
     });
   });
+
+  describe('findById', () => {
+    const workdayId = new Types.ObjectId().toString();
+
+    it('returns the workday when it belongs to the farm', async () => {
+      const doc = {
+        _id: new Types.ObjectId(workdayId),
+        farmId: new Types.ObjectId(farmId),
+        date: new Date('2026-09-02'),
+        fruitId: new Types.ObjectId(fruitId),
+        defaultMeasurementUnitId: new Types.ObjectId(measurementUnitId),
+        status: 'OPEN',
+        createdAt: new Date('2026-09-02T08:00:00.000Z'),
+        recorderId: null,
+      };
+      workdayModel.findOne.mockReturnValue({
+        exec: jest.fn().mockResolvedValue(doc),
+      });
+
+      const result = await workdaysService.findById(farmId, workdayId);
+
+      expect(workdayModel.findOne).toHaveBeenCalledWith({
+        _id: workdayId,
+        farmId: new Types.ObjectId(farmId),
+      });
+      expect(result?.status).toEqual('OPEN');
+    });
+
+    it('returns null when no matching workday exists for the farm', async () => {
+      workdayModel.findOne.mockReturnValue({
+        exec: jest.fn().mockResolvedValue(null),
+      });
+
+      const result = await workdaysService.findById(farmId, workdayId);
+
+      expect(result).toBeNull();
+    });
+
+    it('returns null without querying when the id is not a valid ObjectId', async () => {
+      const result = await workdaysService.findById(farmId, 'not-an-id');
+
+      expect(workdayModel.findOne).not.toHaveBeenCalled();
+      expect(result).toBeNull();
+    });
+  });
 });

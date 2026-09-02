@@ -79,6 +79,18 @@ export class WorkdaysService {
     return found.map((doc) => this.toDto(doc));
   }
 
+  async findById(farmId: string, id: string): Promise<WorkdayDto | null> {
+    if (!Types.ObjectId.isValid(id)) {
+      return null;
+    }
+
+    const found = await this.workdayModel
+      .findOne({ _id: id, farmId: new Types.ObjectId(farmId) })
+      .exec();
+
+    return found ? this.toDto(found) : null;
+  }
+
   async close(farmId: string, id: string): Promise<WorkdayDto> {
     if (!Types.ObjectId.isValid(id)) {
       throw new NotFoundException('Workday not found');

@@ -27,9 +27,15 @@ export class HarvestEntry {
   @Prop({ required: true, default: Date.now })
   recordedAt!: Date;
 
+  // Client-generated id (the SQLite row's own id) — makes offline-sync
+  // retries idempotent via the unique {workdayId, clientEntryId} index below.
+  @Prop({ required: true })
+  clientEntryId!: string;
+
   @Prop({ required: true, default: false })
   syncedOffline!: boolean;
 }
 
 export const HarvestEntrySchema = SchemaFactory.createForClass(HarvestEntry);
 HarvestEntrySchema.index({ workdayId: 1, harvesterId: 1 });
+HarvestEntrySchema.index({ workdayId: 1, clientEntryId: 1 }, { unique: true });

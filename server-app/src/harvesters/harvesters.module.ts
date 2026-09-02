@@ -14,6 +14,6 @@ import { HarvestersService } from './harvesters.service';
   ],
   controllers: [HarvestersController],
   providers: [HarvestersService],
-  exports: [MongooseModule],
+  exports: [MongooseModule, HarvestersService],
 })
 export class HarvestersModule {}

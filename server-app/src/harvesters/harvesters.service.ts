@@ -46,6 +46,25 @@ export class HarvestersService {
     return found.map((doc) => this.toDto(doc));
   }
 
+  async findActiveById(
+    farmId: string,
+    id: string,
+  ): Promise<HarvesterDto | null> {
+    if (!Types.ObjectId.isValid(id)) {
+      return null;
+    }
+
+    const found = await this.harvesterModel
+      .findOne({
+        _id: id,
+        farmId: new Types.ObjectId(farmId),
+        active: true,
+      })
+      .exec();
+
+    return found ? this.toDto(found) : null;
+  }
+
   private toDto(doc: HarvesterDocument): HarvesterDto {
     return {
       _id: doc._id.toString(),

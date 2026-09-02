@@ -20,7 +20,10 @@ async function bootstrap() {
   // underlying HTTP adapter rather than through Nest's controller-routing
   // pipeline, so this prefix never applies to it — /api-docs keeps working
   // unprefixed without needing an explicit exclude here.
-  app.setGlobalPrefix('api/v1');
+  // /health is explicitly excluded: it's an infrastructure-level check
+  // (Railway/Render gate deploys on it), not part of the versioned public
+  // API contract, so it stays stable at /health across API version bumps.
+  app.setGlobalPrefix('api/v1', { exclude: ['health'] });
 
   if (process.env.NODE_ENV !== 'production') {
     const config = new DocumentBuilder()

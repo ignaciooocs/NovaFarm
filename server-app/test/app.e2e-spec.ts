@@ -21,6 +21,14 @@ describe('AppController (e2e)', () => {
     await app.init();
   });
 
+  // Sin esto, la conexión real a Mongo (vía DatabaseModule) queda abierta
+  // después de cada test: Jest fuerza el cierre del entorno y el handshake
+  // SCRAM en curso termina tirando un ReferenceError al intentar hacer
+  // require() después de que Jest ya desmontó los módulos.
+  afterEach(async () => {
+    await app.close();
+  });
+
   it('/api/v1 (GET)', () => {
     return request(app.getHttpServer())
       .get('/api/v1')

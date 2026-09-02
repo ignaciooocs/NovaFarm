@@ -5,6 +5,7 @@ import {
   ApiResponse,
   ApiTags,
 } from '@nestjs/swagger';
+import { Throttle } from '@nestjs/throttler';
 import { Request } from 'express';
 import { AuthService } from './auth.service';
 import {
@@ -21,6 +22,10 @@ export class AuthController {
   constructor(private readonly authService: AuthService) {}
 
   @Post('register/admin')
+  // Límite más estricto que el default global (100/min): el registro crea
+  // datos (farm + user) y consume cupo de Firebase, así que conviene
+  // acotarlo más — 5 intentos por minuto por IP.
+  @Throttle({ default: { limit: 5, ttl: 60000 } })
   @UseGuards(FirebaseAuthGuard)
   @ApiBearerAuth()
   @ApiOperation({
@@ -47,6 +52,8 @@ export class AuthController {
   }
 
   @Post('register/recorder')
+  // Mismo límite estricto que register/admin — ver el comentario de arriba.
+  @Throttle({ default: { limit: 5, ttl: 60000 } })
   @UseGuards(FirebaseAuthGuard)
   @ApiBearerAuth()
   @ApiOperation({

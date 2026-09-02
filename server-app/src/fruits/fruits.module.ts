@@ -12,6 +12,6 @@ import { FruitsService } from './fruits.service';
   ],
   controllers: [FruitsController],
   providers: [FruitsService],
-  exports: [MongooseModule],
+  exports: [MongooseModule, FruitsService],
 })
 export class FruitsModule {}

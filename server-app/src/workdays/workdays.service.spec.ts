@@ -1,0 +1,288 @@
+import { ConflictException, NotFoundException } from '@nestjs/common';
+import { getModelToken } from '@nestjs/mongoose';
+import { Test, TestingModule } from '@nestjs/testing';
+import { Types } from 'mongoose';
+import { FruitsService } from '../fruits/fruits.service';
+import { HarvestEntry } from '../harvest-entries/schemas/harvest-entry.schema';
+import { MeasurementUnitsService } from '../measurement-units/measurement-units.service';
+import { UsersService } from '../users/users.service';
+import { Workday } from './schemas/workday.schema';
+import { WorkdaysService } from './workdays.service';
+
+describe('WorkdaysService', () => {
+  let workdaysService: WorkdaysService;
+
+  const workdayModel = {
+    create: jest.fn(),
+    find: jest.fn(),
+    findOne: jest.fn(),
+  };
+
+  const harvestEntryModel = {
+    aggregate: jest.fn(),
+  };
+
+  const fruitsService = {
+    findActiveById: jest.fn(),
+  };
+
+  const measurementUnitsService = {
+    findActiveById: jest.fn(),
+  };
+
+  const usersService = {
+    findByFirebaseUid: jest.fn(),
+  };
+
+  const farmId = '507f1f77bcf86cd799439011';
+  const fruitId = '507f1f77bcf86cd799439012';
+  const measurementUnitId = '507f1f77bcf86cd799439013';
+
+  beforeEach(async () => {
+    jest.clearAllMocks();
+
+    const module: TestingModule = await Test.createTestingModule({
+      providers: [
+        WorkdaysService,
+        { provide: getModelToken(Workday.name), useValue: workdayModel },
+        {
+          provide: getModelToken(HarvestEntry.name),
+          useValue: harvestEntryModel,
+        },
+        { provide: FruitsService, useValue: fruitsService },
+        {
+          provide: MeasurementUnitsService,
+          useValue: measurementUnitsService,
+        },
+        { provide: UsersService, useValue: usersService },
+      ],
+    }).compile();
+
+    workdaysService = module.get(WorkdaysService);
+  });
+
+  describe('create', () => {
+    const dto = {
+      date: '2026-09-02',
+      fruitId,
+      defaultMeasurementUnitId: measurementUnitId,
+    };
+
+    it('opens a workday and resolves recorderId from the authenticated recorder', async () => {
+      fruitsService.findActiveById.mockResolvedValue({
+        _id: fruitId,
+        active: true,
+      });
+      measurementUnitsService.findActiveById.mockResolvedValue({
+        _id: measurementUnitId,
+        active: true,
+      });
+      const recorderMongoId = new Types.ObjectId();
+      usersService.findByFirebaseUid.mockResolvedValue({
+        _id: recorderMongoId,
+      });
+
+      workdayModel.create.mockResolvedValue({
+        _id: new Types.ObjectId(),
+        farmId: new Types.ObjectId(farmId),
+        date: new Date(dto.date),
+        fruitId: new Types.ObjectId(fruitId),
+        defaultMeasurementUnitId: new Types.ObjectId(measurementUnitId),
+        status: 'OPEN',
+        createdAt: new Date('2026-09-02T08:00:00.000Z'),
+        recorderId: recorderMongoId,
+      });
+
+      const result = await workdaysService.create(
+        farmId,
+        { uid: 'firebase-uid', farmId, role: 'recorder' },
+        dto,
+      );
+
+      expect(usersService.findByFirebaseUid).toHaveBeenCalledWith(
+        'firebase-uid',
+      );
+      expect(workdayModel.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          recorderId: recorderMongoId,
+          status: 'OPEN',
+        }),
+      );
+      expect(result.recorderId).toEqual(recorderMongoId.toString());
+      expect(result.status).toEqual('OPEN');
+    });
+
+    it('leaves recorderId null when opened by an admin (guest mode)', async () => {
+      fruitsService.findActiveById.mockResolvedValue({
+        _id: fruitId,
+        active: true,
+      });
+      measurementUnitsService.findActiveById.mockResolvedValue({
+        _id: measurementUnitId,
+        active: true,
+      });
+
+      workdayModel.create.mockResolvedValue({
+        _id: new Types.ObjectId(),
+        farmId: new Types.ObjectId(farmId),
+        date: new Date(dto.date),
+        fruitId: new Types.ObjectId(fruitId),
+        defaultMeasurementUnitId: new Types.ObjectId(measurementUnitId),
+        status: 'OPEN',
+        createdAt: new Date(),
+        recorderId: null,
+      });
+
+      const result = await workdaysService.create(
+        farmId,
+        { uid: 'firebase-uid', farmId, role: 'admin' },
+        dto,
+      );
+
+      expect(usersService.findByFirebaseUid).not.toHaveBeenCalled();
+      expect(workdayModel.create).toHaveBeenCalledWith(
+        expect.objectContaining({ recorderId: null }),
+      );
+      expect(result.recorderId).toBeNull();
+    });
+
+    it('throws NotFoundException when the fruit does not exist in the caller farm', async () => {
+      fruitsService.findActiveById.mockResolvedValue(null);
+
+      await expect(
+        workdaysService.create(
+          farmId,
+          { uid: 'u', farmId, role: 'admin' },
+          dto,
+        ),
+      ).rejects.toBeInstanceOf(NotFoundException);
+      expect(measurementUnitsService.findActiveById).not.toHaveBeenCalled();
+      expect(workdayModel.create).not.toHaveBeenCalled();
+    });
+
+    it('throws NotFoundException when the measurement unit does not exist in the caller farm', async () => {
+      fruitsService.findActiveById.mockResolvedValue({
+        _id: fruitId,
+        active: true,
+      });
+      measurementUnitsService.findActiveById.mockResolvedValue(null);
+
+      await expect(
+        workdaysService.create(
+          farmId,
+          { uid: 'u', farmId, role: 'admin' },
+          dto,
+        ),
+      ).rejects.toBeInstanceOf(NotFoundException);
+      expect(workdayModel.create).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('findAll', () => {
+    it('lists workdays scoped to the caller farm without a filter', async () => {
+      const exec = jest.fn().mockResolvedValue([]);
+      workdayModel.find.mockReturnValue({ exec });
+
+      await workdaysService.findAll(farmId, {});
+
+      expect(workdayModel.find).toHaveBeenCalledWith({
+        farmId: new Types.ObjectId(farmId),
+      });
+    });
+
+    it('lists workdays scoped to the caller farm filtered by status', async () => {
+      const exec = jest.fn().mockResolvedValue([]);
+      workdayModel.find.mockReturnValue({ exec });
+
+      await workdaysService.findAll(farmId, { status: 'OPEN' });
+
+      expect(workdayModel.find).toHaveBeenCalledWith({
+        farmId: new Types.ObjectId(farmId),
+        status: 'OPEN',
+      });
+    });
+  });
+
+  describe('close', () => {
+    const workdayId = new Types.ObjectId().toString();
+
+    it('closes an open workday and freezes the aggregated total', async () => {
+      const save = jest.fn().mockResolvedValue(undefined);
+      const workdayDoc = {
+        _id: new Types.ObjectId(workdayId),
+        farmId: new Types.ObjectId(farmId),
+        date: new Date('2026-09-02'),
+        fruitId: new Types.ObjectId(fruitId),
+        defaultMeasurementUnitId: new Types.ObjectId(measurementUnitId),
+        status: 'OPEN',
+        createdAt: new Date('2026-09-02T08:00:00.000Z'),
+        recorderId: null,
+        save,
+      };
+      workdayModel.findOne.mockReturnValue({
+        exec: jest.fn().mockResolvedValue(workdayDoc),
+      });
+      harvestEntryModel.aggregate.mockResolvedValue([
+        { total: Types.Decimal128.fromString('128.5') },
+      ]);
+
+      const result = await workdaysService.close(farmId, workdayId);
+
+      expect(save).toHaveBeenCalled();
+      expect(workdayDoc.status).toEqual('CLOSED');
+      expect(result.status).toEqual('CLOSED');
+      expect(result.finalTotalKg).toEqual(128.5);
+    });
+
+    it('freezes a zero total when the workday has no harvest entries', async () => {
+      const save = jest.fn().mockResolvedValue(undefined);
+      const workdayDoc = {
+        _id: new Types.ObjectId(workdayId),
+        farmId: new Types.ObjectId(farmId),
+        date: new Date('2026-09-02'),
+        fruitId: new Types.ObjectId(fruitId),
+        defaultMeasurementUnitId: new Types.ObjectId(measurementUnitId),
+        status: 'OPEN',
+        createdAt: new Date('2026-09-02T08:00:00.000Z'),
+        recorderId: null,
+        save,
+      };
+      workdayModel.findOne.mockReturnValue({
+        exec: jest.fn().mockResolvedValue(workdayDoc),
+      });
+      harvestEntryModel.aggregate.mockResolvedValue([]);
+
+      const result = await workdaysService.close(farmId, workdayId);
+
+      expect(result.finalTotalKg).toEqual(0);
+    });
+
+    it('throws ConflictException when the workday is already closed', async () => {
+      workdayModel.findOne.mockReturnValue({
+        exec: jest.fn().mockResolvedValue({ status: 'CLOSED' }),
+      });
+
+      await expect(
+        workdaysService.close(farmId, workdayId),
+      ).rejects.toBeInstanceOf(ConflictException);
+      expect(harvestEntryModel.aggregate).not.toHaveBeenCalled();
+    });
+
+    it('throws NotFoundException when the workday does not exist for the caller farm', async () => {
+      workdayModel.findOne.mockReturnValue({
+        exec: jest.fn().mockResolvedValue(null),
+      });
+
+      await expect(
+        workdaysService.close(farmId, workdayId),
+      ).rejects.toBeInstanceOf(NotFoundException);
+    });
+
+    it('throws NotFoundException without querying when the id is not a valid ObjectId', async () => {
+      await expect(
+        workdaysService.close(farmId, 'not-an-id'),
+      ).rejects.toBeInstanceOf(NotFoundException);
+      expect(workdayModel.findOne).not.toHaveBeenCalled();
+    });
+  });
+});

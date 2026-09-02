@@ -1,23 +1,35 @@
 import { ConflictException, Injectable } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model, Types } from 'mongoose';
-import { Fruit, FruitDocument } from './schemas/fruit.schema';
-import { CreateFruitRequestDto, FindFruitRequestDto, FruitDto } from './dto';
+import {
+  MeasurementUnit,
+  MeasurementUnitDocument,
+} from './schemas/measurement-unit.schema';
+import {
+  CreateMeasurementUnitRequestDto,
+  FindMeasurementUnitRequestDto,
+  MeasurementUnitDto,
+} from './dto';
 
 // Mongo duplicate-key error code.
 const MONGO_DUPLICATE_KEY_ERROR_CODE = 11000;
 
 @Injectable()
-export class FruitsService {
+export class MeasurementUnitsService {
   constructor(
-    @InjectModel(Fruit.name) private readonly fruitModel: Model<Fruit>,
+    @InjectModel(MeasurementUnit.name)
+    private readonly measurementUnitModel: Model<MeasurementUnit>,
   ) {}
 
-  async create(farmId: string, dto: CreateFruitRequestDto): Promise<FruitDto> {
+  async create(
+    farmId: string,
+    dto: CreateMeasurementUnitRequestDto,
+  ): Promise<MeasurementUnitDto> {
     try {
-      const created = await this.fruitModel.create({
+      const created = await this.measurementUnitModel.create({
         farmId: new Types.ObjectId(farmId),
         name: dto.name,
+        kgFactor: Types.Decimal128.fromString(dto.kgFactor.toString()),
         active: true,
       });
 
@@ -25,7 +37,7 @@ export class FruitsService {
     } catch (error) {
       if (this.isDuplicateNameError(error)) {
         throw new ConflictException(
-          'A fruit with this name already exists for this farm',
+          'A measurement unit with this name already exists for this farm',
         );
       }
 
@@ -35,9 +47,9 @@ export class FruitsService {
 
   async findAll(
     farmId: string,
-    filter: FindFruitRequestDto,
-  ): Promise<FruitDto[]> {
-    const found = await this.fruitModel
+    filter: FindMeasurementUnitRequestDto,
+  ): Promise<MeasurementUnitDto[]> {
+    const found = await this.measurementUnitModel
       .find({
         farmId: new Types.ObjectId(farmId),
         ...(filter.active !== undefined ? { active: filter.active } : {}),
@@ -47,12 +59,15 @@ export class FruitsService {
     return found.map((doc) => this.toDto(doc));
   }
 
-  async findActiveById(farmId: string, id: string): Promise<FruitDto | null> {
+  async findActiveById(
+    farmId: string,
+    id: string,
+  ): Promise<MeasurementUnitDto | null> {
     if (!Types.ObjectId.isValid(id)) {
       return null;
     }
 
-    const found = await this.fruitModel
+    const found = await this.measurementUnitModel
       .findOne({
         _id: id,
         farmId: new Types.ObjectId(farmId),
@@ -76,11 +91,12 @@ export class FruitsService {
     );
   }
 
-  private toDto(doc: FruitDocument): FruitDto {
+  private toDto(doc: MeasurementUnitDocument): MeasurementUnitDto {
     return {
       _id: doc._id.toString(),
       farmId: doc.farmId.toString(),
       name: doc.name,
+      kgFactor: Number(doc.kgFactor.toString()),
       active: doc.active,
     };
   }

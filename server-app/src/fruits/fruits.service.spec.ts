@@ -11,6 +11,7 @@ describe('FruitsService', () => {
   const fruitModel = {
     create: jest.fn(),
     find: jest.fn(),
+    findOne: jest.fn(),
   };
 
   const farmId = '507f1f77bcf86cd799439011';
@@ -103,6 +104,56 @@ describe('FruitsService', () => {
         farmId: new Types.ObjectId(farmId),
         active: true,
       });
+    });
+  });
+
+  describe('findActiveById', () => {
+    it('returns the fruit when it is active and belongs to the farm', async () => {
+      const fruitId = new Types.ObjectId();
+      const doc = {
+        _id: fruitId,
+        farmId: new Types.ObjectId(farmId),
+        name: 'Lemon',
+        active: true,
+      };
+      const exec = jest.fn().mockResolvedValue(doc);
+      fruitModel.findOne.mockReturnValue({ exec });
+
+      const result = await fruitsService.findActiveById(
+        farmId,
+        fruitId.toString(),
+      );
+
+      expect(fruitModel.findOne).toHaveBeenCalledWith({
+        _id: fruitId.toString(),
+        farmId: new Types.ObjectId(farmId),
+        active: true,
+      });
+      expect(result).toEqual({
+        _id: fruitId.toString(),
+        farmId,
+        name: 'Lemon',
+        active: true,
+      });
+    });
+
+    it('returns null when no matching active fruit exists for the farm', async () => {
+      const exec = jest.fn().mockResolvedValue(null);
+      fruitModel.findOne.mockReturnValue({ exec });
+
+      const result = await fruitsService.findActiveById(
+        farmId,
+        new Types.ObjectId().toString(),
+      );
+
+      expect(result).toBeNull();
+    });
+
+    it('returns null without querying when the id is not a valid ObjectId', async () => {
+      const result = await fruitsService.findActiveById(farmId, 'not-an-id');
+
+      expect(fruitModel.findOne).not.toHaveBeenCalled();
+      expect(result).toBeNull();
     });
   });
 });

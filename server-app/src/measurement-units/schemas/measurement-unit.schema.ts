@@ -21,3 +21,4 @@ export class MeasurementUnit {
 
 export const MeasurementUnitSchema =
   SchemaFactory.createForClass(MeasurementUnit);
+MeasurementUnitSchema.index({ farmId: 1, name: 1 }, { unique: true });

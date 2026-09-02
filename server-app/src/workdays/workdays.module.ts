@@ -2,7 +2,10 @@ import { Module } from '@nestjs/common';
 import { MongooseModule } from '@nestjs/mongoose';
 import { AuthModule } from '../auth/auth.module';
 import { FruitsModule } from '../fruits/fruits.module';
-import { HarvestEntry, HarvestEntrySchema } from '../harvest-entries/schemas/harvest-entry.schema';
+import {
+  HarvestEntry,
+  HarvestEntrySchema,
+} from '../harvest-entries/schemas/harvest-entry.schema';
 import { MeasurementUnitsModule } from '../measurement-units/measurement-units.module';
 import { UsersModule } from '../users/users.module';
 import { Workday, WorkdaySchema } from './schemas/workday.schema';

@@ -11,9 +11,13 @@ import {
   MeasurementUnitDto,
 } from './dto';
 
-// Mongo duplicate-key error code.
+// Código de error de Mongo para llave duplicada (choque de índice único).
 const MONGO_DUPLICATE_KEY_ERROR_CODE = 11000;
 
+/**
+ * Catálogo de unidades de medida de una farm (envases o pesaje directo),
+ * cada una con su factor de conversión a kilos (kgFactor).
+ */
 @Injectable()
 export class MeasurementUnitsService {
   constructor(
@@ -21,6 +25,10 @@ export class MeasurementUnitsService {
     private readonly measurementUnitModel: Model<MeasurementUnit>,
   ) {}
 
+  // Crea una unidad de medida nueva. kgFactor llega como number pero se
+  // guarda como Decimal128 para no perder precisión en los totalKg que se
+  // calculan a partir de esta unidad. Si el nombre ya existe para la farm
+  // (índice único {farmId, name}), devuelve 409.
   async create(
     farmId: string,
     dto: CreateMeasurementUnitRequestDto,
@@ -45,6 +53,7 @@ export class MeasurementUnitsService {
     }
   }
 
+  // Lista las unidades de medida de la farm, con filtro opcional por estado activo/inactivo.
   async findAll(
     farmId: string,
     filter: FindMeasurementUnitRequestDto,
@@ -59,6 +68,9 @@ export class MeasurementUnitsService {
     return found.map((doc) => this.toDto(doc));
   }
 
+  // Busca una unidad de medida por id, pero solo si está activa y pertenece
+  // a la farm indicada. Se usa desde otros módulos (workdays, harvest-entries)
+  // para validar referencias sin exponerles el modelo de Mongoose directamente.
   async findActiveById(
     farmId: string,
     id: string,
@@ -78,6 +90,8 @@ export class MeasurementUnitsService {
     return found ? this.toDto(found) : null;
   }
 
+  // Chequea si el error de Mongo es específicamente un choque en el índice
+  // único {farmId, name} (código 11000 + keyPattern.name).
   private isDuplicateNameError(error: unknown): boolean {
     return (
       typeof error === 'object' &&
@@ -91,6 +105,7 @@ export class MeasurementUnitsService {
     );
   }
 
+  // Convierte el documento a DTO, incluyendo kgFactor de Decimal128 a number.
   private toDto(doc: MeasurementUnitDocument): MeasurementUnitDto {
     return {
       _id: doc._id.toString(),

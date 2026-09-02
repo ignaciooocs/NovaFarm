@@ -15,6 +15,11 @@ import {
 import { FirebaseAdminService } from './firebase-admin.service';
 import { FirebaseUser } from './guards/firebase-auth.guard';
 
+/**
+ * Orquesta el registro de cuentas nuevas: crea (o busca) la farm, crea el
+ * usuario en Mongo, y publica los custom claims (farmId/role) en Firebase
+ * que el resto del backend usa para el scoping multi-tenant (FarmScopeGuard).
+ */
 @Injectable()
 export class AuthService {
   constructor(
@@ -23,6 +28,10 @@ export class AuthService {
     private readonly firebaseAdminService: FirebaseAdminService,
   ) {}
 
+  // Registra un admin: crea una farm nueva ("para mi equipo" o
+  // "independiente", misma acción de backend, solo cambia el type) y el
+  // usuario admin asociado, y publica los claims en Firebase para que el
+  // token del usuario quede con farmId/role desde ese momento.
   async registerAdmin(
     firebaseUser: FirebaseUser,
     dto: RegisterAdminRequestDto,
@@ -50,6 +59,9 @@ export class AuthService {
     return { farm, user };
   }
 
+  // Registra un recorder: busca la farm por invitationCode (debe existir y
+  // estar activa, si no 404), crea el usuario recorder asociado a esa farm,
+  // y publica los claims en Firebase.
   async registerRecorder(
     firebaseUser: FirebaseUser,
     dto: RegisterRecorderRequestDto,
@@ -80,6 +92,8 @@ export class AuthService {
     return { farm, user };
   }
 
+  // Evita que una misma cuenta de Firebase complete el onboarding dos veces:
+  // si ya existe un usuario de Mongo con ese firebaseUid, rechaza con 409.
   private async assertNotOnboarded(firebaseUid: string): Promise<void> {
     const existing = await this.usersService.findByFirebaseUid(firebaseUid);
 

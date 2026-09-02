@@ -13,9 +13,15 @@ import {
   SyncHarvesterWorkdayResponseDto,
 } from './dto';
 
-// Mongo duplicate-key error code.
+// Código de error de Mongo para llave duplicada (choque de índice único).
 const MONGO_DUPLICATE_KEY_ERROR_CODE = 11000;
 
+/**
+ * Maneja el roster (lista de cosechadores) de una jornada. A diferencia de
+ * los módulos anteriores esto NO es un CRUD en vivo: ui-app captura estos
+ * datos offline y los sube después en un batch, por eso el método principal
+ * es sync() en vez de create().
+ */
 @Injectable()
 export class HarvesterWorkdayService {
   constructor(
@@ -25,6 +31,12 @@ export class HarvesterWorkdayService {
     private readonly workdaysService: WorkdaysService,
   ) {}
 
+  // Sube un batch de entradas de roster capturadas offline. Primero valida
+  // que la jornada exista y esté abierta — si no, rechaza TODO el batch de
+  // una sola vez, sin gastar consultas por cada ítem. Si está abierta,
+  // procesa cada entrada una por una y devuelve un resultado por ítem
+  // (created/already-synced/rejected). Nunca lanza un error HTTP: un
+  // rechazo es un resultado de negocio válido, no una falla de la petición.
   async sync(
     farmId: string,
     workdayId: string,
@@ -52,6 +64,7 @@ export class HarvesterWorkdayService {
     return results;
   }
 
+  // Lista el roster de una jornada específica.
   async findAll(
     farmId: string,
     workdayId: string,
@@ -66,6 +79,9 @@ export class HarvesterWorkdayService {
     return found.map((doc) => this.toDto(doc));
   }
 
+  // Chequea si un cosechador ya está en el roster de una jornada. Lo usa
+  // harvest-entries para no dejar registrar una entrega de alguien que
+  // nunca fue agregado al roster primero.
   async existsInRoster(
     farmId: string,
     workdayId: string,
@@ -82,6 +98,16 @@ export class HarvesterWorkdayService {
     return found !== null;
   }
 
+  // Procesa una sola entrada del batch:
+  // 1) si el clientEntryId ya existe, es un reintento — devuelve
+  //    already-synced sin tocar nada más.
+  // 2) si el cosechador no existe o no está activo en la farm, rechaza.
+  // 3) si no hay conflicto, crea el registro. Si Mongo tira un choque de
+  //    índice único, distingue cuál: mismo clientEntryId (carrera entre
+  //    reintentos concurrentes — se resuelve re-consultando y devolviendo
+  //    already-synced), mismo harvesterId (ya estaba en el roster con otro
+  //    clientEntryId, rechaza), o mismo workdayNumber (otro cosechador ya
+  //    tiene ese número en esta jornada, rechaza).
   private async syncOne(
     farmId: string,
     workdayId: string,
@@ -162,6 +188,7 @@ export class HarvesterWorkdayService {
     }
   }
 
+  // Arma un resultado de tipo "rechazado" con su razón.
   private rejected(
     clientEntryId: string,
     reason: string,
@@ -169,6 +196,8 @@ export class HarvesterWorkdayService {
     return { clientEntryId, status: 'rejected', reason };
   }
 
+  // Chequea si el error de Mongo es un choque de índice único sobre un
+  // campo específico (código 11000 + keyPattern[field]).
   private isDuplicateKeyOn(error: unknown, field: string): boolean {
     return (
       typeof error === 'object' &&
@@ -182,6 +211,7 @@ export class HarvesterWorkdayService {
     );
   }
 
+  // Convierte el documento a DTO.
   private toDto(doc: HarvesterWorkdayDocument): HarvesterWorkdayDto {
     return {
       _id: doc._id.toString(),

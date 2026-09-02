@@ -4,15 +4,22 @@ import { Model, Types } from 'mongoose';
 import { Fruit, FruitDocument } from './schemas/fruit.schema';
 import { CreateFruitRequestDto, FindFruitRequestDto, FruitDto } from './dto';
 
-// Mongo duplicate-key error code.
+// Código de error de Mongo para llave duplicada (choque de índice único).
 const MONGO_DUPLICATE_KEY_ERROR_CODE = 11000;
 
+/**
+ * Catálogo de frutas de una farm (RF-03.3): crear, listar, y buscar por id
+ * validando que esté activa y pertenezca a la farm de quien llama.
+ */
 @Injectable()
 export class FruitsService {
   constructor(
     @InjectModel(Fruit.name) private readonly fruitModel: Model<Fruit>,
   ) {}
 
+  // Crea una fruta nueva en el catálogo de la farm. Si el nombre ya existe
+  // para esa farm (índice único {farmId, name}), devuelve 409 en vez de
+  // dejar que el error crudo de Mongo se propague.
   async create(farmId: string, dto: CreateFruitRequestDto): Promise<FruitDto> {
     try {
       const created = await this.fruitModel.create({
@@ -33,6 +40,7 @@ export class FruitsService {
     }
   }
 
+  // Lista las frutas de la farm, con filtro opcional por estado activo/inactivo.
   async findAll(
     farmId: string,
     filter: FindFruitRequestDto,
@@ -47,6 +55,9 @@ export class FruitsService {
     return found.map((doc) => this.toDto(doc));
   }
 
+  // Busca una fruta por id, pero solo si está activa y pertenece a la farm
+  // indicada. Se usa desde otros módulos (por ejemplo workdays) para validar
+  // referencias sin exponerles el modelo de Mongoose directamente.
   async findActiveById(farmId: string, id: string): Promise<FruitDto | null> {
     if (!Types.ObjectId.isValid(id)) {
       return null;
@@ -63,6 +74,8 @@ export class FruitsService {
     return found ? this.toDto(found) : null;
   }
 
+  // Chequea si el error de Mongo es específicamente un choque en el índice
+  // único {farmId, name} (código 11000 + keyPattern.name).
   private isDuplicateNameError(error: unknown): boolean {
     return (
       typeof error === 'object' &&
@@ -76,6 +89,7 @@ export class FruitsService {
     );
   }
 
+  // Convierte el documento de Mongoose al DTO de respuesta.
   private toDto(doc: FruitDocument): FruitDto {
     return {
       _id: doc._id.toString(),

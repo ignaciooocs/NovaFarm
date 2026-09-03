@@ -9,7 +9,9 @@ import type {
   CreateHarvesterRequestDto,
   CreateHarvesterResponseDto,
   FindHarvesterResponseDto,
-  HarvestersControllerFindAllParams
+  HarvestersControllerFindAllParams,
+  UpdateHarvesterRequestDto,
+  UpdateHarvesterResponseDto
 } from '../anotaYaAPI.schemas';
 
 import { apiClient } from '../../axios-instance';
@@ -42,6 +44,21 @@ const harvestersControllerFindAll = (
     },
       );
     }
-  return {harvestersControllerCreate,harvestersControllerFindAll}};
+  /**
+ * @summary Partially update a harvester in the caller farm roster (edit and/or activate/deactivate)
+ */
+const harvestersControllerUpdate = (
+    id: string,
+    updateHarvesterRequestDto: UpdateHarvesterRequestDto,
+ ) => {
+      return apiClient<UpdateHarvesterResponseDto>(
+      {url: `/api/v1/harvesters/${id}`, method: 'PATCH',
+      headers: {'Content-Type': 'application/json', },
+      data: updateHarvesterRequestDto
+    },
+      );
+    }
+  return {harvestersControllerCreate,harvestersControllerFindAll,harvestersControllerUpdate}};
 export type HarvestersControllerCreateResult = NonNullable<Awaited<ReturnType<ReturnType<typeof getHarvesters>['harvestersControllerCreate']>>>
 export type HarvestersControllerFindAllResult = NonNullable<Awaited<ReturnType<ReturnType<typeof getHarvesters>['harvestersControllerFindAll']>>>
+export type HarvestersControllerUpdateResult = NonNullable<Awaited<ReturnType<ReturnType<typeof getHarvesters>['harvestersControllerUpdate']>>>

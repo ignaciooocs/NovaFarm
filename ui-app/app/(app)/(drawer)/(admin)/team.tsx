@@ -5,5 +5,10 @@ import { strings } from '@/constants/strings';
 // (hoy UsersService no tiene rutas HTTP propias) — queda como placeholder
 // hasta que ese endpoint se construya.
 export default function TeamScreen() {
-  return <PlaceholderScreen title={strings.admin.teamTitle} />;
+  return (
+    <PlaceholderScreen
+      title={strings.admin.teamTitle}
+      edges={['bottom', 'left', 'right']}
+    />
+  );
 }

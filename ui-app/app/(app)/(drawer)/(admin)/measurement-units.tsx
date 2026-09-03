@@ -1,11 +1,12 @@
 import { useEffect, useState } from 'react';
-import { FlatList, StyleSheet } from 'react-native';
+import { FlatList, StyleSheet, View } from 'react-native';
 import {
   ActivityIndicator,
   Button,
   Dialog,
   FAB,
   HelperText,
+  IconButton,
   List,
   Portal,
   Text,
@@ -22,9 +23,13 @@ export default function MeasurementUnitsScreen() {
   const [units, setUnits] = useState<FindMeasurementUnitResponseDto[]>([]);
   const [loading, setLoading] = useState(true);
   const [dialogOpen, setDialogOpen] = useState(false);
+  // null = creando una unidad nueva; con valor = editando esa unidad (mismo
+  // diálogo para ambos casos, ver openCreateDialog/openEditDialog).
+  const [editingId, setEditingId] = useState<string | null>(null);
   const [name, setName] = useState('');
   const [kgFactor, setKgFactor] = useState('');
   const [saving, setSaving] = useState(false);
+  const [togglingId, setTogglingId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   async function loadUnits() {
@@ -43,26 +48,42 @@ export default function MeasurementUnitsScreen() {
     loadUnits();
   }, []);
 
-  function openDialog() {
+  function openCreateDialog() {
     setError(null);
+    setEditingId(null);
     setName('');
     setKgFactor('');
     setDialogOpen(true);
   }
 
-  const parsedKgFactor = Number(kgFactor.replace(',', '.'));
-  const canSubmit =
-    name.trim().length > 0 && parsedKgFactor > 0 && !saving;
+  function openEditDialog(unit: FindMeasurementUnitResponseDto) {
+    setError(null);
+    setEditingId(unit._id);
+    setName(unit.name);
+    setKgFactor(String(unit.kgFactor));
+    setDialogOpen(true);
+  }
 
-  async function handleCreate() {
+  const parsedKgFactor = Number(kgFactor.replace(',', '.'));
+  const canSubmit = name.trim().length > 0 && parsedKgFactor > 0 && !saving;
+
+  async function handleSubmit() {
     setError(null);
     setSaving(true);
     try {
-      const { measurementUnitsControllerCreate } = getMeasurementUnits();
-      await measurementUnitsControllerCreate({
-        name: name.trim(),
-        kgFactor: parsedKgFactor,
-      });
+      const { measurementUnitsControllerCreate, measurementUnitsControllerUpdate } =
+        getMeasurementUnits();
+      if (editingId) {
+        await measurementUnitsControllerUpdate(editingId, {
+          name: name.trim(),
+          kgFactor: parsedKgFactor,
+        });
+      } else {
+        await measurementUnitsControllerCreate({
+          name: name.trim(),
+          kgFactor: parsedKgFactor,
+        });
+      }
       setDialogOpen(false);
       await loadUnits();
     } catch (err) {
@@ -72,8 +93,27 @@ export default function MeasurementUnitsScreen() {
     }
   }
 
+  // Desactivar/reactivar es reversible y no afecta jornadas ya abiertas
+  // (esas quedan referenciando el id igual, ver findActiveById en
+  // server-app) — así que es un toggle directo, sin diálogo de confirmación.
+  async function handleToggleActive(unit: FindMeasurementUnitResponseDto) {
+    setTogglingId(unit._id);
+    setError(null);
+    try {
+      const { measurementUnitsControllerUpdate } = getMeasurementUnits();
+      await measurementUnitsControllerUpdate(unit._id, {
+        active: !unit.active,
+      });
+      await loadUnits();
+    } catch (err) {
+      setError(getErrorMessage(err));
+    } finally {
+      setTogglingId(null);
+    }
+  }
+
   return (
-    <Screen>
+    <Screen edges={['bottom', 'left', 'right']}>
       <Text variant="headlineMedium" style={styles.title}>
         {strings.admin.measurementUnitsTitle}
       </Text>
@@ -92,16 +132,45 @@ export default function MeasurementUnitsScreen() {
                 `${item.kgFactor} kg` +
                 (item.active ? '' : ` · ${strings.common.inactive}`)
               }
+              right={() =>
+                togglingId === item._id ? (
+                  <ActivityIndicator
+                    size="small"
+                    style={styles.rowActivity}
+                  />
+                ) : (
+                  <View style={styles.rowActions}>
+                    <IconButton
+                      icon="pencil"
+                      accessibilityLabel={strings.common.edit}
+                      onPress={() => openEditDialog(item)}
+                    />
+                    <IconButton
+                      icon={item.active ? 'eye-off' : 'eye'}
+                      accessibilityLabel={
+                        item.active
+                          ? strings.common.deactivate
+                          : strings.common.activate
+                      }
+                      onPress={() => handleToggleActive(item)}
+                    />
+                  </View>
+                )
+              }
             />
           )}
         />
       )}
 
-      <FAB icon="plus" style={styles.fab} onPress={openDialog} />
+      <FAB icon="plus" style={styles.fab} onPress={openCreateDialog} />
 
       <Portal>
         <Dialog visible={dialogOpen} onDismiss={() => setDialogOpen(false)}>
-          <Dialog.Title>{strings.admin.newMeasurementUnit}</Dialog.Title>
+          <Dialog.Title>
+            {editingId
+              ? strings.admin.editMeasurementUnit
+              : strings.admin.newMeasurementUnit}
+          </Dialog.Title>
           <Dialog.Content>
             <TextInput
               label={strings.admin.unitNameLabel}
@@ -121,7 +190,7 @@ export default function MeasurementUnitsScreen() {
             <Button onPress={() => setDialogOpen(false)}>
               {strings.common.cancel}
             </Button>
-            <Button onPress={handleCreate} loading={saving} disabled={!canSubmit}>
+            <Button onPress={handleSubmit} loading={saving} disabled={!canSubmit}>
               {strings.common.save}
             </Button>
           </Dialog.Actions>
@@ -135,4 +204,6 @@ const styles = StyleSheet.create({
   title: { marginBottom: spacing.md },
   input: { marginBottom: spacing.sm },
   fab: { position: 'absolute', right: spacing.lg, bottom: spacing.lg },
+  rowActions: { flexDirection: 'row' },
+  rowActivity: { alignSelf: 'center', marginHorizontal: spacing.lg },
 });

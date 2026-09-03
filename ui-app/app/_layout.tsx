@@ -1,5 +1,6 @@
 import { useEffect } from 'react';
 import { View } from 'react-native';
+import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { Stack } from 'expo-router';
 import { useMigrations } from 'drizzle-orm/expo-sqlite/migrator';
 import { PaperProvider, Text } from 'react-native-paper';
@@ -40,8 +41,12 @@ export default function RootLayout() {
   }
 
   return (
-    <PaperProvider theme={theme}>
-      <Stack screenOptions={{ headerShown: false }} />
-    </PaperProvider>
+    // El drawer de (app)/(drawer)/_layout.tsx necesita este wrapper en la
+    // raíz para que el gesto de deslizar a abrir/cerrar funcione.
+    <GestureHandlerRootView style={{ flex: 1 }}>
+      <PaperProvider theme={theme}>
+        <Stack screenOptions={{ headerShown: false }} />
+      </PaperProvider>
+    </GestureHandlerRootView>
   );
 }

@@ -2,11 +2,10 @@ import { useCallback, useState } from 'react';
 import { StyleSheet } from 'react-native';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { ActivityIndicator, Button, Text } from 'react-native-paper';
-import { signOut } from 'firebase/auth';
 import { Screen } from '@/components/Screen';
 import { strings } from '@/constants/strings';
 import { getActiveWorkday } from '@/db/queries';
-import { auth } from '@/lib/firebase';
+import { syncCatalogs } from '@/lib/catalogSync';
 import { useActiveWorkdayStore, useAuthStore } from '@/stores';
 import { spacing } from '@/theme';
 
@@ -28,6 +27,12 @@ export default function HomeScreen() {
         return;
       }
 
+      // Fire-and-forget: Home es el punto natural "ya-online" del ciclo (se
+      // visita al iniciar sesión y al volver de cada jornada) para refrescar
+      // la caché local de catálogos — no bloquea el render de Home ni
+      // depende de que termine para mostrar la jornada activa.
+      syncCatalogs();
+
       let cancelled = false;
 
       (async () => {
@@ -47,13 +52,8 @@ export default function HomeScreen() {
     }, [uid, setActiveWorkdayId]),
   );
 
-  async function handleLogout() {
-    await signOut(auth);
-    router.replace('/');
-  }
-
   return (
-    <Screen>
+    <Screen edges={['bottom', 'left', 'right']}>
       <Text variant="headlineMedium" style={styles.title}>
         {strings.home.title}
       </Text>
@@ -82,32 +82,6 @@ export default function HomeScreen() {
           {strings.home.openWorkday}
         </Button>
       )}
-
-      <Button
-        mode="contained-tonal"
-        onPress={() => router.push('/fruits')}
-        style={styles.button}
-      >
-        {strings.admin.fruitsTitle}
-      </Button>
-      <Button
-        mode="contained-tonal"
-        onPress={() => router.push('/measurement-units')}
-        style={styles.button}
-      >
-        {strings.admin.measurementUnitsTitle}
-      </Button>
-      <Button
-        mode="contained-tonal"
-        onPress={() => router.push('/harvesters')}
-        style={styles.button}
-      >
-        {strings.admin.harvestersTitle}
-      </Button>
-
-      <Button mode="outlined" onPress={handleLogout} style={styles.logout}>
-        {strings.settings.logout}
-      </Button>
     </Screen>
   );
 }
@@ -115,5 +89,4 @@ export default function HomeScreen() {
 const styles = StyleSheet.create({
   title: { marginBottom: spacing.lg },
   button: { marginBottom: spacing.md },
-  logout: { marginTop: spacing.lg },
 });

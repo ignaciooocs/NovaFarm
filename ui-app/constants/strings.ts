@@ -16,6 +16,8 @@ export const strings = {
     delete: 'Eliminar',
     edit: 'Editar',
     add: 'Agregar',
+    activate: 'Activar',
+    deactivate: 'Desactivar',
     name: 'Nombre',
     loading: 'Cargando...',
     retry: 'Reintentar',
@@ -98,6 +100,9 @@ export const strings = {
     newFruit: 'Nueva fruta',
     newMeasurementUnit: 'Nueva unidad',
     newHarvester: 'Nuevo cosechador',
+    editFruit: 'Editar fruta',
+    editMeasurementUnit: 'Editar unidad',
+    editHarvester: 'Editar cosechador',
     unitNameLabel: 'Nombre (ej. Tarro 10kg)',
     kgFactorLabel: 'Factor de conversión a kilos',
     firstNameLabel: 'Nombre',
@@ -109,6 +114,9 @@ export const strings = {
     title: 'Ajustes',
     logout: 'Cerrar sesión',
     farmInfo: 'Información de la farm',
+  },
+  profile: {
+    title: 'Perfil',
   },
   errors: {
     generic: 'Algo salió mal. Intenta de nuevo.',

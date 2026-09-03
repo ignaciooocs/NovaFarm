@@ -1,11 +1,12 @@
 import { useEffect, useState } from 'react';
-import { FlatList, StyleSheet } from 'react-native';
+import { FlatList, StyleSheet, View } from 'react-native';
 import {
   ActivityIndicator,
   Button,
   Dialog,
   FAB,
   HelperText,
+  IconButton,
   List,
   Portal,
   Text,
@@ -22,8 +23,12 @@ export default function FruitsScreen() {
   const [fruits, setFruits] = useState<FindFruitResponseDto[]>([]);
   const [loading, setLoading] = useState(true);
   const [dialogOpen, setDialogOpen] = useState(false);
+  // null = creando una fruta nueva; con valor = editando esa fruta (mismo
+  // diálogo para ambos casos, ver openCreateDialog/openEditDialog).
+  const [editingId, setEditingId] = useState<string | null>(null);
   const [name, setName] = useState('');
   const [saving, setSaving] = useState(false);
+  const [togglingId, setTogglingId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   async function loadFruits() {
@@ -42,18 +47,30 @@ export default function FruitsScreen() {
     loadFruits();
   }, []);
 
-  function openDialog() {
+  function openCreateDialog() {
     setError(null);
+    setEditingId(null);
     setName('');
     setDialogOpen(true);
   }
 
-  async function handleCreate() {
+  function openEditDialog(fruit: FindFruitResponseDto) {
+    setError(null);
+    setEditingId(fruit._id);
+    setName(fruit.name);
+    setDialogOpen(true);
+  }
+
+  async function handleSubmit() {
     setError(null);
     setSaving(true);
     try {
-      const { fruitsControllerCreate } = getFruits();
-      await fruitsControllerCreate({ name: name.trim() });
+      const { fruitsControllerCreate, fruitsControllerUpdate } = getFruits();
+      if (editingId) {
+        await fruitsControllerUpdate(editingId, { name: name.trim() });
+      } else {
+        await fruitsControllerCreate({ name: name.trim() });
+      }
       setDialogOpen(false);
       await loadFruits();
     } catch (err) {
@@ -63,8 +80,25 @@ export default function FruitsScreen() {
     }
   }
 
+  // Desactivar/reactivar es reversible y no afecta jornadas ya abiertas
+  // (esas quedan referenciando el id igual, ver findActiveById en
+  // server-app) — así que es un toggle directo, sin diálogo de confirmación.
+  async function handleToggleActive(fruit: FindFruitResponseDto) {
+    setTogglingId(fruit._id);
+    setError(null);
+    try {
+      const { fruitsControllerUpdate } = getFruits();
+      await fruitsControllerUpdate(fruit._id, { active: !fruit.active });
+      await loadFruits();
+    } catch (err) {
+      setError(getErrorMessage(err));
+    } finally {
+      setTogglingId(null);
+    }
+  }
+
   return (
-    <Screen>
+    <Screen edges={['bottom', 'left', 'right']}>
       <Text variant="headlineMedium" style={styles.title}>
         {strings.admin.fruitsTitle}
       </Text>
@@ -80,16 +114,43 @@ export default function FruitsScreen() {
             <List.Item
               title={item.name}
               description={item.active ? undefined : strings.common.inactive}
+              right={() =>
+                togglingId === item._id ? (
+                  <ActivityIndicator
+                    size="small"
+                    style={styles.rowActivity}
+                  />
+                ) : (
+                  <View style={styles.rowActions}>
+                    <IconButton
+                      icon="pencil"
+                      accessibilityLabel={strings.common.edit}
+                      onPress={() => openEditDialog(item)}
+                    />
+                    <IconButton
+                      icon={item.active ? 'eye-off' : 'eye'}
+                      accessibilityLabel={
+                        item.active
+                          ? strings.common.deactivate
+                          : strings.common.activate
+                      }
+                      onPress={() => handleToggleActive(item)}
+                    />
+                  </View>
+                )
+              }
             />
           )}
         />
       )}
 
-      <FAB icon="plus" style={styles.fab} onPress={openDialog} />
+      <FAB icon="plus" style={styles.fab} onPress={openCreateDialog} />
 
       <Portal>
         <Dialog visible={dialogOpen} onDismiss={() => setDialogOpen(false)}>
-          <Dialog.Title>{strings.admin.newFruit}</Dialog.Title>
+          <Dialog.Title>
+            {editingId ? strings.admin.editFruit : strings.admin.newFruit}
+          </Dialog.Title>
           <Dialog.Content>
             <TextInput
               label={strings.common.name}
@@ -103,7 +164,7 @@ export default function FruitsScreen() {
               {strings.common.cancel}
             </Button>
             <Button
-              onPress={handleCreate}
+              onPress={handleSubmit}
               loading={saving}
               disabled={!name.trim() || saving}
             >
@@ -119,4 +180,6 @@ export default function FruitsScreen() {
 const styles = StyleSheet.create({
   title: { marginBottom: spacing.md },
   fab: { position: 'absolute', right: spacing.lg, bottom: spacing.lg },
+  rowActions: { flexDirection: 'row' },
+  rowActivity: { alignSelf: 'center', marginHorizontal: spacing.lg },
 });

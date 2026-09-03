@@ -9,7 +9,9 @@ import type {
   CreateMeasurementUnitRequestDto,
   CreateMeasurementUnitResponseDto,
   FindMeasurementUnitResponseDto,
-  MeasurementUnitsControllerFindAllParams
+  MeasurementUnitsControllerFindAllParams,
+  UpdateMeasurementUnitRequestDto,
+  UpdateMeasurementUnitResponseDto
 } from '../anotaYaAPI.schemas';
 
 import { apiClient } from '../../axios-instance';
@@ -42,6 +44,21 @@ const measurementUnitsControllerFindAll = (
     },
       );
     }
-  return {measurementUnitsControllerCreate,measurementUnitsControllerFindAll}};
+  /**
+ * @summary Partially update a measurement unit in the caller farm catalog (edit and/or activate/deactivate)
+ */
+const measurementUnitsControllerUpdate = (
+    id: string,
+    updateMeasurementUnitRequestDto: UpdateMeasurementUnitRequestDto,
+ ) => {
+      return apiClient<UpdateMeasurementUnitResponseDto>(
+      {url: `/api/v1/measurement-units/${id}`, method: 'PATCH',
+      headers: {'Content-Type': 'application/json', },
+      data: updateMeasurementUnitRequestDto
+    },
+      );
+    }
+  return {measurementUnitsControllerCreate,measurementUnitsControllerFindAll,measurementUnitsControllerUpdate}};
 export type MeasurementUnitsControllerCreateResult = NonNullable<Awaited<ReturnType<ReturnType<typeof getMeasurementUnits>['measurementUnitsControllerCreate']>>>
 export type MeasurementUnitsControllerFindAllResult = NonNullable<Awaited<ReturnType<ReturnType<typeof getMeasurementUnits>['measurementUnitsControllerFindAll']>>>
+export type MeasurementUnitsControllerUpdateResult = NonNullable<Awaited<ReturnType<ReturnType<typeof getMeasurementUnits>['measurementUnitsControllerUpdate']>>>

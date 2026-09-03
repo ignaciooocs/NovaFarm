@@ -9,7 +9,9 @@ import type {
   CreateFruitRequestDto,
   CreateFruitResponseDto,
   FindFruitResponseDto,
-  FruitsControllerFindAllParams
+  FruitsControllerFindAllParams,
+  UpdateFruitRequestDto,
+  UpdateFruitResponseDto
 } from '../anotaYaAPI.schemas';
 
 import { apiClient } from '../../axios-instance';
@@ -42,6 +44,21 @@ const fruitsControllerFindAll = (
     },
       );
     }
-  return {fruitsControllerCreate,fruitsControllerFindAll}};
+  /**
+ * @summary Partially update a fruit in the caller farm catalog (rename and/or activate/deactivate)
+ */
+const fruitsControllerUpdate = (
+    id: string,
+    updateFruitRequestDto: UpdateFruitRequestDto,
+ ) => {
+      return apiClient<UpdateFruitResponseDto>(
+      {url: `/api/v1/fruits/${id}`, method: 'PATCH',
+      headers: {'Content-Type': 'application/json', },
+      data: updateFruitRequestDto
+    },
+      );
+    }
+  return {fruitsControllerCreate,fruitsControllerFindAll,fruitsControllerUpdate}};
 export type FruitsControllerCreateResult = NonNullable<Awaited<ReturnType<ReturnType<typeof getFruits>['fruitsControllerCreate']>>>
 export type FruitsControllerFindAllResult = NonNullable<Awaited<ReturnType<ReturnType<typeof getFruits>['fruitsControllerFindAll']>>>
+export type FruitsControllerUpdateResult = NonNullable<Awaited<ReturnType<ReturnType<typeof getFruits>['fruitsControllerUpdate']>>>

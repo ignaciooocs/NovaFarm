@@ -2,12 +2,13 @@ import { Injectable } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model, Types } from 'mongoose';
 import { User, UserDocument } from './schemas/user.schema';
-import { UserDto } from './dto';
+import { FindUserRequestDto, UserDto } from './dto';
 
 // Forma de los datos necesarios para crear un usuario. Distinta del DTO de
-// request porque este servicio no tiene controller propio — se arma
-// internamente desde AuthService durante el registro, no viene directo
-// del body de una petición del cliente.
+// request porque create() no tiene endpoint propio — se arma internamente
+// desde AuthService durante el registro, no viene directo del body de una
+// petición del cliente (los usuarios se crean vía onboarding, no los crea
+// un admin a mano).
 export interface CreateUserData {
   farmId: Types.ObjectId;
   name: string;
@@ -17,10 +18,11 @@ export interface CreateUserData {
 }
 
 /**
- * Catálogo de usuarios (recorders y admins) autenticados vía Firebase.
- * No expone un controller propio — se consume desde AuthModule durante
- * el registro y desde cualquier módulo que necesite resolver el usuario
- * de Mongo a partir del uid de Firebase.
+ * Catálogo de usuarios (recorders y admins) autenticados vía Firebase. Se
+ * consume desde AuthModule durante el registro y desde cualquier módulo que
+ * necesite resolver el usuario de Mongo a partir del uid de Firebase.
+ * findAll() sí tiene un endpoint propio (GET /users, solo admin — ver
+ * UsersController) para la pantalla "Mi equipo" de ui-app.
  */
 @Injectable()
 export class UsersService {
@@ -40,6 +42,22 @@ export class UsersService {
     });
 
     return this.toDto(created);
+  }
+
+  // Lista el equipo de la farm (RF: "Mi equipo", solo admin — ver
+  // UsersController), con filtro opcional por estado activo/inactivo.
+  async findAll(
+    farmId: string,
+    filter: FindUserRequestDto,
+  ): Promise<UserDto[]> {
+    const found = await this.userModel
+      .find({
+        farmId: new Types.ObjectId(farmId),
+        ...(filter.active !== undefined ? { active: filter.active } : {}),
+      })
+      .exec();
+
+    return found.map((doc) => this.toDto(doc));
   }
 
   // Busca un usuario por su firebaseUid. Se usa para chequear si una cuenta

@@ -97,6 +97,34 @@ export interface RegisterRecorderResponseDto {
 }
 
 /**
+ * Role of the user within their farm
+ */
+export type FindUserResponseDtoRole = typeof FindUserResponseDtoRole[keyof typeof FindUserResponseDtoRole];
+
+
+export const FindUserResponseDtoRole = {
+  recorder: 'recorder',
+  admin: 'admin',
+} as const;
+
+export interface FindUserResponseDto {
+  /** Unique identifier of the user */
+  _id: string;
+  /** Farm this user belongs to (tenant scope) */
+  farmId: string;
+  /** Display name of the user */
+  name: string;
+  /** Email address of the user */
+  email: string;
+  /** Role of the user within their farm */
+  role: FindUserResponseDtoRole;
+  /** Whether the user is active */
+  active: boolean;
+  /** National ID (optional/nullable — not collected at quick field registration, filled in later by an admin) */
+  nationalId?: string;
+}
+
+/**
  * UI-only classification: whether to show the 'invite your team' step after creation. No backend logic differs between the two values.
  */
 export type CreateFarmRequestDtoType = typeof CreateFarmRequestDtoType[keyof typeof CreateFarmRequestDtoType];
@@ -571,6 +599,13 @@ export interface FindHarvestEntryResponseDto {
   /** Whether this record originated from an offline sync */
   syncedOffline: boolean;
 }
+
+export type UsersControllerFindAllParams = {
+/**
+ * Filter by active status
+ */
+active?: boolean;
+};
 
 export type HarvestersControllerFindAllParams = {
 /**

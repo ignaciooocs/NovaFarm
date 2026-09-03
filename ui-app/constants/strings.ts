@@ -103,6 +103,8 @@ export const strings = {
     editFruit: 'Editar fruta',
     editMeasurementUnit: 'Editar unidad',
     editHarvester: 'Editar cosechador',
+    roleAdmin: 'Admin',
+    roleRecorder: 'Anotador',
     unitNameLabel: 'Nombre (ej. Tarro 10kg)',
     kgFactorLabel: 'Factor de conversión a kilos',
     firstNameLabel: 'Nombre',

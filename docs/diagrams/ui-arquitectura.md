@@ -76,7 +76,7 @@ app/
       settings.tsx                # /settings — ítem del drawer (el logout vive en el drawer, no acá)      [placeholder]
       (admin)/                   # sin _layout.tsx propio — cada archivo es su propio ítem del Drawer
         fruits.tsx, measurement-units.tsx, harvesters.tsx   # lista + FAB/Dialog para crear                [real]
-        team.tsx                                              # stub — depende de un controller de `users` [placeholder]
+        team.tsx                                              # lista GET /users (solo admin) — sin editar/desactivar todavía [real]
                                 # Catálogos + "Mi equipo": listados en el drawer solo si role === 'admin'
                                 # (drawerItemStyle:{display:'none'} si no — ayuda de UX, no control de acceso:
                                 # el server tampoco chequea rol en estas rutas todavía)
@@ -121,6 +121,7 @@ ui-app/
 
 **Recién implementado, todavía sin probar en dispositivo físico (2026-09-03):**
 - Editar/desactivar catálogo (fruits/harvesters/measurement-units) — hasta ahora solo se podía crear. `server-app` suma `PATCH /:id` a los tres controllers, con un `update()` de partial-update por servicio: no filtra por `active` (a diferencia de `findActiveById`) así que también sirve para reactivar, y reusa el mismo manejo de nombre-duplicado que `create()` en fruits/measurement-units. `nickname` de harvester es el único campo opcional-editable — mandar `null` explícito lo borra (`$unset`, no `$set` con `undefined`, que Mongo descarta en silencio), mandar el campo omitido lo deja como estaba. En `ui-app`, las 3 pantallas de catálogo comparten un mismo diálogo para crear/editar (`editingId` null = crear) y un ícono de ojo por fila para el toggle activo/inactivo — sin diálogo de confirmación, porque es reversible y no afecta jornadas que ya referenciaban ese id (`findActiveById` solo se usa para referencias *nuevas*). Client regenerado (`pnpm generate:api`), tests nuevos por servicio en `server-app` (incluye el caso `$unset` del nickname).
+- `team.tsx` dejó de ser stub: `GET /users` en `server-app` (solo admin) lista el equipo de la farm. Primer uso real de un chequeo de rol en el proyecto — `RolesGuard` (`src/auth/guards/roles.guard.ts`) + `@Roles('admin')`, en pareja con `FarmScopeGuard` (`@UseGuards(FarmScopeGuard, RolesGuard)`). `AuthModule`/`UsersModule` ahora se importan mutuamente vía `forwardRef()` (Auth necesita Users para el registro, Users ahora necesita los guards de Auth para su controller nuevo) — es el patrón sancionado por Nest para una dependencia genuina en dos sentidos, no un error a corregir. Alcance de `team.tsx` acotado a propósito a solo listar — ver la pregunta que quedó abierta más abajo sobre editar rol antes de construir eso.
 
 **Recién implementado, camino feliz verificado pero sin probar el caso límite (2026-09-03):**
 - La idempotencia de `POST /workdays` (mismo patrón `clientEntryId` + upsert que ya tienen `harvesterWorkday`/`harvestEntries`): `open-workday.tsx` genera el `clientEntryId` una sola vez por visita a la pantalla y lo reusa en cada reintento; `server-app` hace upsert por `{farmId, clientEntryId}`. El caso concreto que arregla (perder la respuesta justo después de que el server ya creó la jornada) es difícil de reproducir a mano con modo avión — la creación es demasiado rápida para alcanzar a cortar la señal a tiempo — así que quedó sin verificar en dispositivo. La lógica en sí ya está cubierta de forma determinística por los tests unitarios de `server-app` (incluye el caso de carrera entre dos reintentos concurrentes), así que el riesgo residual es bajo.
@@ -132,11 +133,12 @@ ui-app/
 
 **Recomendación de qué seguir, en orden de importancia real:**
 
-1. Probar en dispositivo físico editar/desactivar catálogo (recién implementado, ver arriba) — sobre todo el caso de borrar el apodo de un harvester.
+1. Probar en dispositivo físico lo recién implementado (ver arriba): editar/desactivar catálogo (sobre todo borrar el apodo de un harvester) y `/team` (que un recorder no vea la pantalla ni pueda pegarle directo a `GET /users`).
 2. Pulido, lo que queda: contenido real para Ajustes y Perfil (hoy placeholders, pero ya reachable desde el drawer).
 3. El gap grande de arriba (registrar harvester nuevo offline) — priorizado pero pospuesto explícitamente hasta madurar si se necesita pronto.
-4. `team.tsx` sigue bloqueado hasta que `server-app` tenga un controller de `users` (hoy `UsersService` no expone rutas HTTP).
-5. Desplegar `server-app` a un hosting real (Railway o Render, ver [arquitectura.md §3](arquitectura.md)) — necesario para que la app funcione fuera de la red local del desarrollo, pero no urgente mientras se sigue construyendo/probando en local.
-6. Verificar en dispositivo el caso límite de la idempotencia de `POST /workdays` (ver arriba) — bajo riesgo, sin apuro.
+4. Desplegar `server-app` a un hosting real (Railway o Render, ver [arquitectura.md §3](arquitectura.md)) — necesario para que la app funcione fuera de la red local del desarrollo, pero no urgente mientras se sigue construyendo/probando en local.
+5. Verificar en dispositivo el caso límite de la idempotencia de `POST /workdays` (ver arriba) — bajo riesgo, sin apuro.
+
+**Pregunta abierta (definida con el usuario el 2026-09-03):** `team.tsx` quedó deliberadamente acotado a solo listar el equipo. Activar/desactivar a un miembro y cambiar su rol (recorder ↔ admin) quedaron explícitamente afuera de este alcance — lo segundo tiene casos límite reales sin resolver (¿qué pasa si un admin se auto-degrada? ¿puede una farm quedar sin ningún admin?) que hay que pensar antes de construirlo, no durante.
 
 **Decisión de producto pendiente de definir (no arquitectónica):** el usuario planteó que en uso real puede haber varias cuadrillas trabajando jornadas distintas en paralelo (cada una con su propio dispositivo/recorder — ya soportado, ver el fix de `createdByUid`), pero también casos donde más de una persona necesita anotar en la *misma* jornada desde dispositivos distintos. Eso último es una función bastante más grande (edición colaborativa multi-dispositivo, que choca con el diseño offline-first actual) y está explícitamente fuera de alcance en `modelo-datos.md` ("Whether several devices can share the same workday") — no se ha vuelto a discutir en profundidad, queda como pregunta abierta para cuando/si se necesite de verdad.

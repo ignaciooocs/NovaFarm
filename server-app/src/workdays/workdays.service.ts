@@ -17,6 +17,9 @@ import {
   WorkdayDto,
 } from './dto';
 
+// Código de error de Mongo para llave duplicada (choque de índice único).
+const MONGO_DUPLICATE_KEY_ERROR_CODE = 11000;
+
 /**
  * Maneja el ciclo de vida de una jornada de cosecha (workday): abrirla,
  * listarlas, buscar una por id, y cerrarla congelando el total en kilos
@@ -33,16 +36,29 @@ export class WorkdaysService {
     private readonly usersService: UsersService,
   ) {}
 
-  // Abre una jornada nueva. Antes de crearla valida que la fruta y la unidad
-  // de medida por defecto existan, estén activas, y pertenezcan a la farm de
-  // quien llama (si no, 404). El recorder se resuelve del lado del servidor
-  // (nunca viene del cliente) para que nadie pueda abrir una jornada a
-  // nombre de otro usuario.
+  // Abre una jornada nueva. Idempotente vía clientEntryId (mismo patrón que
+  // harvester-workday/harvest-entries): si ya existe una jornada de esta
+  // farm con ese clientEntryId, es un reintento — se devuelve la que ya
+  // existe sin volver a validar ni crear nada. Si no, valida que la fruta y
+  // la unidad de medida por defecto existan, estén activas, y pertenezcan a
+  // la farm de quien llama (si no, 404). El recorder se resuelve del lado
+  // del servidor (nunca viene del cliente) para que nadie pueda abrir una
+  // jornada a nombre de otro usuario.
   async create(
     farmId: string,
     authUser: AuthenticatedUser,
     dto: CreateWorkdayRequestDto,
   ): Promise<WorkdayDto> {
+    const existing = await this.workdayModel
+      .findOne({
+        farmId: new Types.ObjectId(farmId),
+        clientEntryId: dto.clientEntryId,
+      })
+      .exec();
+    if (existing) {
+      return this.toDto(existing);
+    }
+
     const fruit = await this.fruitsService.findActiveById(farmId, dto.fruitId);
     if (!fruit) {
       throw new NotFoundException('Fruit not found in the caller farm catalog');
@@ -60,19 +76,40 @@ export class WorkdaysService {
 
     const recorderId = await this.resolveRecorderId(authUser);
 
-    const created = await this.workdayModel.create({
-      farmId: new Types.ObjectId(farmId),
-      date: new Date(dto.date),
-      fruitId: new Types.ObjectId(dto.fruitId),
-      defaultMeasurementUnitId: new Types.ObjectId(
-        dto.defaultMeasurementUnitId,
-      ),
-      status: 'OPEN',
-      createdAt: new Date(),
-      recorderId,
-    });
+    try {
+      const created = await this.workdayModel.create({
+        farmId: new Types.ObjectId(farmId),
+        date: new Date(dto.date),
+        fruitId: new Types.ObjectId(dto.fruitId),
+        defaultMeasurementUnitId: new Types.ObjectId(
+          dto.defaultMeasurementUnitId,
+        ),
+        status: 'OPEN',
+        createdAt: new Date(),
+        recorderId,
+        clientEntryId: dto.clientEntryId,
+      });
 
-    return this.toDto(created);
+      return this.toDto(created);
+    } catch (error) {
+      // Carrera entre dos reintentos concurrentes del mismo clientEntryId
+      // (el chequeo de arriba pasó para ambos antes de que ninguno
+      // terminara de crear) — el índice único la resuelve, así que
+      // re-consultamos y devolvemos la que ganó en vez de propagar el 500.
+      if (this.isDuplicateKeyOn(error, 'clientEntryId')) {
+        const raced = await this.workdayModel
+          .findOne({
+            farmId: new Types.ObjectId(farmId),
+            clientEntryId: dto.clientEntryId,
+          })
+          .exec();
+        if (raced) {
+          return this.toDto(raced);
+        }
+      }
+
+      throw error;
+    }
   }
 
   // Lista las jornadas de la farm, con filtro opcional por status (OPEN/CLOSED).
@@ -168,6 +205,21 @@ export class WorkdaysService {
     return user ? user._id : null;
   }
 
+  // Chequea si el error de Mongo es un choque de índice único sobre un
+  // campo específico (código 11000 + keyPattern[field]).
+  private isDuplicateKeyOn(error: unknown, field: string): boolean {
+    return (
+      typeof error === 'object' &&
+      error !== null &&
+      'code' in error &&
+      (error as { code?: number }).code === MONGO_DUPLICATE_KEY_ERROR_CODE &&
+      'keyPattern' in error &&
+      Boolean(
+        (error as { keyPattern?: Record<string, unknown> }).keyPattern?.[field],
+      )
+    );
+  }
+
   // Convierte el documento a DTO. finalTotalKg solo está presente si la
   // jornada ya se cerró; recorderId puede ser null (modo invitado).
   private toDto(doc: WorkdayDocument): WorkdayDto {
@@ -183,6 +235,7 @@ export class WorkdaysService {
         ? Number(doc.finalTotalKg.toString())
         : undefined,
       recorderId: doc.recorderId ? doc.recorderId.toString() : null,
+      clientEntryId: doc.clientEntryId,
     };
   }
 }

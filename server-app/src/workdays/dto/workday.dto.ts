@@ -62,4 +62,11 @@ export class WorkdayDto {
     nullable: true,
   })
   recorderId!: string | null;
+
+  @ApiProperty({
+    description:
+      'Client-generated id (the originating local workday row id) used to make retrying POST /workdays idempotent',
+    example: 'local-8f3a2b1c',
+  })
+  clientEntryId!: string;
 }

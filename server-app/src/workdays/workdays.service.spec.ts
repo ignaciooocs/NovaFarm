@@ -63,12 +63,20 @@ describe('WorkdaysService', () => {
 
   describe('create', () => {
     const dto = {
+      clientEntryId: 'local-8f3a2b1c',
       date: '2026-09-02',
       fruitId,
       defaultMeasurementUnitId: measurementUnitId,
     };
 
+    function mockNoExistingClientEntry() {
+      workdayModel.findOne.mockReturnValue({
+        exec: jest.fn().mockResolvedValue(null),
+      });
+    }
+
     it('opens a workday and resolves recorderId from the authenticated recorder', async () => {
+      mockNoExistingClientEntry();
       fruitsService.findActiveById.mockResolvedValue({
         _id: fruitId,
         active: true,
@@ -91,6 +99,7 @@ describe('WorkdaysService', () => {
         status: 'OPEN',
         createdAt: new Date('2026-09-02T08:00:00.000Z'),
         recorderId: recorderMongoId,
+        clientEntryId: dto.clientEntryId,
       });
 
       const result = await workdaysService.create(
@@ -106,6 +115,7 @@ describe('WorkdaysService', () => {
         expect.objectContaining({
           recorderId: recorderMongoId,
           status: 'OPEN',
+          clientEntryId: dto.clientEntryId,
         }),
       );
       expect(result.recorderId).toEqual(recorderMongoId.toString());
@@ -113,6 +123,7 @@ describe('WorkdaysService', () => {
     });
 
     it('leaves recorderId null when opened by an admin (guest mode)', async () => {
+      mockNoExistingClientEntry();
       fruitsService.findActiveById.mockResolvedValue({
         _id: fruitId,
         active: true,
@@ -131,6 +142,7 @@ describe('WorkdaysService', () => {
         status: 'OPEN',
         createdAt: new Date(),
         recorderId: null,
+        clientEntryId: dto.clientEntryId,
       });
 
       const result = await workdaysService.create(
@@ -147,6 +159,7 @@ describe('WorkdaysService', () => {
     });
 
     it('throws NotFoundException when the fruit does not exist in the caller farm', async () => {
+      mockNoExistingClientEntry();
       fruitsService.findActiveById.mockResolvedValue(null);
 
       await expect(
@@ -161,6 +174,7 @@ describe('WorkdaysService', () => {
     });
 
     it('throws NotFoundException when the measurement unit does not exist in the caller farm', async () => {
+      mockNoExistingClientEntry();
       fruitsService.findActiveById.mockResolvedValue({
         _id: fruitId,
         active: true,
@@ -175,6 +189,98 @@ describe('WorkdaysService', () => {
         ),
       ).rejects.toBeInstanceOf(NotFoundException);
       expect(workdayModel.create).not.toHaveBeenCalled();
+    });
+
+    it('returns the existing workday without re-validating when clientEntryId was already synced (idempotent retry)', async () => {
+      const existing = {
+        _id: new Types.ObjectId(),
+        farmId: new Types.ObjectId(farmId),
+        date: new Date(dto.date),
+        fruitId: new Types.ObjectId(fruitId),
+        defaultMeasurementUnitId: new Types.ObjectId(measurementUnitId),
+        status: 'OPEN',
+        createdAt: new Date('2026-09-02T08:00:00.000Z'),
+        recorderId: null,
+        clientEntryId: dto.clientEntryId,
+      };
+      workdayModel.findOne.mockReturnValue({
+        exec: jest.fn().mockResolvedValue(existing),
+      });
+
+      const result = await workdaysService.create(
+        farmId,
+        { uid: 'u', farmId, role: 'admin' },
+        dto,
+      );
+
+      expect(workdayModel.findOne).toHaveBeenCalledWith({
+        farmId: new Types.ObjectId(farmId),
+        clientEntryId: dto.clientEntryId,
+      });
+      expect(fruitsService.findActiveById).not.toHaveBeenCalled();
+      expect(workdayModel.create).not.toHaveBeenCalled();
+      expect(result._id).toEqual(existing._id.toString());
+    });
+
+    it('returns the workday from a concurrent duplicate clientEntryId race instead of throwing', async () => {
+      const raced = {
+        _id: new Types.ObjectId(),
+        farmId: new Types.ObjectId(farmId),
+        date: new Date(dto.date),
+        fruitId: new Types.ObjectId(fruitId),
+        defaultMeasurementUnitId: new Types.ObjectId(measurementUnitId),
+        status: 'OPEN',
+        createdAt: new Date('2026-09-02T08:00:00.000Z'),
+        recorderId: null,
+        clientEntryId: dto.clientEntryId,
+      };
+      // Primera consulta (antes de crear): nada todavía. Segunda consulta
+      // (tras el choque de índice único): el registro que ganó la carrera.
+      workdayModel.findOne
+        .mockReturnValueOnce({ exec: jest.fn().mockResolvedValue(null) })
+        .mockReturnValueOnce({ exec: jest.fn().mockResolvedValue(raced) });
+      fruitsService.findActiveById.mockResolvedValue({
+        _id: fruitId,
+        active: true,
+      });
+      measurementUnitsService.findActiveById.mockResolvedValue({
+        _id: measurementUnitId,
+        active: true,
+      });
+      workdayModel.create.mockRejectedValue({
+        code: 11000,
+        keyPattern: { farmId: 1, clientEntryId: 1 },
+      });
+
+      const result = await workdaysService.create(
+        farmId,
+        { uid: 'u', farmId, role: 'admin' },
+        dto,
+      );
+
+      expect(workdayModel.findOne).toHaveBeenCalledTimes(2);
+      expect(result._id).toEqual(raced._id.toString());
+    });
+
+    it('propagates an unrelated error from create without swallowing it', async () => {
+      mockNoExistingClientEntry();
+      fruitsService.findActiveById.mockResolvedValue({
+        _id: fruitId,
+        active: true,
+      });
+      measurementUnitsService.findActiveById.mockResolvedValue({
+        _id: measurementUnitId,
+        active: true,
+      });
+      workdayModel.create.mockRejectedValue(new Error('boom'));
+
+      await expect(
+        workdaysService.create(
+          farmId,
+          { uid: 'u', farmId, role: 'admin' },
+          dto,
+        ),
+      ).rejects.toThrow('boom');
     });
   });
 

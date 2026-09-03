@@ -1,5 +1,5 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { IsDateString, IsMongoId } from 'class-validator';
+import { IsDateString, IsMongoId, IsNotEmpty, IsString } from 'class-validator';
 
 /**
  * Request shape for POST /api/v1/workdays — opens a new workday.
@@ -9,6 +9,15 @@ import { IsDateString, IsMongoId } from 'class-validator';
  * workday is always OPEN.
  */
 export class CreateWorkdayRequestDto {
+  @ApiProperty({
+    description:
+      'Client-generated id (the local workday row id) — makes retrying this call after a dropped response idempotent, same pattern as harvester-workday/harvest-entries sync',
+    example: 'local-8f3a2b1c',
+  })
+  @IsString()
+  @IsNotEmpty()
+  clientEntryId!: string;
+
   @ApiProperty({
     description: 'Date this workday covers (ISO 8601)',
     example: '2026-09-02',

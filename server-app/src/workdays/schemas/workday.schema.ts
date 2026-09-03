@@ -29,7 +29,15 @@ export class Workday {
 
   @Prop({ type: Types.ObjectId, ref: 'User', default: null })
   recorderId?: Types.ObjectId | null;
+
+  // Client-generated id (ui-app's local workday row id) — makes retrying
+  // POST /workdays after a dropped response idempotent, same pattern as
+  // harvesterWorkday/harvestEntries. Scoped per farm (not globally unique)
+  // since it's generated on-device without server coordination.
+  @Prop({ required: true })
+  clientEntryId!: string;
 }
 
 export const WorkdaySchema = SchemaFactory.createForClass(Workday);
 WorkdaySchema.index({ farmId: 1, date: 1 });
+WorkdaySchema.index({ farmId: 1, clientEntryId: 1 }, { unique: true });

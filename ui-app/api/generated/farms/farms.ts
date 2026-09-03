@@ -7,7 +7,10 @@
  */
 import type {
   CreateFarmRequestDto,
-  CreateFarmResponseDto
+  CreateFarmResponseDto,
+  FindFarmResponseDto,
+  UpdateFarmRequestDto,
+  UpdateFarmResponseDto
 } from '../anotaYaAPI.schemas';
 
 import { apiClient } from '../../axios-instance';
@@ -28,5 +31,31 @@ const farmsControllerCreate = (
     },
       );
     }
-  return {farmsControllerCreate}};
+  /**
+ * @summary Get the caller's own farm
+ */
+const farmsControllerFindMe = (
+
+ ) => {
+      return apiClient<FindFarmResponseDto>(
+      {url: `/api/v1/farms/me`, method: 'GET'
+    },
+      );
+    }
+  /**
+ * @summary Update the caller's own farm settings (admin only) — currently just recordersCanManageCatalog
+ */
+const farmsControllerUpdateMe = (
+    updateFarmRequestDto: UpdateFarmRequestDto,
+ ) => {
+      return apiClient<UpdateFarmResponseDto>(
+      {url: `/api/v1/farms/me`, method: 'PATCH',
+      headers: {'Content-Type': 'application/json', },
+      data: updateFarmRequestDto
+    },
+      );
+    }
+  return {farmsControllerCreate,farmsControllerFindMe,farmsControllerUpdateMe}};
 export type FarmsControllerCreateResult = NonNullable<Awaited<ReturnType<ReturnType<typeof getFarms>['farmsControllerCreate']>>>
+export type FarmsControllerFindMeResult = NonNullable<Awaited<ReturnType<ReturnType<typeof getFarms>['farmsControllerFindMe']>>>
+export type FarmsControllerUpdateMeResult = NonNullable<Awaited<ReturnType<ReturnType<typeof getFarms>['farmsControllerUpdateMe']>>>

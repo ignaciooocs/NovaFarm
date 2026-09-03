@@ -10,6 +10,7 @@ import { db } from '@/db/client';
 import migrations from '../drizzle/migrations';
 import { theme } from '@/theme';
 import { bootstrapCatalogSyncOnReconnect } from '@/lib/catalogSync';
+import { bootstrapFarmSettingsOnReconnect } from '@/lib/farmSettings';
 import { bootstrapAuthListener, bootstrapConnectivityListener } from '@/stores';
 
 export default function RootLayout() {
@@ -21,10 +22,12 @@ export default function RootLayout() {
     const unsubscribeAuth = bootstrapAuthListener();
     const unsubscribeConnectivity = bootstrapConnectivityListener();
     const unsubscribeCatalogSync = bootstrapCatalogSyncOnReconnect();
+    const unsubscribeFarmSettings = bootstrapFarmSettingsOnReconnect();
     return () => {
       unsubscribeAuth();
       unsubscribeConnectivity();
       unsubscribeCatalogSync();
+      unsubscribeFarmSettings();
     };
   }, []);
 

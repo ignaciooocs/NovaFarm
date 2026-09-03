@@ -6,6 +6,7 @@ import { Screen } from '@/components/Screen';
 import { strings } from '@/constants/strings';
 import { getActiveWorkday } from '@/db/queries';
 import { syncCatalogs } from '@/lib/catalogSync';
+import { syncFarmSettings } from '@/lib/farmSettings';
 import { useActiveWorkdayStore, useAuthStore } from '@/stores';
 import { spacing } from '@/theme';
 
@@ -29,9 +30,11 @@ export default function HomeScreen() {
 
       // Fire-and-forget: Home es el punto natural "ya-online" del ciclo (se
       // visita al iniciar sesión y al volver de cada jornada) para refrescar
-      // la caché local de catálogos — no bloquea el render de Home ni
-      // depende de que termine para mostrar la jornada activa.
+      // la caché local de catálogos y el interruptor de la farm — no
+      // bloquea el render de Home ni depende de que terminen para mostrar
+      // la jornada activa.
       syncCatalogs();
+      syncFarmSettings();
 
       let cancelled = false;
 

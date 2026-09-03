@@ -1,9 +1,9 @@
 import { Injectable } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { randomInt } from 'crypto';
-import { Model } from 'mongoose';
+import { Model, Types } from 'mongoose';
 import { Farm, FarmDocument } from './schemas/farm.schema';
-import { CreateFarmRequestDto, FarmDto } from './dto';
+import { CreateFarmRequestDto, FarmDto, UpdateFarmRequestDto } from './dto';
 
 const INVITATION_CODE_LENGTH = 8;
 // Sin 0/O/1/I para evitar ambigüedad al leerlo en voz alta o escribirlo.
@@ -69,6 +69,43 @@ export class FarmsService {
     return found ? this.toDto(found) : null;
   }
 
+  // Busca la propia farm de quien llama (GET /farms/me — cualquier miembro
+  // autenticado, no solo admin, ya que un recorder necesita leer
+  // recordersCanManageCatalog para saber si puede ver el catálogo).
+  async findById(id: string): Promise<FarmDto | null> {
+    if (!Types.ObjectId.isValid(id)) {
+      return null;
+    }
+
+    const found = await this.farmModel.findById(id).exec();
+    return found ? this.toDto(found) : null;
+  }
+
+  // Edita recordersCanManageCatalog (PATCH /farms/me, admin only — el
+  // chequeo de rol vive en el controller vía RolesGuard, no acá). Usa
+  // findOneAndUpdate con $set puntual, no fetch+mutate+save(): igual que en
+  // workdays.close(), .save() revalidaría el documento completo y
+  // reventaría en farms creadas antes de que este campo existiera.
+  async update(
+    id: string,
+    dto: UpdateFarmRequestDto,
+  ): Promise<FarmDto | null> {
+    if (!Types.ObjectId.isValid(id)) {
+      return null;
+    }
+
+    const changes: Partial<Pick<Farm, 'recordersCanManageCatalog'>> = {};
+    if (dto.recordersCanManageCatalog !== undefined) {
+      changes.recordersCanManageCatalog = dto.recordersCanManageCatalog;
+    }
+
+    const updated = await this.farmModel
+      .findOneAndUpdate({ _id: id }, { $set: changes }, { new: true })
+      .exec();
+
+    return updated ? this.toDto(updated) : null;
+  }
+
   // Genera un código aleatorio de INVITATION_CODE_LENGTH caracteres tomados
   // del alfabeto permitido.
   private generateInvitationCode(): string {
@@ -98,6 +135,15 @@ export class FarmsService {
   }
 
   // Convierte el documento de Mongoose al DTO de respuesta.
+  //
+  // recordersCanManageCatalog usa `?? true` a propósito: Mongoose solo
+  // aplica el `default` del schema al CREAR un documento, nunca al leer uno
+  // viejo que no lo tiene guardado — las farms creadas antes de que este
+  // campo existiera literalmente no lo tienen en la base. Sin este
+  // fallback, esas farms leerían `undefined` acá y el interruptor quedaría
+  // "apagado" por accidente para farms viejas, justo lo opuesto al default
+  // "true" que se decidió (mismo tipo de gap que causó el bug real de
+  // clientEntryId en workdays — acá se previno a propósito).
   private toDto(doc: FarmDocument): FarmDto {
     return {
       _id: doc._id.toString(),
@@ -106,6 +152,7 @@ export class FarmsService {
       invitationCode: doc.invitationCode,
       active: doc.active,
       createdAt: doc.createdAt,
+      recordersCanManageCatalog: doc.recordersCanManageCatalog ?? true,
     };
   }
 }

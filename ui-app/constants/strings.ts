@@ -116,6 +116,9 @@ export const strings = {
     title: 'Ajustes',
     logout: 'Cerrar sesión',
     farmInfo: 'Información de la farm',
+    recordersCanManageCatalog: 'Anotadores pueden ver el catálogo',
+    recordersCanManageCatalogHelp:
+      'Si está prendido, cualquier anotador puede ver y agregar frutas, unidades de medida y cosechadores. Si lo apagas, solo los admin pueden.',
   },
   profile: {
     title: 'Perfil',

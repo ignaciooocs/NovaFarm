@@ -19,6 +19,15 @@ export class Farm {
 
   @Prop({ required: true, default: Date.now })
   createdAt!: Date;
+
+  // Interruptor único por farm (no permisos por persona): si un recorder
+  // puede ver y gestionar el catálogo (fruits/harvesters/measurement-units)
+  // además de un admin. Default true — "por defecto tienen acceso, el admin
+  // lo puede apagar" fue la decisión explícita al diseñar esto (2026-09-03).
+  // No afecta a "Mi equipo" — eso sigue siendo admin-only siempre, vía
+  // RolesGuard, sin excepción.
+  @Prop({ required: true, default: true })
+  recordersCanManageCatalog!: boolean;
 }
 
 export const FarmSchema = SchemaFactory.createForClass(Farm);

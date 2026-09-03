@@ -43,4 +43,11 @@ export class FarmDto {
     example: '2026-08-19T12:00:00.000Z',
   })
   createdAt!: Date;
+
+  @ApiProperty({
+    description:
+      'Whether recorders (not just admins) can view/manage the farm catalog (fruits/harvesters/measurement-units). A single per-farm switch, not per-user permissions. Does not affect the team roster, which stays admin-only regardless.',
+    example: true,
+  })
+  recordersCanManageCatalog!: boolean;
 }

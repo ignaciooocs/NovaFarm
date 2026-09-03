@@ -8,12 +8,13 @@ import { FarmScopeGuard } from './guards/farm-scope.guard';
 import { FirebaseAuthGuard } from './guards/firebase-auth.guard';
 import { RolesGuard } from './guards/roles.guard';
 
-// forwardRef en ambos sentidos: AuthModule necesita UsersModule (AuthService
-// crea/busca usuarios durante el registro) y, desde que UsersController
-// existe, UsersModule necesita AuthModule (FarmScopeGuard/RolesGuard) — ver
-// el mismo forwardRef en users.module.ts.
+// forwardRef en ambos sentidos, para Users y para Farms: AuthModule
+// necesita ambos (AuthService crea/busca usuarios y farms durante el
+// registro), y desde que UsersController/FarmsController existen, ambos
+// necesitan AuthModule (FarmScopeGuard/RolesGuard) — ver el mismo
+// forwardRef en users.module.ts y farms.module.ts.
 @Module({
-  imports: [forwardRef(() => UsersModule), FarmsModule],
+  imports: [forwardRef(() => UsersModule), forwardRef(() => FarmsModule)],
   controllers: [AuthController],
   providers: [
     AuthService,

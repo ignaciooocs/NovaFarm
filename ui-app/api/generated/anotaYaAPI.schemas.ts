@@ -49,6 +49,8 @@ export interface FarmDto {
   active: boolean;
   /** Creation timestamp */
   createdAt: string;
+  /** Whether recorders (not just admins) can view/manage the farm catalog (fruits/harvesters/measurement-units). A single per-farm switch, not per-user permissions. Does not affect the team roster, which stays admin-only regardless. */
+  recordersCanManageCatalog: boolean;
 }
 
 /**
@@ -166,6 +168,69 @@ export interface CreateFarmResponseDto {
   active: boolean;
   /** Creation timestamp */
   createdAt: string;
+  /** Whether recorders (not just admins) can view/manage the farm catalog (fruits/harvesters/measurement-units). A single per-farm switch, not per-user permissions. Does not affect the team roster, which stays admin-only regardless. */
+  recordersCanManageCatalog: boolean;
+}
+
+/**
+ * UI-only classification: whether to show the 'invite your team' step after creation. No backend logic differs between the two values.
+ */
+export type FindFarmResponseDtoType = typeof FindFarmResponseDtoType[keyof typeof FindFarmResponseDtoType];
+
+
+export const FindFarmResponseDtoType = {
+  organization: 'organization',
+  independent: 'independent',
+} as const;
+
+export interface FindFarmResponseDto {
+  /** Unique identifier of the farm */
+  _id: string;
+  /** Display name of the farm */
+  name: string;
+  /** UI-only classification: whether to show the 'invite your team' step after creation. No backend logic differs between the two values. */
+  type: FindFarmResponseDtoType;
+  /** Code a recorder enters during onboarding to join this farm. Regenerable by an admin, no expiry. */
+  invitationCode: string;
+  /** Whether the farm is active */
+  active: boolean;
+  /** Creation timestamp */
+  createdAt: string;
+  /** Whether recorders (not just admins) can view/manage the farm catalog (fruits/harvesters/measurement-units). A single per-farm switch, not per-user permissions. Does not affect the team roster, which stays admin-only regardless. */
+  recordersCanManageCatalog: boolean;
+}
+
+export interface UpdateFarmRequestDto {
+  /** Whether recorders (not just admins) can view/manage the farm catalog */
+  recordersCanManageCatalog?: boolean;
+}
+
+/**
+ * UI-only classification: whether to show the 'invite your team' step after creation. No backend logic differs between the two values.
+ */
+export type UpdateFarmResponseDtoType = typeof UpdateFarmResponseDtoType[keyof typeof UpdateFarmResponseDtoType];
+
+
+export const UpdateFarmResponseDtoType = {
+  organization: 'organization',
+  independent: 'independent',
+} as const;
+
+export interface UpdateFarmResponseDto {
+  /** Unique identifier of the farm */
+  _id: string;
+  /** Display name of the farm */
+  name: string;
+  /** UI-only classification: whether to show the 'invite your team' step after creation. No backend logic differs between the two values. */
+  type: UpdateFarmResponseDtoType;
+  /** Code a recorder enters during onboarding to join this farm. Regenerable by an admin, no expiry. */
+  invitationCode: string;
+  /** Whether the farm is active */
+  active: boolean;
+  /** Creation timestamp */
+  createdAt: string;
+  /** Whether recorders (not just admins) can view/manage the farm catalog (fruits/harvesters/measurement-units). A single per-farm switch, not per-user permissions. Does not affect the team roster, which stays admin-only regardless. */
+  recordersCanManageCatalog: boolean;
 }
 
 export interface CreateHarvesterRequestDto {

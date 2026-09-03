@@ -7,6 +7,8 @@
  */
 import type {
   FindUserResponseDto,
+  UpdateUserRequestDto,
+  UpdateUserResponseDto,
   UsersControllerFindAllParams
 } from '../anotaYaAPI.schemas';
 
@@ -27,5 +29,31 @@ const usersControllerFindAll = (
     },
       );
     }
-  return {usersControllerFindAll}};
+  /**
+ * @summary Get the caller's own user profile
+ */
+const usersControllerFindMe = (
+
+ ) => {
+      return apiClient<FindUserResponseDto>(
+      {url: `/api/v1/users/me`, method: 'GET'
+    },
+      );
+    }
+  /**
+ * @summary Update the caller's own user profile (name and/or nationalId only)
+ */
+const usersControllerUpdateMe = (
+    updateUserRequestDto: UpdateUserRequestDto,
+ ) => {
+      return apiClient<UpdateUserResponseDto>(
+      {url: `/api/v1/users/me`, method: 'PATCH',
+      headers: {'Content-Type': 'application/json', },
+      data: updateUserRequestDto
+    },
+      );
+    }
+  return {usersControllerFindAll,usersControllerFindMe,usersControllerUpdateMe}};
 export type UsersControllerFindAllResult = NonNullable<Awaited<ReturnType<ReturnType<typeof getUsers>['usersControllerFindAll']>>>
+export type UsersControllerFindMeResult = NonNullable<Awaited<ReturnType<ReturnType<typeof getUsers>['usersControllerFindMe']>>>
+export type UsersControllerUpdateMeResult = NonNullable<Awaited<ReturnType<ReturnType<typeof getUsers>['usersControllerUpdateMe']>>>

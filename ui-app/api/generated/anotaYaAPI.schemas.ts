@@ -126,6 +126,44 @@ export interface FindUserResponseDto {
   nationalId?: string;
 }
 
+export interface UpdateUserRequestDto {
+  /** New display name */
+  name?: string;
+  /**
+     * National ID. Omit to leave it untouched, or pass null explicitly to clear an existing one.
+     * @nullable
+     */
+  nationalId?: string | null;
+}
+
+/**
+ * Role of the user within their farm
+ */
+export type UpdateUserResponseDtoRole = typeof UpdateUserResponseDtoRole[keyof typeof UpdateUserResponseDtoRole];
+
+
+export const UpdateUserResponseDtoRole = {
+  recorder: 'recorder',
+  admin: 'admin',
+} as const;
+
+export interface UpdateUserResponseDto {
+  /** Unique identifier of the user */
+  _id: string;
+  /** Farm this user belongs to (tenant scope) */
+  farmId: string;
+  /** Display name of the user */
+  name: string;
+  /** Email address of the user */
+  email: string;
+  /** Role of the user within their farm */
+  role: UpdateUserResponseDtoRole;
+  /** Whether the user is active */
+  active: boolean;
+  /** National ID (optional/nullable — not collected at quick field registration, filled in later by an admin) */
+  nationalId?: string;
+}
+
 /**
  * UI-only classification: whether to show the 'invite your team' step after creation. No backend logic differs between the two values.
  */

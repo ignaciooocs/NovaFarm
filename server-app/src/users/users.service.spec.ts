@@ -11,6 +11,7 @@ describe('UsersService', () => {
     create: jest.fn(),
     find: jest.fn(),
     findOne: jest.fn(),
+    findOneAndUpdate: jest.fn(),
   };
 
   const farmId = '507f1f77bcf86cd799439011';
@@ -146,6 +147,100 @@ describe('UsersService', () => {
         firebaseUid: 'firebase-uid',
       });
       expect(result).toEqual(doc);
+    });
+  });
+
+  describe('findMe', () => {
+    it("returns the caller's own profile by firebaseUid", async () => {
+      const userId = new Types.ObjectId();
+      const exec = jest.fn().mockResolvedValue({
+        _id: userId,
+        farmId: new Types.ObjectId(farmId),
+        name: 'Juana Perez',
+        email: 'juana@example.com',
+        role: 'recorder',
+        active: true,
+      });
+      userModel.findOne.mockReturnValue({ exec });
+
+      const result = await usersService.findMe('firebase-uid');
+
+      expect(userModel.findOne).toHaveBeenCalledWith({
+        firebaseUid: 'firebase-uid',
+      });
+      expect(result?._id).toEqual(userId.toString());
+    });
+
+    it('returns null when no user matches the firebaseUid', async () => {
+      userModel.findOne.mockReturnValue({
+        exec: jest.fn().mockResolvedValue(null),
+      });
+
+      const result = await usersService.findMe('firebase-uid');
+
+      expect(result).toBeNull();
+    });
+  });
+
+  describe('updateMe', () => {
+    it("edits the caller's own name, scoped by firebaseUid", async () => {
+      const userId = new Types.ObjectId();
+      userModel.findOneAndUpdate.mockReturnValue({
+        exec: jest.fn().mockResolvedValue({
+          _id: userId,
+          farmId: new Types.ObjectId(farmId),
+          name: 'Juana Gonzalez',
+          email: 'juana@example.com',
+          role: 'recorder',
+          active: true,
+        }),
+      });
+
+      const result = await usersService.updateMe('firebase-uid', {
+        name: 'Juana Gonzalez',
+      });
+
+      // findOneAndUpdate con $set puntual, no fetch+mutate+save() — mismo
+      // motivo que en workdays.close()/farms.update().
+      expect(userModel.findOneAndUpdate).toHaveBeenCalledWith(
+        { firebaseUid: 'firebase-uid' },
+        { $set: { name: 'Juana Gonzalez' }, $unset: {} },
+        { new: true },
+      );
+      expect(result?.name).toEqual('Juana Gonzalez');
+    });
+
+    it('clears an existing nationalId when nationalId is explicitly null ($unset, not $set)', async () => {
+      userModel.findOneAndUpdate.mockReturnValue({
+        exec: jest.fn().mockResolvedValue({
+          _id: new Types.ObjectId(),
+          farmId: new Types.ObjectId(farmId),
+          name: 'Juana Perez',
+          email: 'juana@example.com',
+          role: 'recorder',
+          active: true,
+        }),
+      });
+
+      await usersService.updateMe('firebase-uid', { nationalId: null });
+
+      expect(userModel.findOneAndUpdate).toHaveBeenCalledWith(
+        { firebaseUid: 'firebase-uid' },
+        { $set: {}, $unset: { nationalId: 1 } },
+        { new: true },
+      );
+    });
+
+    it('returns null when no user matches the firebaseUid', async () => {
+      userModel.findOneAndUpdate.mockReturnValue({
+        exec: jest.fn().mockResolvedValue(null),
+      });
+
+      const result = await usersService.updateMe('firebase-uid', {
+        name: 'Juana Gonzalez',
+      });
+
+      expect(result).toBeNull();
     });
   });
 });

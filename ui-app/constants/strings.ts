@@ -122,6 +122,8 @@ export const strings = {
   },
   profile: {
     title: 'Perfil',
+    nationalIdLabel: 'RUT',
+    saved: 'Guardado',
   },
   errors: {
     generic: 'Algo salió mal. Intenta de nuevo.',

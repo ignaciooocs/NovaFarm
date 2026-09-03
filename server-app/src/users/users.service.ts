@@ -2,7 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model, Types } from 'mongoose';
 import { User, UserDocument } from './schemas/user.schema';
-import { FindUserRequestDto, UserDto } from './dto';
+import { FindUserRequestDto, UpdateUserRequestDto, UserDto } from './dto';
 
 // Forma de los datos necesarios para crear un usuario. Distinta del DTO de
 // request porque create() no tiene endpoint propio — se arma internamente
@@ -65,6 +65,46 @@ export class UsersService {
   // a partir del uid que viaja en el token (el token no trae el _id de Mongo).
   async findByFirebaseUid(firebaseUid: string): Promise<UserDocument | null> {
     return this.userModel.findOne({ firebaseUid }).exec();
+  }
+
+  // Perfil propio (GET /users/me — cualquier miembro autenticado, admin o
+  // recorder, ve el suyo). A diferencia de findAll(), buscar por
+  // firebaseUid ya es intrínsecamente "solo el mío": el uid sale del token
+  // verificado, nunca del cliente, así que no hace falta filtrar por farmId
+  // además.
+  async findMe(firebaseUid: string): Promise<UserDto | null> {
+    const found = await this.userModel.findOne({ firebaseUid }).exec();
+    return found ? this.toDto(found) : null;
+  }
+
+  // Edita el propio perfil (PATCH /users/me): solo name y/o nationalId — ver
+  // por qué no role/email/active en el comentario de UpdateUserRequestDto.
+  // nationalId sigue el mismo patrón que el nickname de harvester: `null`
+  // explícito lo borra ($unset), omitido lo deja como estaba. findOneAndUpdate
+  // con $set puntual, no fetch+mutate+save() — mismo motivo que en
+  // workdays.close()/farms.update(): .save() revalidaría el documento
+  // completo.
+  async updateMe(
+    firebaseUid: string,
+    dto: UpdateUserRequestDto,
+  ): Promise<UserDto | null> {
+    const changes: Partial<Pick<User, 'name' | 'nationalId'>> = {};
+    const unset: Record<string, 1> = {};
+
+    if (dto.name !== undefined) {
+      changes.name = dto.name;
+    }
+    if (dto.nationalId === null) {
+      unset.nationalId = 1;
+    } else if (dto.nationalId !== undefined) {
+      changes.nationalId = dto.nationalId;
+    }
+
+    const updated = await this.userModel
+      .findOneAndUpdate({ firebaseUid }, { $set: changes, $unset: unset }, { new: true })
+      .exec();
+
+    return updated ? this.toDto(updated) : null;
   }
 
   // Convierte el documento a DTO. nationalId puede venir undefined — es

@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
-import { StyleSheet, View } from 'react-native';
+import { Pressable, StyleSheet, View } from 'react-native';
+import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
 import {
   ActivityIndicator,
   Divider,
@@ -11,11 +12,15 @@ import { getFarms } from '@/api/generated/farms/farms';
 import { Screen } from '@/components/Screen';
 import { strings } from '@/constants/strings';
 import { getErrorMessage } from '@/lib/errors';
-import { useAuthStore } from '@/stores';
-import { spacing } from '@/theme';
+import { useAuthStore, useThemeStore } from '@/stores';
+import { colors, palettes, spacing, type PaletteName } from '@/theme';
+
+const PALETTE_NAMES = Object.keys(palettes) as PaletteName[];
 
 export default function SettingsScreen() {
   const isAdmin = useAuthStore((state) => state.claims.role) === 'admin';
+  const activePalette = useThemeStore((state) => state.palette);
+  const setPalette = useThemeStore((state) => state.setPalette);
 
   const [farmName, setFarmName] = useState('');
   const [invitationCode, setInvitationCode] = useState('');
@@ -104,6 +109,45 @@ export default function SettingsScreen() {
         </>
       ) : null}
 
+      <Divider style={styles.divider} />
+      <Text variant="titleMedium" style={styles.sectionTitle}>
+        {strings.settings.theme}
+      </Text>
+      <Text variant="bodySmall" style={styles.themeHelp}>
+        {strings.settings.themeHelp}
+      </Text>
+      <View style={styles.paletteRow}>
+        {PALETTE_NAMES.map((name) => {
+          const selected = name === activePalette;
+          return (
+            <Pressable
+              key={name}
+              onPress={() => setPalette(name)}
+              style={styles.swatchWrapper}
+            >
+              <View
+                style={[
+                  styles.swatch,
+                  { backgroundColor: palettes[name].primary },
+                  selected ? styles.swatchSelected : null,
+                ]}
+              >
+                {selected ? (
+                  <MaterialCommunityIcons
+                    name="check"
+                    size={20}
+                    color={colors.surface}
+                  />
+                ) : null}
+              </View>
+              <Text style={styles.swatchLabel}>
+                {strings.settings.palettes[name]}
+              </Text>
+            </Pressable>
+          );
+        })}
+      </View>
+
       {error ? <HelperText type="error">{error}</HelperText> : null}
     </Screen>
   );
@@ -121,4 +165,19 @@ const styles = StyleSheet.create({
   },
   switchLabel: { flex: 1, marginRight: spacing.md },
   switchHelp: { marginTop: spacing.xs },
+  themeHelp: { color: colors.textSecondary, marginBottom: spacing.md },
+  paletteRow: { flexDirection: 'row', justifyContent: 'space-around' },
+  swatchWrapper: { alignItems: 'center' },
+  swatch: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  swatchSelected: {
+    borderWidth: 3,
+    borderColor: colors.textPrimary,
+  },
+  swatchLabel: { marginTop: spacing.xs, color: colors.textSecondary },
 });

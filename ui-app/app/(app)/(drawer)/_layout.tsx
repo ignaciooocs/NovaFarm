@@ -10,7 +10,7 @@ import type { DrawerContentComponentProps } from 'expo-router/drawer';
 import { signOut } from 'firebase/auth';
 import { strings } from '@/constants/strings';
 import { auth } from '@/lib/firebase';
-import { useAuthStore, useFarmSettingsStore } from '@/stores';
+import { useAuthStore, useFarmSettingsStore, usePalette } from '@/stores';
 import { colors } from '@/theme';
 
 // "Cerrar sesión" es una acción directa acá, no una pantalla propia — se
@@ -55,6 +55,7 @@ export default function DrawerLayout() {
     (state) => state.recordersCanManageCatalog,
   );
   const canManageCatalog = isAdmin || recordersCanManageCatalog;
+  const palette = usePalette();
 
   return (
     <Drawer
@@ -62,7 +63,19 @@ export default function DrawerLayout() {
       drawerContent={(props) => <DrawerContent {...props} />}
       screenOptions={{
         headerShown: true,
-        drawerActiveTintColor: colors.primary,
+        drawerActiveTintColor: palette.primary,
+        // Sin esto, el botón hamburguesa que este Drawer genera solo para
+        // sus pantallas (Perfil, Ajustes, catálogos, Mi equipo — (tabs)
+        // tiene el suyo propio, ver headerLeft en (tabs)/_layout.tsx) queda
+        // con el azul por defecto de React Navigation en vez del tema
+        // elegido. Bug real reportado por el usuario (2026-09-03): el
+        // hamburgués cambiaba de color en Inicio/Historial pero no en el
+        // resto de las pantallas del drawer, justo por esto.
+        headerTintColor: palette.primary,
+        // headerTintColor también tiñe el texto del título por defecto —
+        // se fija acá aparte para que títulos como "Perfil"/"Ajustes"
+        // sigan neutros y solo el hamburgués use el color de marca.
+        headerTitleStyle: { color: colors.textPrimary },
       }}
     >
       <Drawer.Screen

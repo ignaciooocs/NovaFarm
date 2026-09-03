@@ -16,6 +16,7 @@ export const strings = {
     delete: 'Eliminar',
     edit: 'Editar',
     add: 'Agregar',
+    close: 'Cerrar',
     activate: 'Activar',
     deactivate: 'Desactivar',
     name: 'Nombre',
@@ -52,8 +53,13 @@ export const strings = {
     title: 'Inicio',
     openWorkday: 'Abrir Jornada',
     activeWorkday: 'Jornada activa',
+    goToAnotador: 'Ir al Anotador',
     history: 'Historial de jornadas',
     noActiveWorkday: 'No tienes una jornada abierta',
+    todayTeam: 'Equipo de hoy',
+    workersCount: (n: number) =>
+      n === 1 ? '1 cosechador trabajando hoy' : `${n} cosechadores trabajando hoy`,
+    moreWorkers: (n: number) => `+${n} más`,
   },
   workday: {
     openTitle: 'Abrir Jornada',
@@ -70,6 +76,11 @@ export const strings = {
         ? 'Tienes 1 registro sin sincronizar. Sincroniza antes de cerrar, o el total va a quedar incompleto.'
         : `Tienes ${count} registros sin sincronizar. Sincroniza antes de cerrar, o el total va a quedar incompleto.`,
   },
+  history: {
+    team: 'Equipo',
+    workersCount: (n: number) => (n === 1 ? '1 cosechador' : `${n} cosechadores`),
+    recordedBy: (name: string) => `Anotado por ${name}`,
+  },
   anotador: {
     title: 'Anotador',
     tapToRecord: 'Anotar',
@@ -82,6 +93,9 @@ export const strings = {
     weightLabel: 'Peso (kg)',
     recordWeight: 'Anotar peso',
     grandTotal: 'Total del día',
+    roundsTitle: 'Vueltas',
+    round: (n: number) => `Vuelta ${n}`,
+    noRoundsYet: 'Todavía no tiene vueltas anotadas.',
   },
   sync: {
     title: 'Sincronizar',
@@ -105,6 +119,7 @@ export const strings = {
     editHarvester: 'Editar cosechador',
     roleAdmin: 'Admin',
     roleRecorder: 'Anotador',
+    fruitIconLabel: 'Emoji',
     unitNameLabel: 'Nombre (ej. Tarro 10kg)',
     kgFactorLabel: 'Factor de conversión a kilos',
     firstNameLabel: 'Nombre',
@@ -119,6 +134,14 @@ export const strings = {
     recordersCanManageCatalog: 'Anotadores pueden ver el catálogo',
     recordersCanManageCatalogHelp:
       'Si está prendido, cualquier anotador puede ver y agregar frutas, unidades de medida y cosechadores. Si lo apagas, solo los admin pueden.',
+    theme: 'Tema',
+    themeHelp: 'El color se guarda en este dispositivo, cada persona puede elegir el suyo.',
+    palettes: {
+      verde: 'Verde',
+      morado: 'Morado',
+      azul: 'Azul',
+      naranja: 'Naranja',
+    },
   },
   profile: {
     title: 'Perfil',

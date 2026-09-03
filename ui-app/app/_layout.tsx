@@ -2,7 +2,8 @@ import { useEffect } from 'react';
 import { View } from 'react-native';
 import { Stack } from 'expo-router';
 import { useMigrations } from 'drizzle-orm/expo-sqlite/migrator';
-import { ActivityIndicator, PaperProvider, Text } from 'react-native-paper';
+import { PaperProvider, Text } from 'react-native-paper';
+import { LoadingScreen } from '@/components/LoadingScreen';
 import { db } from '@/db/client';
 // eslint-disable-next-line import/no-unresolved -- generado por `pnpm db:generate`
 import migrations from '../drizzle/migrations';
@@ -32,11 +33,7 @@ export default function RootLayout() {
   }
 
   if (!success) {
-    return (
-      <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
-        <ActivityIndicator />
-      </View>
-    );
+    return <LoadingScreen />;
   }
 
   return (

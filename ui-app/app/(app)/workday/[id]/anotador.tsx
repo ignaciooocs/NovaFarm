@@ -229,13 +229,22 @@ export default function AnotadorScreen() {
         {strings.anotador.grandTotal}: {grandTotalKg.toFixed(2)} {strings.anotador.kg}
       </Text>
 
-      <Button
-        mode="text"
-        onPress={() => router.push('/sync')}
-        style={styles.syncLink}
-      >
-        {strings.sync.title}
-      </Button>
+      <View style={styles.linkRow}>
+        <Button mode="text" onPress={() => router.push('/sync')}>
+          {strings.sync.title}
+        </Button>
+        <Button
+          mode="text"
+          onPress={() =>
+            router.push({
+              pathname: '/workday/[id]/close',
+              params: { id: workdayId },
+            })
+          }
+        >
+          {strings.workday.closeTitle}
+        </Button>
+      </View>
 
       {error ? <HelperText type="error">{error}</HelperText> : null}
 
@@ -347,7 +356,11 @@ export default function AnotadorScreen() {
 const styles = StyleSheet.create({
   title: { marginBottom: spacing.xs },
   grandTotal: { marginBottom: spacing.xs },
-  syncLink: { alignSelf: 'flex-start', marginBottom: spacing.sm },
+  linkRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginBottom: spacing.sm,
+  },
   row: {
     paddingVertical: spacing.sm,
     borderBottomWidth: StyleSheet.hairlineWidth,

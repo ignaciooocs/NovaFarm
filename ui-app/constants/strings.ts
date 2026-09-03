@@ -63,6 +63,10 @@ export const strings = {
     closeConfirm: 'Al cerrar, los totales del día quedan congelados y ya no se pueden agregar más entregas.',
     close: 'Cerrar Jornada',
     totalKg: 'Total del día',
+    pendingBeforeClose: (count: number) =>
+      count === 1
+        ? 'Tienes 1 registro sin sincronizar. Sincroniza antes de cerrar, o el total va a quedar incompleto.'
+        : `Tienes ${count} registros sin sincronizar. Sincroniza antes de cerrar, o el total va a quedar incompleto.`,
   },
   anotador: {
     title: 'Anotador',

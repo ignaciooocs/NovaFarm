@@ -1,8 +1,4 @@
-import {
-  ConflictException,
-  Injectable,
-  NotFoundException,
-} from '@nestjs/common';
+import { Injectable, NotFoundException } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model, Types } from 'mongoose';
 import { AuthenticatedUser } from '../auth/guards/farm-scope.guard';
@@ -144,10 +140,17 @@ export class WorkdaysService {
     return found ? this.toDto(found) : null;
   }
 
-  // Cierra una jornada (RF-01.2). Si ya estaba cerrada, rechaza con 409 (no
-  // se puede volver a cerrar ni reabrir). Si sigue abierta, suma todos los
-  // totalKg de harvestEntries de esa jornada y congela el resultado en
-  // finalTotalKg junto con el nuevo status.
+  // Cierra una jornada (RF-01.2). Idempotente: si ya estaba cerrada, no
+  // rechaza — devuelve el estado ya congelado tal cual. Esto es a propósito
+  // (bug real encontrado en producción, 2026-09-03): si la respuesta del
+  // primer cierre se pierde en el camino (señal inestable, mismo escenario
+  // que POST /workdays), el cliente reintenta pensando que sigue abierta;
+  // tratar el reintento como error dejaba a quien reintenta atascado viendo
+  // "ya está cerrada" para siempre, sin forma de salir de ahí. No hay
+  // riesgo de datos: el segundo llamado nunca recalcula, solo lee lo que ya
+  // quedó congelado. Si sigue abierta, suma todos los totalKg de
+  // harvestEntries de esa jornada y congela el resultado en finalTotalKg
+  // junto con el nuevo status.
   async close(farmId: string, id: string): Promise<WorkdayDto> {
     if (!Types.ObjectId.isValid(id)) {
       throw new NotFoundException('Workday not found');
@@ -162,7 +165,7 @@ export class WorkdaysService {
     }
 
     if (workday.status === 'CLOSED') {
-      throw new ConflictException('Workday is already closed');
+      return this.toDto(workday);
     }
 
     // $match acota la suma a los harvestEntries de esta jornada y farm;
@@ -183,11 +186,29 @@ export class WorkdaysService {
 
     // Si la jornada no tuvo ninguna entrega, aggregate viene undefined —
     // en ese caso el total congelado queda en cero.
-    workday.finalTotalKg = aggregate?.total ?? Types.Decimal128.fromString('0');
-    workday.status = 'CLOSED';
-    await workday.save();
+    const finalTotalKg = aggregate?.total ?? Types.Decimal128.fromString('0');
 
-    return this.toDto(workday);
+    // findOneAndUpdate con $set puntual, no fetch+mutate+save(): .save()
+    // revalida el documento COMPLETO contra el schema actual, y cualquier
+    // jornada abierta antes de que clientEntryId se volviera required
+    // (2026-09-03) no lo tiene guardado — cerrarla con .save() la rechazaba
+    // con un ValidationError por un campo que en ese momento ni existía
+    // (bug real, encontrado en producción). findOneAndUpdate no corre
+    // validadores por defecto (a diferencia de .save()), así que $set solo
+    // toca finalTotalKg/status sin chocar con eso.
+    const updated = await this.workdayModel
+      .findOneAndUpdate(
+        { _id: id, farmId: new Types.ObjectId(farmId) },
+        { $set: { finalTotalKg, status: 'CLOSED' } },
+        { new: true },
+      )
+      .exec();
+
+    if (!updated) {
+      throw new NotFoundException('Workday not found');
+    }
+
+    return this.toDto(updated);
   }
 
   // Si quien abre la jornada es un recorder, resuelve su _id de Mongo a

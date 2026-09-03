@@ -1,4 +1,4 @@
-import { ConflictException, NotFoundException } from '@nestjs/common';
+import { NotFoundException } from '@nestjs/common';
 import { getModelToken } from '@nestjs/mongoose';
 import { Test, TestingModule } from '@nestjs/testing';
 import { Types } from 'mongoose';
@@ -16,6 +16,7 @@ describe('WorkdaysService', () => {
     create: jest.fn(),
     find: jest.fn(),
     findOne: jest.fn(),
+    findOneAndUpdate: jest.fn(),
   };
 
   const harvestEntryModel = {
@@ -313,7 +314,6 @@ describe('WorkdaysService', () => {
     const workdayId = new Types.ObjectId().toString();
 
     it('closes an open workday and freezes the aggregated total', async () => {
-      const save = jest.fn().mockResolvedValue(undefined);
       const workdayDoc = {
         _id: new Types.ObjectId(workdayId),
         farmId: new Types.ObjectId(farmId),
@@ -323,7 +323,6 @@ describe('WorkdaysService', () => {
         status: 'OPEN',
         createdAt: new Date('2026-09-02T08:00:00.000Z'),
         recorderId: null,
-        save,
       };
       workdayModel.findOne.mockReturnValue({
         exec: jest.fn().mockResolvedValue(workdayDoc),
@@ -331,17 +330,36 @@ describe('WorkdaysService', () => {
       harvestEntryModel.aggregate.mockResolvedValue([
         { total: Types.Decimal128.fromString('128.5') },
       ]);
+      workdayModel.findOneAndUpdate.mockReturnValue({
+        exec: jest.fn().mockResolvedValue({
+          ...workdayDoc,
+          status: 'CLOSED',
+          finalTotalKg: Types.Decimal128.fromString('128.5'),
+        }),
+      });
 
       const result = await workdaysService.close(farmId, workdayId);
 
-      expect(save).toHaveBeenCalled();
-      expect(workdayDoc.status).toEqual('CLOSED');
+      // findOneAndUpdate con $set puntual, no fetch+mutate+save() — .save()
+      // revalida el documento COMPLETO, y una jornada abierta antes de que
+      // clientEntryId se volviera required no lo tiene guardado (bug real,
+      // ver el comentario en el service). $set solo debe tocar
+      // finalTotalKg/status.
+      expect(workdayModel.findOneAndUpdate).toHaveBeenCalledWith(
+        { _id: workdayId, farmId: new Types.ObjectId(farmId) },
+        {
+          $set: {
+            finalTotalKg: Types.Decimal128.fromString('128.5'),
+            status: 'CLOSED',
+          },
+        },
+        { new: true },
+      );
       expect(result.status).toEqual('CLOSED');
       expect(result.finalTotalKg).toEqual(128.5);
     });
 
     it('freezes a zero total when the workday has no harvest entries', async () => {
-      const save = jest.fn().mockResolvedValue(undefined);
       const workdayDoc = {
         _id: new Types.ObjectId(workdayId),
         farmId: new Types.ObjectId(farmId),
@@ -351,27 +369,82 @@ describe('WorkdaysService', () => {
         status: 'OPEN',
         createdAt: new Date('2026-09-02T08:00:00.000Z'),
         recorderId: null,
-        save,
       };
       workdayModel.findOne.mockReturnValue({
         exec: jest.fn().mockResolvedValue(workdayDoc),
       });
       harvestEntryModel.aggregate.mockResolvedValue([]);
+      workdayModel.findOneAndUpdate.mockReturnValue({
+        exec: jest.fn().mockResolvedValue({
+          ...workdayDoc,
+          status: 'CLOSED',
+          finalTotalKg: Types.Decimal128.fromString('0'),
+        }),
+      });
 
       const result = await workdaysService.close(farmId, workdayId);
 
       expect(result.finalTotalKg).toEqual(0);
     });
 
-    it('throws ConflictException when the workday is already closed', async () => {
+    it('closes a workday that predates clientEntryId becoming required, without validating the whole document', async () => {
+      // Antes del fix, esto reventaba con
+      // "ValidationError: Workday validation failed: clientEntryId: Path
+      // `clientEntryId` is required." al llamar workday.save() sobre un
+      // documento viejo que nunca tuvo ese campo — bug real encontrado en
+      // producción (2026-09-03). Este doc simula esa jornada vieja.
+      const legacyWorkdayDoc = {
+        _id: new Types.ObjectId(workdayId),
+        farmId: new Types.ObjectId(farmId),
+        date: new Date('2026-09-02'),
+        fruitId: new Types.ObjectId(fruitId),
+        defaultMeasurementUnitId: new Types.ObjectId(measurementUnitId),
+        status: 'OPEN',
+        createdAt: new Date('2026-09-02T08:00:00.000Z'),
+        recorderId: null,
+        // sin clientEntryId, a propósito
+      };
       workdayModel.findOne.mockReturnValue({
-        exec: jest.fn().mockResolvedValue({ status: 'CLOSED' }),
+        exec: jest.fn().mockResolvedValue(legacyWorkdayDoc),
+      });
+      harvestEntryModel.aggregate.mockResolvedValue([
+        { total: Types.Decimal128.fromString('50') },
+      ]);
+      workdayModel.findOneAndUpdate.mockReturnValue({
+        exec: jest.fn().mockResolvedValue({
+          ...legacyWorkdayDoc,
+          status: 'CLOSED',
+          finalTotalKg: Types.Decimal128.fromString('50'),
+        }),
       });
 
-      await expect(
-        workdaysService.close(farmId, workdayId),
-      ).rejects.toBeInstanceOf(ConflictException);
+      const result = await workdaysService.close(farmId, workdayId);
+
+      expect(result.status).toEqual('CLOSED');
+      expect(result.finalTotalKg).toEqual(50);
+    });
+
+    it('returns the already-frozen state without re-aggregating when the workday is already closed (idempotent retry)', async () => {
+      const closedDoc = {
+        _id: new Types.ObjectId(workdayId),
+        farmId: new Types.ObjectId(farmId),
+        date: new Date('2026-09-02'),
+        fruitId: new Types.ObjectId(fruitId),
+        defaultMeasurementUnitId: new Types.ObjectId(measurementUnitId),
+        status: 'CLOSED',
+        createdAt: new Date('2026-09-02T08:00:00.000Z'),
+        recorderId: null,
+        finalTotalKg: Types.Decimal128.fromString('128.5'),
+      };
+      workdayModel.findOne.mockReturnValue({
+        exec: jest.fn().mockResolvedValue(closedDoc),
+      });
+
+      const result = await workdaysService.close(farmId, workdayId);
+
       expect(harvestEntryModel.aggregate).not.toHaveBeenCalled();
+      expect(result.status).toEqual('CLOSED');
+      expect(result.finalTotalKg).toEqual(128.5);
     });
 
     it('throws NotFoundException when the workday does not exist for the caller farm', async () => {

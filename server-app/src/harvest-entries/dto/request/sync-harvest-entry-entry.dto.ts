@@ -4,8 +4,8 @@ import {
   IsMongoId,
   IsNotEmpty,
   IsNumber,
-  IsPositive,
   IsString,
+  NotEquals,
 } from 'class-validator';
 
 /**
@@ -39,11 +39,11 @@ export class SyncHarvestEntryEntryDto {
 
   @ApiProperty({
     description:
-      'Number of units delivered (or the raw kilo weight, in direct-weighing mode)',
+      'Number of units delivered (or the raw kilo weight, in direct-weighing mode). Negative values are corrections (RF-02.3, e.g. the -1 button undoing a mis-tap) — never zero.',
     example: 3,
   })
   @IsNumber()
-  @IsPositive()
+  @NotEquals(0)
   unitCount!: number;
 
   @ApiProperty({

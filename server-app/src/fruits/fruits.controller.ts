@@ -1,4 +1,14 @@
-import { Body, Controller, Get, Post, Query, UseGuards } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Get,
+  NotFoundException,
+  Param,
+  Patch,
+  Post,
+  Query,
+  UseGuards,
+} from '@nestjs/common';
 import {
   ApiBearerAuth,
   ApiOperation,
@@ -13,6 +23,8 @@ import {
   CreateFruitResponseDto,
   FindFruitRequestDto,
   FindFruitResponseDto,
+  UpdateFruitRequestDto,
+  UpdateFruitResponseDto,
 } from './dto';
 
 @ApiTags('fruits')
@@ -48,5 +60,27 @@ export class FruitsController {
     @Query() filter: FindFruitRequestDto,
   ): Promise<FindFruitResponseDto[]> {
     return this.fruitsService.findAll(farmId, filter);
+  }
+
+  @Patch(':id')
+  @ApiOperation({
+    summary:
+      'Partially update a fruit in the caller farm catalog (rename and/or activate/deactivate)',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'The fruit was updated successfully.',
+    type: UpdateFruitResponseDto,
+  })
+  async update(
+    @CurrentFarm() farmId: string,
+    @Param('id') id: string,
+    @Body() dto: UpdateFruitRequestDto,
+  ): Promise<UpdateFruitResponseDto> {
+    const updated = await this.fruitsService.update(farmId, id, dto);
+    if (!updated) {
+      throw new NotFoundException('Fruit not found in the caller farm catalog');
+    }
+    return updated;
   }
 }

@@ -12,6 +12,7 @@ describe('MeasurementUnitsService', () => {
     create: jest.fn(),
     find: jest.fn(),
     findOne: jest.fn(),
+    findOneAndUpdate: jest.fn(),
   };
 
   const farmId = '507f1f77bcf86cd799439011';
@@ -172,6 +173,121 @@ describe('MeasurementUnitsService', () => {
       );
 
       expect(measurementUnitModel.findOne).not.toHaveBeenCalled();
+      expect(result).toBeNull();
+    });
+  });
+
+  describe('update', () => {
+    const unitId = new Types.ObjectId();
+
+    it('edits name and kgFactor scoped to the caller farm, converting kgFactor to Decimal128', async () => {
+      const exec = jest.fn().mockResolvedValue({
+        _id: unitId,
+        farmId: new Types.ObjectId(farmId),
+        name: 'Crate 12kg',
+        kgFactor: Types.Decimal128.fromString('12'),
+        active: true,
+      });
+      measurementUnitModel.findOneAndUpdate.mockReturnValue({ exec });
+
+      const result = await measurementUnitsService.update(
+        farmId,
+        unitId.toString(),
+        { name: 'Crate 12kg', kgFactor: 12 },
+      );
+
+      expect(measurementUnitModel.findOneAndUpdate).toHaveBeenCalledWith(
+        { _id: unitId.toString(), farmId: new Types.ObjectId(farmId) },
+        {
+          $set: {
+            name: 'Crate 12kg',
+            kgFactor: Types.Decimal128.fromString('12'),
+          },
+        },
+        { new: true },
+      );
+      expect(result?.kgFactor).toEqual(12);
+    });
+
+    it('deactivates a measurement unit without touching other fields', async () => {
+      measurementUnitModel.findOneAndUpdate.mockReturnValue({
+        exec: jest.fn().mockResolvedValue({
+          _id: unitId,
+          farmId: new Types.ObjectId(farmId),
+          name: 'Crate 10kg',
+          kgFactor: Types.Decimal128.fromString('10'),
+          active: false,
+        }),
+      });
+
+      await measurementUnitsService.update(farmId, unitId.toString(), {
+        active: false,
+      });
+
+      expect(measurementUnitModel.findOneAndUpdate).toHaveBeenCalledWith(
+        { _id: unitId.toString(), farmId: new Types.ObjectId(farmId) },
+        { $set: { active: false } },
+        { new: true },
+      );
+    });
+
+    it('reactivates a measurement unit that was deactivated (no active filter on the query)', async () => {
+      measurementUnitModel.findOneAndUpdate.mockReturnValue({
+        exec: jest.fn().mockResolvedValue({
+          _id: unitId,
+          farmId: new Types.ObjectId(farmId),
+          name: 'Crate 10kg',
+          kgFactor: Types.Decimal128.fromString('10'),
+          active: true,
+        }),
+      });
+
+      const result = await measurementUnitsService.update(
+        farmId,
+        unitId.toString(),
+        { active: true },
+      );
+
+      expect(result?.active).toBe(true);
+    });
+
+    it('throws ConflictException when renaming to a name already taken in the farm', async () => {
+      measurementUnitModel.findOneAndUpdate.mockReturnValue({
+        exec: jest.fn().mockRejectedValue({
+          code: 11000,
+          keyPattern: { farmId: 1, name: 1 },
+        }),
+      });
+
+      await expect(
+        measurementUnitsService.update(farmId, unitId.toString(), {
+          name: 'Crate 10kg',
+        }),
+      ).rejects.toBeInstanceOf(ConflictException);
+    });
+
+    it('returns null when no matching measurement unit exists for the farm', async () => {
+      measurementUnitModel.findOneAndUpdate.mockReturnValue({
+        exec: jest.fn().mockResolvedValue(null),
+      });
+
+      const result = await measurementUnitsService.update(
+        farmId,
+        unitId.toString(),
+        { name: 'Crate 10kg' },
+      );
+
+      expect(result).toBeNull();
+    });
+
+    it('returns null without querying when the id is not a valid ObjectId', async () => {
+      const result = await measurementUnitsService.update(
+        farmId,
+        'not-an-id',
+        { name: 'Crate 10kg' },
+      );
+
+      expect(measurementUnitModel.findOneAndUpdate).not.toHaveBeenCalled();
       expect(result).toBeNull();
     });
   });

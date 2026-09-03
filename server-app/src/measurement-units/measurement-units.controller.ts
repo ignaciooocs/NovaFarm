@@ -1,4 +1,14 @@
-import { Body, Controller, Get, Post, Query, UseGuards } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Get,
+  NotFoundException,
+  Param,
+  Patch,
+  Post,
+  Query,
+  UseGuards,
+} from '@nestjs/common';
 import {
   ApiBearerAuth,
   ApiOperation,
@@ -13,6 +23,8 @@ import {
   CreateMeasurementUnitResponseDto,
   FindMeasurementUnitRequestDto,
   FindMeasurementUnitResponseDto,
+  UpdateMeasurementUnitRequestDto,
+  UpdateMeasurementUnitResponseDto,
 } from './dto';
 
 @ApiTags('measurement-units')
@@ -54,5 +66,33 @@ export class MeasurementUnitsController {
     @Query() filter: FindMeasurementUnitRequestDto,
   ): Promise<FindMeasurementUnitResponseDto[]> {
     return this.measurementUnitsService.findAll(farmId, filter);
+  }
+
+  @Patch(':id')
+  @ApiOperation({
+    summary:
+      'Partially update a measurement unit in the caller farm catalog (edit and/or activate/deactivate)',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'The measurement unit was updated successfully.',
+    type: UpdateMeasurementUnitResponseDto,
+  })
+  async update(
+    @CurrentFarm() farmId: string,
+    @Param('id') id: string,
+    @Body() dto: UpdateMeasurementUnitRequestDto,
+  ): Promise<UpdateMeasurementUnitResponseDto> {
+    const updated = await this.measurementUnitsService.update(
+      farmId,
+      id,
+      dto,
+    );
+    if (!updated) {
+      throw new NotFoundException(
+        'Measurement unit not found in the caller farm catalog',
+      );
+    }
+    return updated;
   }
 }

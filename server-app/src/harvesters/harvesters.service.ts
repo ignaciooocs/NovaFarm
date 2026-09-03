@@ -6,6 +6,7 @@ import {
   CreateHarvesterRequestDto,
   FindHarvesterRequestDto,
   HarvesterDto,
+  UpdateHarvesterRequestDto,
 } from './dto';
 
 /**
@@ -75,6 +76,55 @@ export class HarvestersService {
       .exec();
 
     return found ? this.toDto(found) : null;
+  }
+
+  // Edita datos y/o estado activo (RF-03.3: editar/desactivar catálogo). A
+  // diferencia de findActiveById, no filtra por active — así también sirve
+  // para reactivar a alguien que estaba desactivado. Sin choque de nombre
+  // duplicado que manejar acá (ver el comentario en create(): firstName +
+  // lastName nunca fue una clave de unicidad). Devuelve null si el id no es
+  // válido o no pertenece a la farm (el controller decide si eso es un 404).
+  //
+  // nickname es el único campo opcional-editable: omitido = no tocar,
+  // string = reemplazar, null explícito = borrar el que tenía ($unset —
+  // $set con undefined no alcanza, Mongo lo descarta silenciosamente).
+  async update(
+    farmId: string,
+    id: string,
+    dto: UpdateHarvesterRequestDto,
+  ): Promise<HarvesterDto | null> {
+    if (!Types.ObjectId.isValid(id)) {
+      return null;
+    }
+
+    const changes: Partial<Pick<Harvester, 'firstName' | 'lastName' | 'active'>> &
+      { nickname?: string } = {};
+    const unset: Record<string, 1> = {};
+
+    if (dto.firstName !== undefined) {
+      changes.firstName = dto.firstName;
+    }
+    if (dto.lastName !== undefined) {
+      changes.lastName = dto.lastName;
+    }
+    if (dto.nickname === null) {
+      unset.nickname = 1;
+    } else if (dto.nickname !== undefined) {
+      changes.nickname = dto.nickname;
+    }
+    if (dto.active !== undefined) {
+      changes.active = dto.active;
+    }
+
+    const updated = await this.harvesterModel
+      .findOneAndUpdate(
+        { _id: id, farmId: new Types.ObjectId(farmId) },
+        { $set: changes, $unset: unset },
+        { new: true },
+      )
+      .exec();
+
+    return updated ? this.toDto(updated) : null;
   }
 
   // Convierte el documento a DTO. nationalId queda fuera a propósito: es un

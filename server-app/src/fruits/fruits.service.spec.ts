@@ -12,6 +12,7 @@ describe('FruitsService', () => {
     create: jest.fn(),
     find: jest.fn(),
     findOne: jest.fn(),
+    findOneAndUpdate: jest.fn(),
   };
 
   const farmId = '507f1f77bcf86cd799439011';
@@ -153,6 +154,101 @@ describe('FruitsService', () => {
       const result = await fruitsService.findActiveById(farmId, 'not-an-id');
 
       expect(fruitModel.findOne).not.toHaveBeenCalled();
+      expect(result).toBeNull();
+    });
+  });
+
+  describe('update', () => {
+    const fruitId = new Types.ObjectId();
+
+    it('renames a fruit scoped to the caller farm', async () => {
+      const exec = jest.fn().mockResolvedValue({
+        _id: fruitId,
+        farmId: new Types.ObjectId(farmId),
+        name: 'Lime',
+        active: true,
+      });
+      fruitModel.findOneAndUpdate.mockReturnValue({ exec });
+
+      const result = await fruitsService.update(farmId, fruitId.toString(), {
+        name: 'Lime',
+      });
+
+      expect(fruitModel.findOneAndUpdate).toHaveBeenCalledWith(
+        { _id: fruitId.toString(), farmId: new Types.ObjectId(farmId) },
+        { $set: { name: 'Lime' } },
+        { new: true },
+      );
+      expect(result?.name).toEqual('Lime');
+    });
+
+    it('deactivates a fruit without touching its name', async () => {
+      const exec = jest.fn().mockResolvedValue({
+        _id: fruitId,
+        farmId: new Types.ObjectId(farmId),
+        name: 'Lemon',
+        active: false,
+      });
+      fruitModel.findOneAndUpdate.mockReturnValue({ exec });
+
+      await fruitsService.update(farmId, fruitId.toString(), {
+        active: false,
+      });
+
+      expect(fruitModel.findOneAndUpdate).toHaveBeenCalledWith(
+        { _id: fruitId.toString(), farmId: new Types.ObjectId(farmId) },
+        { $set: { active: false } },
+        { new: true },
+      );
+    });
+
+    it('reactivates a fruit that was deactivated (no active filter on the query)', async () => {
+      const exec = jest.fn().mockResolvedValue({
+        _id: fruitId,
+        farmId: new Types.ObjectId(farmId),
+        name: 'Lemon',
+        active: true,
+      });
+      fruitModel.findOneAndUpdate.mockReturnValue({ exec });
+
+      const result = await fruitsService.update(farmId, fruitId.toString(), {
+        active: true,
+      });
+
+      expect(result?.active).toBe(true);
+    });
+
+    it('throws ConflictException when renaming to a name already taken in the farm', async () => {
+      fruitModel.findOneAndUpdate.mockReturnValue({
+        exec: jest.fn().mockRejectedValue({
+          code: 11000,
+          keyPattern: { farmId: 1, name: 1 },
+        }),
+      });
+
+      await expect(
+        fruitsService.update(farmId, fruitId.toString(), { name: 'Lime' }),
+      ).rejects.toBeInstanceOf(ConflictException);
+    });
+
+    it('returns null when no matching fruit exists for the farm', async () => {
+      fruitModel.findOneAndUpdate.mockReturnValue({
+        exec: jest.fn().mockResolvedValue(null),
+      });
+
+      const result = await fruitsService.update(farmId, fruitId.toString(), {
+        name: 'Lime',
+      });
+
+      expect(result).toBeNull();
+    });
+
+    it('returns null without querying when the id is not a valid ObjectId', async () => {
+      const result = await fruitsService.update(farmId, 'not-an-id', {
+        name: 'Lime',
+      });
+
+      expect(fruitModel.findOneAndUpdate).not.toHaveBeenCalled();
       expect(result).toBeNull();
     });
   });

@@ -2,7 +2,12 @@ import { ConflictException, Injectable } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model, Types } from 'mongoose';
 import { Fruit, FruitDocument } from './schemas/fruit.schema';
-import { CreateFruitRequestDto, FindFruitRequestDto, FruitDto } from './dto';
+import {
+  CreateFruitRequestDto,
+  FindFruitRequestDto,
+  FruitDto,
+  UpdateFruitRequestDto,
+} from './dto';
 
 // Código de error de Mongo para llave duplicada (choque de índice único).
 const MONGO_DUPLICATE_KEY_ERROR_CODE = 11000;
@@ -72,6 +77,49 @@ export class FruitsService {
       .exec();
 
     return found ? this.toDto(found) : null;
+  }
+
+  // Edita nombre y/o estado activo (RF-03.3: editar/desactivar catálogo).
+  // A diferencia de findActiveById, no filtra por active — así también
+  // sirve para reactivar una fruta que estaba desactivada. Devuelve null si
+  // el id no es válido o no pertenece a la farm (el controller decide si
+  // eso es un 404). Mismo manejo de choque de nombre duplicado que create().
+  async update(
+    farmId: string,
+    id: string,
+    dto: UpdateFruitRequestDto,
+  ): Promise<FruitDto | null> {
+    if (!Types.ObjectId.isValid(id)) {
+      return null;
+    }
+
+    const changes: Partial<Pick<Fruit, 'name' | 'active'>> = {};
+    if (dto.name !== undefined) {
+      changes.name = dto.name;
+    }
+    if (dto.active !== undefined) {
+      changes.active = dto.active;
+    }
+
+    try {
+      const updated = await this.fruitModel
+        .findOneAndUpdate(
+          { _id: id, farmId: new Types.ObjectId(farmId) },
+          { $set: changes },
+          { new: true },
+        )
+        .exec();
+
+      return updated ? this.toDto(updated) : null;
+    } catch (error) {
+      if (this.isDuplicateNameError(error)) {
+        throw new ConflictException(
+          'A fruit with this name already exists for this farm',
+        );
+      }
+
+      throw error;
+    }
   }
 
   // Chequea si el error de Mongo es específicamente un choque en el índice

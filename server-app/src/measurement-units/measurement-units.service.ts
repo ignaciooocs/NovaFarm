@@ -9,6 +9,7 @@ import {
   CreateMeasurementUnitRequestDto,
   FindMeasurementUnitRequestDto,
   MeasurementUnitDto,
+  UpdateMeasurementUnitRequestDto,
 } from './dto';
 
 // Código de error de Mongo para llave duplicada (choque de índice único).
@@ -88,6 +89,57 @@ export class MeasurementUnitsService {
       .exec();
 
     return found ? this.toDto(found) : null;
+  }
+
+  // Edita nombre, kgFactor y/o estado activo (RF-03.3: editar/desactivar
+  // catálogo). A diferencia de findActiveById, no filtra por active — así
+  // también sirve para reactivar una unidad que estaba desactivada.
+  // kgFactor se vuelve a convertir a Decimal128 igual que en create(), por
+  // la misma razón (evitar drift de precisión en los totalKg calculados).
+  // Devuelve null si el id no es válido o no pertenece a la farm (el
+  // controller decide si eso es un 404). Mismo manejo de choque de nombre
+  // duplicado que create().
+  async update(
+    farmId: string,
+    id: string,
+    dto: UpdateMeasurementUnitRequestDto,
+  ): Promise<MeasurementUnitDto | null> {
+    if (!Types.ObjectId.isValid(id)) {
+      return null;
+    }
+
+    const changes: Partial<
+      Pick<MeasurementUnit, 'name' | 'kgFactor' | 'active'>
+    > = {};
+    if (dto.name !== undefined) {
+      changes.name = dto.name;
+    }
+    if (dto.kgFactor !== undefined) {
+      changes.kgFactor = Types.Decimal128.fromString(dto.kgFactor.toString());
+    }
+    if (dto.active !== undefined) {
+      changes.active = dto.active;
+    }
+
+    try {
+      const updated = await this.measurementUnitModel
+        .findOneAndUpdate(
+          { _id: id, farmId: new Types.ObjectId(farmId) },
+          { $set: changes },
+          { new: true },
+        )
+        .exec();
+
+      return updated ? this.toDto(updated) : null;
+    } catch (error) {
+      if (this.isDuplicateNameError(error)) {
+        throw new ConflictException(
+          'A measurement unit with this name already exists for this farm',
+        );
+      }
+
+      throw error;
+    }
   }
 
   // Chequea si el error de Mongo es específicamente un choque en el índice

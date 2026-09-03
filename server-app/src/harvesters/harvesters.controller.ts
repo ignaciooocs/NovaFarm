@@ -1,4 +1,14 @@
-import { Body, Controller, Get, Post, Query, UseGuards } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Get,
+  NotFoundException,
+  Param,
+  Patch,
+  Post,
+  Query,
+  UseGuards,
+} from '@nestjs/common';
 import {
   ApiBearerAuth,
   ApiOperation,
@@ -13,6 +23,8 @@ import {
   CreateHarvesterResponseDto,
   FindHarvesterRequestDto,
   FindHarvesterResponseDto,
+  UpdateHarvesterRequestDto,
+  UpdateHarvesterResponseDto,
 } from './dto';
 
 @ApiTags('harvesters')
@@ -50,5 +62,29 @@ export class HarvestersController {
     @Query() filter: FindHarvesterRequestDto,
   ): Promise<FindHarvesterResponseDto[]> {
     return this.harvestersService.findAll(farmId, filter);
+  }
+
+  @Patch(':id')
+  @ApiOperation({
+    summary:
+      'Partially update a harvester in the caller farm roster (edit and/or activate/deactivate)',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'The harvester was updated successfully.',
+    type: UpdateHarvesterResponseDto,
+  })
+  async update(
+    @CurrentFarm() farmId: string,
+    @Param('id') id: string,
+    @Body() dto: UpdateHarvesterRequestDto,
+  ): Promise<UpdateHarvesterResponseDto> {
+    const updated = await this.harvestersService.update(farmId, id, dto);
+    if (!updated) {
+      throw new NotFoundException(
+        'Harvester not found in the caller farm roster',
+      );
+    }
+    return updated;
   }
 }

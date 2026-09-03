@@ -11,6 +11,7 @@ describe('HarvestersService', () => {
     create: jest.fn(),
     find: jest.fn(),
     findOne: jest.fn(),
+    findOneAndUpdate: jest.fn(),
   };
 
   const farmId = '507f1f77bcf86cd799439011';
@@ -232,6 +233,145 @@ describe('HarvestersService', () => {
       );
 
       expect(harvesterModel.findOne).not.toHaveBeenCalled();
+      expect(result).toBeNull();
+    });
+  });
+
+  describe('update', () => {
+    const harvesterId = new Types.ObjectId();
+
+    it('edits a harvester scoped to the caller farm', async () => {
+      const exec = jest.fn().mockResolvedValue({
+        _id: harvesterId,
+        farmId: new Types.ObjectId(farmId),
+        firstName: 'Juan',
+        lastName: 'Gonzalez',
+        nickname: 'Juanito',
+        active: true,
+      });
+      harvesterModel.findOneAndUpdate.mockReturnValue({ exec });
+
+      const result = await harvestersService.update(
+        farmId,
+        harvesterId.toString(),
+        { lastName: 'Gonzalez', nickname: 'Juanito' },
+      );
+
+      expect(harvesterModel.findOneAndUpdate).toHaveBeenCalledWith(
+        { _id: harvesterId.toString(), farmId: new Types.ObjectId(farmId) },
+        { $set: { lastName: 'Gonzalez', nickname: 'Juanito' }, $unset: {} },
+        { new: true },
+      );
+      expect(result?.lastName).toEqual('Gonzalez');
+    });
+
+    it('clears an existing nickname when nickname is explicitly null ($unset, not $set)', async () => {
+      harvesterModel.findOneAndUpdate.mockReturnValue({
+        exec: jest.fn().mockResolvedValue({
+          _id: harvesterId,
+          farmId: new Types.ObjectId(farmId),
+          firstName: 'Juan',
+          lastName: 'Perez',
+          active: true,
+        }),
+      });
+
+      await harvestersService.update(farmId, harvesterId.toString(), {
+        nickname: null,
+      });
+
+      expect(harvesterModel.findOneAndUpdate).toHaveBeenCalledWith(
+        { _id: harvesterId.toString(), farmId: new Types.ObjectId(farmId) },
+        { $set: {}, $unset: { nickname: 1 } },
+        { new: true },
+      );
+    });
+
+    it('leaves the nickname untouched when it is omitted from the update', async () => {
+      harvesterModel.findOneAndUpdate.mockReturnValue({
+        exec: jest.fn().mockResolvedValue({
+          _id: harvesterId,
+          farmId: new Types.ObjectId(farmId),
+          firstName: 'Juan',
+          lastName: 'Gonzalez',
+          nickname: 'Juanito',
+          active: true,
+        }),
+      });
+
+      await harvestersService.update(farmId, harvesterId.toString(), {
+        lastName: 'Gonzalez',
+      });
+
+      expect(harvesterModel.findOneAndUpdate).toHaveBeenCalledWith(
+        { _id: harvesterId.toString(), farmId: new Types.ObjectId(farmId) },
+        { $set: { lastName: 'Gonzalez' }, $unset: {} },
+        { new: true },
+      );
+    });
+
+    it('deactivates a harvester without touching other fields', async () => {
+      harvesterModel.findOneAndUpdate.mockReturnValue({
+        exec: jest.fn().mockResolvedValue({
+          _id: harvesterId,
+          farmId: new Types.ObjectId(farmId),
+          firstName: 'Juan',
+          lastName: 'Perez',
+          active: false,
+        }),
+      });
+
+      await harvestersService.update(farmId, harvesterId.toString(), {
+        active: false,
+      });
+
+      expect(harvesterModel.findOneAndUpdate).toHaveBeenCalledWith(
+        { _id: harvesterId.toString(), farmId: new Types.ObjectId(farmId) },
+        { $set: { active: false }, $unset: {} },
+        { new: true },
+      );
+    });
+
+    it('reactivates a harvester that was deactivated (no active filter on the query)', async () => {
+      harvesterModel.findOneAndUpdate.mockReturnValue({
+        exec: jest.fn().mockResolvedValue({
+          _id: harvesterId,
+          farmId: new Types.ObjectId(farmId),
+          firstName: 'Juan',
+          lastName: 'Perez',
+          active: true,
+        }),
+      });
+
+      const result = await harvestersService.update(
+        farmId,
+        harvesterId.toString(),
+        { active: true },
+      );
+
+      expect(result?.active).toBe(true);
+    });
+
+    it('returns null when no matching harvester exists for the farm', async () => {
+      harvesterModel.findOneAndUpdate.mockReturnValue({
+        exec: jest.fn().mockResolvedValue(null),
+      });
+
+      const result = await harvestersService.update(
+        farmId,
+        harvesterId.toString(),
+        { firstName: 'Juan' },
+      );
+
+      expect(result).toBeNull();
+    });
+
+    it('returns null without querying when the id is not a valid ObjectId', async () => {
+      const result = await harvestersService.update(farmId, 'not-an-id', {
+        firstName: 'Juan',
+      });
+
+      expect(harvesterModel.findOneAndUpdate).not.toHaveBeenCalled();
       expect(result).toBeNull();
     });
   });

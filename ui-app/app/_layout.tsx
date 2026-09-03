@@ -1,5 +1,47 @@
+import { useEffect } from 'react';
+import { View } from 'react-native';
 import { Stack } from 'expo-router';
+import { useMigrations } from 'drizzle-orm/expo-sqlite/migrator';
+import { ActivityIndicator, PaperProvider, Text } from 'react-native-paper';
+import { db } from '@/db/client';
+// eslint-disable-next-line import/no-unresolved -- generado por `pnpm db:generate`
+import migrations from '../drizzle/migrations';
+import { theme } from '@/theme';
+import { bootstrapAuthListener, bootstrapConnectivityListener } from '@/stores';
 
 export default function RootLayout() {
-  return <Stack />;
+  // Corre las migraciones de Drizzle una sola vez, antes de renderizar
+  // cualquier pantalla que pueda necesitar la base local.
+  const { success, error } = useMigrations(db, migrations);
+
+  useEffect(() => {
+    const unsubscribeAuth = bootstrapAuthListener();
+    const unsubscribeConnectivity = bootstrapConnectivityListener();
+    return () => {
+      unsubscribeAuth();
+      unsubscribeConnectivity();
+    };
+  }, []);
+
+  if (error) {
+    return (
+      <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
+        <Text>Error al preparar la base de datos local: {error.message}</Text>
+      </View>
+    );
+  }
+
+  if (!success) {
+    return (
+      <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
+        <ActivityIndicator />
+      </View>
+    );
+  }
+
+  return (
+    <PaperProvider theme={theme}>
+      <Stack screenOptions={{ headerShown: false }} />
+    </PaperProvider>
+  );
 }

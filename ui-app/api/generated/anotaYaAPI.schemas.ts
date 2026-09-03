@@ -8,6 +8,97 @@
 /**
  * UI-only classification: whether to show the 'invite your team' step after creation. No backend logic differs between the two values.
  */
+export type RegisterAdminRequestDtoFarmType = typeof RegisterAdminRequestDtoFarmType[keyof typeof RegisterAdminRequestDtoFarmType];
+
+
+export const RegisterAdminRequestDtoFarmType = {
+  organization: 'organization',
+  independent: 'independent',
+} as const;
+
+export interface RegisterAdminRequestDto {
+  /** Display name of the person registering as admin */
+  name: string;
+  /** Display name of the farm being created */
+  farmName: string;
+  /** UI-only classification: whether to show the 'invite your team' step after creation. No backend logic differs between the two values. */
+  farmType: RegisterAdminRequestDtoFarmType;
+}
+
+/**
+ * UI-only classification: whether to show the 'invite your team' step after creation. No backend logic differs between the two values.
+ */
+export type FarmDtoType = typeof FarmDtoType[keyof typeof FarmDtoType];
+
+
+export const FarmDtoType = {
+  organization: 'organization',
+  independent: 'independent',
+} as const;
+
+export interface FarmDto {
+  /** Unique identifier of the farm */
+  _id: string;
+  /** Display name of the farm */
+  name: string;
+  /** UI-only classification: whether to show the 'invite your team' step after creation. No backend logic differs between the two values. */
+  type: FarmDtoType;
+  /** Code a recorder enters during onboarding to join this farm. Regenerable by an admin, no expiry. */
+  invitationCode: string;
+  /** Whether the farm is active */
+  active: boolean;
+  /** Creation timestamp */
+  createdAt: string;
+}
+
+/**
+ * Role of the user within their farm
+ */
+export type UserDtoRole = typeof UserDtoRole[keyof typeof UserDtoRole];
+
+
+export const UserDtoRole = {
+  recorder: 'recorder',
+  admin: 'admin',
+} as const;
+
+export interface UserDto {
+  /** Unique identifier of the user */
+  _id: string;
+  /** Farm this user belongs to (tenant scope) */
+  farmId: string;
+  /** Display name of the user */
+  name: string;
+  /** Email address of the user */
+  email: string;
+  /** Role of the user within their farm */
+  role: UserDtoRole;
+  /** Whether the user is active */
+  active: boolean;
+  /** National ID (optional/nullable — not collected at quick field registration, filled in later by an admin) */
+  nationalId?: string;
+}
+
+export interface RegisterAdminResponseDto {
+  farm: FarmDto;
+  user: UserDto;
+}
+
+export interface RegisterRecorderRequestDto {
+  /** Display name of the person registering as recorder */
+  name: string;
+  /** Invitation code of the farm to join */
+  invitationCode: string;
+}
+
+export interface RegisterRecorderResponseDto {
+  farm: FarmDto;
+  user: UserDto;
+}
+
+/**
+ * UI-only classification: whether to show the 'invite your team' step after creation. No backend logic differs between the two values.
+ */
 export type CreateFarmRequestDtoType = typeof CreateFarmRequestDtoType[keyof typeof CreateFarmRequestDtoType];
 
 
@@ -48,4 +139,469 @@ export interface CreateFarmResponseDto {
   /** Creation timestamp */
   createdAt: string;
 }
+
+export interface CreateHarvesterRequestDto {
+  /** First name of the harvester */
+  firstName: string;
+  /** Last name of the harvester */
+  lastName: string;
+  /** Optional nickname to help disambiguate harvesters with repeated names */
+  nickname?: string;
+}
+
+export interface CreateHarvesterResponseDto {
+  /** Unique identifier of the harvester */
+  _id: string;
+  /** Farm this harvester belongs to (roster is scoped per farm) */
+  farmId: string;
+  /** First name of the harvester */
+  firstName: string;
+  /** Last name of the harvester */
+  lastName: string;
+  /** Optional nickname to help disambiguate harvesters with repeated names */
+  nickname?: string;
+  /** Whether the harvester is active */
+  active: boolean;
+}
+
+export interface FindHarvesterResponseDto {
+  /** Unique identifier of the harvester */
+  _id: string;
+  /** Farm this harvester belongs to (roster is scoped per farm) */
+  farmId: string;
+  /** First name of the harvester */
+  firstName: string;
+  /** Last name of the harvester */
+  lastName: string;
+  /** Optional nickname to help disambiguate harvesters with repeated names */
+  nickname?: string;
+  /** Whether the harvester is active */
+  active: boolean;
+}
+
+export interface CreateFruitRequestDto {
+  /** Display name of the fruit, unique within the farm */
+  name: string;
+}
+
+export interface CreateFruitResponseDto {
+  /** Unique identifier of the fruit */
+  _id: string;
+  /** Farm this fruit belongs to (catalogs are scoped per farm) */
+  farmId: string;
+  /** Display name of the fruit, unique within the farm */
+  name: string;
+  /** Whether the fruit is active */
+  active: boolean;
+}
+
+export interface FindFruitResponseDto {
+  /** Unique identifier of the fruit */
+  _id: string;
+  /** Farm this fruit belongs to (catalogs are scoped per farm) */
+  farmId: string;
+  /** Display name of the fruit, unique within the farm */
+  name: string;
+  /** Whether the fruit is active */
+  active: boolean;
+}
+
+export interface CreateMeasurementUnitRequestDto {
+  /** Display name of the unit, unique within the farm */
+  name: string;
+  /** Conversion factor to kilos (e.g. a 10kg crate is 10). Use 1 for direct-weighing mode. */
+  kgFactor: number;
+}
+
+export interface CreateMeasurementUnitResponseDto {
+  /** Unique identifier of the measurement unit */
+  _id: string;
+  /** Farm this measurement unit belongs to (scoped per farm) */
+  farmId: string;
+  /** Display name of the unit, unique within the farm */
+  name: string;
+  /** Conversion factor to kilos (e.g. a 10kg crate is 10). A factor of 1 represents direct-weighing mode. */
+  kgFactor: number;
+  /** Whether the measurement unit is active */
+  active: boolean;
+}
+
+export interface FindMeasurementUnitResponseDto {
+  /** Unique identifier of the measurement unit */
+  _id: string;
+  /** Farm this measurement unit belongs to (scoped per farm) */
+  farmId: string;
+  /** Display name of the unit, unique within the farm */
+  name: string;
+  /** Conversion factor to kilos (e.g. a 10kg crate is 10). A factor of 1 represents direct-weighing mode. */
+  kgFactor: number;
+  /** Whether the measurement unit is active */
+  active: boolean;
+}
+
+export interface CreateWorkdayRequestDto {
+  /** Date this workday covers (ISO 8601) */
+  date: string;
+  /** Fruit being harvested this workday (must exist and be active in the caller farm catalog) */
+  fruitId: string;
+  /** Default measurement unit for entries recorded this workday (must exist and be active in the caller farm catalog) */
+  defaultMeasurementUnitId: string;
+}
+
+/**
+ * Lifecycle status of the workday
+ */
+export type CreateWorkdayResponseDtoStatus = typeof CreateWorkdayResponseDtoStatus[keyof typeof CreateWorkdayResponseDtoStatus];
+
+
+export const CreateWorkdayResponseDtoStatus = {
+  OPEN: 'OPEN',
+  CLOSED: 'CLOSED',
+} as const;
+
+/**
+ * Recorder attributed to this workday, or null for guest mode (opened by an admin, not tied to a specific recorder)
+ * @nullable
+ */
+export type CreateWorkdayResponseDtoRecorderId = { [key: string]: unknown } | null;
+
+export interface CreateWorkdayResponseDto {
+  /** Unique identifier of the workday */
+  _id: string;
+  /** Farm this workday belongs to */
+  farmId: string;
+  /** Date this workday covers (ISO 8601) */
+  date: string;
+  /** Fruit being harvested this workday */
+  fruitId: string;
+  /** Default measurement unit for entries recorded this workday */
+  defaultMeasurementUnitId: string;
+  /** Lifecycle status of the workday */
+  status: CreateWorkdayResponseDtoStatus;
+  /** When the workday was opened (ISO 8601) */
+  createdAt: string;
+  /** Frozen aggregate total in kilos, computed and set when the workday is closed (RF-01.2) */
+  finalTotalKg?: number;
+  /**
+     * Recorder attributed to this workday, or null for guest mode (opened by an admin, not tied to a specific recorder)
+     * @nullable
+     */
+  recorderId: CreateWorkdayResponseDtoRecorderId;
+}
+
+/**
+ * Lifecycle status of the workday
+ */
+export type FindWorkdayResponseDtoStatus = typeof FindWorkdayResponseDtoStatus[keyof typeof FindWorkdayResponseDtoStatus];
+
+
+export const FindWorkdayResponseDtoStatus = {
+  OPEN: 'OPEN',
+  CLOSED: 'CLOSED',
+} as const;
+
+/**
+ * Recorder attributed to this workday, or null for guest mode (opened by an admin, not tied to a specific recorder)
+ * @nullable
+ */
+export type FindWorkdayResponseDtoRecorderId = { [key: string]: unknown } | null;
+
+export interface FindWorkdayResponseDto {
+  /** Unique identifier of the workday */
+  _id: string;
+  /** Farm this workday belongs to */
+  farmId: string;
+  /** Date this workday covers (ISO 8601) */
+  date: string;
+  /** Fruit being harvested this workday */
+  fruitId: string;
+  /** Default measurement unit for entries recorded this workday */
+  defaultMeasurementUnitId: string;
+  /** Lifecycle status of the workday */
+  status: FindWorkdayResponseDtoStatus;
+  /** When the workday was opened (ISO 8601) */
+  createdAt: string;
+  /** Frozen aggregate total in kilos, computed and set when the workday is closed (RF-01.2) */
+  finalTotalKg?: number;
+  /**
+     * Recorder attributed to this workday, or null for guest mode (opened by an admin, not tied to a specific recorder)
+     * @nullable
+     */
+  recorderId: FindWorkdayResponseDtoRecorderId;
+}
+
+/**
+ * Lifecycle status of the workday
+ */
+export type CloseWorkdayResponseDtoStatus = typeof CloseWorkdayResponseDtoStatus[keyof typeof CloseWorkdayResponseDtoStatus];
+
+
+export const CloseWorkdayResponseDtoStatus = {
+  OPEN: 'OPEN',
+  CLOSED: 'CLOSED',
+} as const;
+
+/**
+ * Recorder attributed to this workday, or null for guest mode (opened by an admin, not tied to a specific recorder)
+ * @nullable
+ */
+export type CloseWorkdayResponseDtoRecorderId = { [key: string]: unknown } | null;
+
+export interface CloseWorkdayResponseDto {
+  /** Unique identifier of the workday */
+  _id: string;
+  /** Farm this workday belongs to */
+  farmId: string;
+  /** Date this workday covers (ISO 8601) */
+  date: string;
+  /** Fruit being harvested this workday */
+  fruitId: string;
+  /** Default measurement unit for entries recorded this workday */
+  defaultMeasurementUnitId: string;
+  /** Lifecycle status of the workday */
+  status: CloseWorkdayResponseDtoStatus;
+  /** When the workday was opened (ISO 8601) */
+  createdAt: string;
+  /** Frozen aggregate total in kilos, computed and set when the workday is closed (RF-01.2) */
+  finalTotalKg?: number;
+  /**
+     * Recorder attributed to this workday, or null for guest mode (opened by an admin, not tied to a specific recorder)
+     * @nullable
+     */
+  recorderId: CloseWorkdayResponseDtoRecorderId;
+}
+
+export interface SyncHarvesterWorkdayEntryDto {
+  /** Client-generated id (the originating SQLite row id) — makes retrying this exact entry idempotent */
+  clientEntryId: string;
+  /** Harvester being added to the roster (must exist and be active in the caller farm roster) */
+  harvesterId: string;
+  /** Per-workday correlative assigned on-device, unique within the workday */
+  workdayNumber: number;
+}
+
+export interface SyncHarvesterWorkdayRequestDto {
+  /** Workday this roster batch belongs to */
+  workdayId: string;
+  /** Batch of roster entries captured offline */
+  entries: SyncHarvesterWorkdayEntryDto[];
+}
+
+/**
+ * Outcome of this entry
+ */
+export type SyncHarvesterWorkdayResponseDtoStatus = typeof SyncHarvesterWorkdayResponseDtoStatus[keyof typeof SyncHarvesterWorkdayResponseDtoStatus];
+
+
+export const SyncHarvesterWorkdayResponseDtoStatus = {
+  created: 'created',
+  'already-synced': 'already-synced',
+  rejected: 'rejected',
+} as const;
+
+export interface SyncHarvesterWorkdayResponseDto {
+  /** Echoes the clientEntryId this result corresponds to */
+  clientEntryId: string;
+  /** Outcome of this entry */
+  status: SyncHarvesterWorkdayResponseDtoStatus;
+  /** Present when status is "rejected" */
+  reason?: string;
+  /** Server-assigned id, present when status is not "rejected" */
+  _id?: string;
+}
+
+export interface FindHarvesterWorkdayResponseDto {
+  /** Unique identifier of the roster entry */
+  _id: string;
+  /** Farm this roster entry belongs to */
+  farmId: string;
+  /** Workday this roster entry belongs to */
+  workdayId: string;
+  /** Harvester added to the workday roster */
+  harvesterId: string;
+  /** Per-workday correlative assigned on-device, unique within the workday */
+  workdayNumber: number;
+  /** Client-generated id (the originating SQLite row id) used to make offline-sync retries idempotent */
+  clientEntryId: string;
+  /** When the harvester was added to the roster (ISO 8601) */
+  addedAt: string;
+  /** Whether this record originated from an offline sync */
+  syncedOffline: boolean;
+}
+
+export interface SyncHarvestEntryEntryDto {
+  /** Client-generated id (the originating SQLite row id) — makes retrying this exact entry idempotent */
+  clientEntryId: string;
+  /** Harvester who made this delivery (must exist, be active, and already be on the workday roster) */
+  harvesterId: string;
+  /** Measurement unit used for this entry (must exist and be active in the caller farm catalog) */
+  measurementUnitId: string;
+  /** Number of units delivered (or the raw kilo weight, in direct-weighing mode) */
+  unitCount: number;
+  /** When the delivery actually happened on-device (ISO 8601), not when it is synced */
+  recordedAt: string;
+}
+
+export interface SyncHarvestEntryRequestDto {
+  /** Workday this entries batch belongs to */
+  workdayId: string;
+  /** Batch of delivery entries captured offline */
+  entries: SyncHarvestEntryEntryDto[];
+}
+
+/**
+ * Outcome of this entry
+ */
+export type SyncHarvestEntryResponseDtoStatus = typeof SyncHarvestEntryResponseDtoStatus[keyof typeof SyncHarvestEntryResponseDtoStatus];
+
+
+export const SyncHarvestEntryResponseDtoStatus = {
+  created: 'created',
+  'already-synced': 'already-synced',
+  rejected: 'rejected',
+} as const;
+
+export interface SyncHarvestEntryResponseDto {
+  /** Echoes the clientEntryId this result corresponds to */
+  clientEntryId: string;
+  /** Outcome of this entry */
+  status: SyncHarvestEntryResponseDtoStatus;
+  /** Present when status is "rejected" */
+  reason?: string;
+  /** Server-assigned id, present when status is not "rejected" */
+  _id?: string;
+}
+
+export interface FindHarvestEntryResponseDto {
+  /** Unique identifier of the entry */
+  _id: string;
+  /** Farm this entry belongs to */
+  farmId: string;
+  /** Workday this entry belongs to */
+  workdayId: string;
+  /** Harvester who made this delivery */
+  harvesterId: string;
+  /** Measurement unit used for this specific entry */
+  measurementUnitId: string;
+  /** Number of units delivered (or the raw kilo weight, in direct-weighing mode) */
+  unitCount: number;
+  /** Total kilos, computed server-side as unitCount x measurementUnit.kgFactor */
+  totalKg: number;
+  /** Client-generated id (the originating SQLite row id) used to make offline-sync retries idempotent */
+  clientEntryId: string;
+  /** When the delivery actually happened on-device (ISO 8601), not when it was synced */
+  recordedAt: string;
+  /** Whether this record originated from an offline sync */
+  syncedOffline: boolean;
+}
+
+export type HarvestersControllerFindAllParams = {
+/**
+ * Filter by active status
+ */
+active?: boolean;
+};
+
+export type FruitsControllerFindAllParams = {
+/**
+ * Filter by active status
+ */
+active?: boolean;
+};
+
+export type MeasurementUnitsControllerFindAllParams = {
+/**
+ * Filter by active status
+ */
+active?: boolean;
+};
+
+export type WorkdaysControllerFindAllParams = {
+/**
+ * Filter by lifecycle status
+ */
+status?: WorkdaysControllerFindAllStatus;
+};
+
+export type WorkdaysControllerFindAllStatus = typeof WorkdaysControllerFindAllStatus[keyof typeof WorkdaysControllerFindAllStatus];
+
+
+export const WorkdaysControllerFindAllStatus = {
+  OPEN: 'OPEN',
+  CLOSED: 'CLOSED',
+} as const;
+
+export type HarvesterWorkdayControllerFindAllParams = {
+/**
+ * Workday to list the roster for
+ */
+workdayId: string;
+};
+
+export type HarvestEntriesControllerFindAllParams = {
+/**
+ * Workday to list the delivery entries for
+ */
+workdayId: string;
+};
+
+/**
+ * @nullable
+ */
+export type HealthControllerCheck200Info = {[key: string]: {
+  status: string;
+  [key: string]: unknown;
+ }} | null;
+
+/**
+ * @nullable
+ */
+export type HealthControllerCheck200Error = {[key: string]: {
+  status: string;
+  [key: string]: unknown;
+ }} | null;
+
+export type HealthControllerCheck200Details = {[key: string]: {
+  status: string;
+  [key: string]: unknown;
+ }};
+
+export type HealthControllerCheck200 = {
+  status?: string;
+  /** @nullable */
+  info?: HealthControllerCheck200Info;
+  /** @nullable */
+  error?: HealthControllerCheck200Error;
+  details?: HealthControllerCheck200Details;
+};
+
+/**
+ * @nullable
+ */
+export type HealthControllerCheck503Info = {[key: string]: {
+  status: string;
+  [key: string]: unknown;
+ }} | null;
+
+/**
+ * @nullable
+ */
+export type HealthControllerCheck503Error = {[key: string]: {
+  status: string;
+  [key: string]: unknown;
+ }} | null;
+
+export type HealthControllerCheck503Details = {[key: string]: {
+  status: string;
+  [key: string]: unknown;
+ }};
+
+export type HealthControllerCheck503 = {
+  status?: string;
+  /** @nullable */
+  info?: HealthControllerCheck503Info;
+  /** @nullable */
+  error?: HealthControllerCheck503Error;
+  details?: HealthControllerCheck503Details;
+};
 

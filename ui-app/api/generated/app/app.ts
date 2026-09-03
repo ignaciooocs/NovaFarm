@@ -14,7 +14,7 @@ const appControllerGetHello = (
 
  ) => {
       return apiClient<void>(
-      {url: `/`, method: 'GET'
+      {url: `/api/v1`, method: 'GET'
     },
       );
     }

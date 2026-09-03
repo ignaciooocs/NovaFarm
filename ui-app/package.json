@@ -3,17 +3,23 @@
   "version": "1.0.0",
   "main": "expo-router/entry",
   "dependencies": {
+    "@expo/vector-icons": "^15.1.1",
+    "@react-native-async-storage/async-storage": "^2.2.0",
+    "@react-native-community/netinfo": "^11.4.1",
     "@react-navigation/native": "^7.3.16",
     "axios": "^1.19.0",
-    "expo": "54",
-    "expo-constants": "~18.0.13",
+    "drizzle-orm": "^0.45.2",
+    "expo": "^54.0.37",
+    "expo-constants": "~18.0.14",
     "expo-linking": "~8.0.12",
     "expo-router": "~6.0.24",
     "expo-sqlite": "~16.0.10",
     "expo-status-bar": "~3.0.9",
+    "firebase": "^12.18.0",
     "react": "19.1.0",
     "react-dom": "19.1.0",
     "react-native": "0.81.5",
+    "react-native-paper": "^5.15.3",
     "react-native-safe-area-context": "~5.6.0",
     "react-native-screens": "~4.16.0",
     "react-native-web": "^0.21.2",
@@ -21,6 +27,8 @@
   },
   "devDependencies": {
     "@types/react": "~19.1.10",
+    "babel-plugin-inline-import": "^3.0.0",
+    "drizzle-kit": "^0.31.10",
     "orval": "^8.24.0",
     "typescript": "~5.9.2"
   },
@@ -29,7 +37,8 @@
     "android": "expo start --android",
     "ios": "expo start --ios",
     "web": "expo start --web",
-    "generate:api": "orval --config orval.config.js"
+    "generate:api": "orval --config orval.config.js",
+    "db:generate": "drizzle-kit generate"
   },
   "private": true,
   "packageManager": "pnpm@10.17.0+sha512.fce8a3dd29a4ed2ec566fb53efbb04d8c44a0f05bc6f24a73046910fb9c3ce7afa35a0980500668fa3573345bd644644fa98338fa168235c80f4aa17aa17fbef"

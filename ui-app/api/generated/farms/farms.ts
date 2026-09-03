@@ -22,7 +22,7 @@ const farmsControllerCreate = (
     createFarmRequestDto: CreateFarmRequestDto,
  ) => {
       return apiClient<CreateFarmResponseDto>(
-      {url: `/farms`, method: 'POST',
+      {url: `/api/v1/farms`, method: 'POST',
       headers: {'Content-Type': 'application/json', },
       data: createFarmRequestDto
     },

@@ -29,17 +29,14 @@ export const measurementUnits = sqliteTable('measurement_units', {
   active: integer('active', { mode: 'boolean' }).notNull().default(true),
 });
 
-// La jornada abierta en el dispositivo. `id` es un uuid generado localmente
-// al abrir (instantáneo, sin red — RNF-01); `serverId` se completa una vez
-// que el POST /workdays contra server-app tiene éxito.
-//
-// NOTA: a diferencia de harvesterWorkday/harvestEntries, server-app todavía
-// no tiene un endpoint de sync idempotente para abrir jornadas offline (ver
-// docs/diagrams/ui-arquitectura.md) — si el dispositivo pierde conexión justo
-// después de que el server crea la jornada pero antes de recibir la
-// respuesta, un reintento podría crear una jornada duplicada. Es un gap
-// conocido, pendiente de resolver en server-app antes de depender de esto
-// en producción.
+// La jornada abierta en el dispositivo. `id` se genera localmente al entrar
+// a la pantalla de abrir jornada (open-workday.tsx) y también se manda al
+// server como `clientEntryId` en el POST /workdays — igual que
+// harvesterWorkday/harvestEntries, esto hace que reintentar sea idempotente:
+// si el dispositivo pierde conexión justo después de que el server crea la
+// jornada pero antes de recibir la respuesta, un reintento con el mismo
+// `clientEntryId` vuelve a traer la misma jornada en vez de duplicarla.
+// `serverId` se completa una vez que esa respuesta llega con éxito.
 export const workdays = sqliteTable('workdays', {
   id: text('id').primaryKey(),
   serverId: text('server_id'),

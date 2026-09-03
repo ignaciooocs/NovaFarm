@@ -32,6 +32,14 @@ export default function OpenWorkdayScreen() {
     (state) => state.setActiveWorkdayId,
   );
 
+  // Generado una sola vez por visita a esta pantalla (no en cada submit) y
+  // reusado en cada reintento — si el primer POST se cae después de que el
+  // server ya creó la jornada pero antes de que la respuesta llegue, un
+  // segundo tap con el mismo clientEntryId es idempotente en vez de abrir
+  // una jornada duplicada (ver el gap de idempotencia documentado en
+  // docs/diagrams/ui-arquitectura.md). También es el id de la fila local.
+  const [clientEntryId] = useState(() => generateLocalId());
+
   // true hasta confirmar que no hay otra jornada ya abierta — se asume un
   // dispositivo trabajando una jornada a la vez (modelo-datos.md); si ya
   // hay una, se redirige a esa en vez de dejar abrir una segunda.
@@ -109,34 +117,42 @@ export default function OpenWorkdayScreen() {
     try {
       const { workdaysControllerCreate } = getWorkdays();
       const result = await workdaysControllerCreate({
+        clientEntryId,
         date: new Date().toISOString(),
         fruitId,
         defaultMeasurementUnitId: unitId,
       });
 
-      // La jornada se abre online (ver el gap de idempotencia documentado en
-      // docs/diagrams/ui-arquitectura.md) — una vez que el server confirma,
+      // La jornada se abre online (server-app ahora hace upsert por
+      // clientEntryId, así que un reintento con el mismo clientEntryId
+      // siempre vuelve al mismo resultado) — una vez que el server confirma,
       // se espeja localmente para que el resto de la app (Anotador, sync)
       // siempre lea de SQLite, sin importar si el dato vino online u offline.
-      const localId = generateLocalId();
-      await db.insert(workdays).values({
-        id: localId,
-        serverId: result._id,
-        farmId: result.farmId,
-        date: result.date,
-        fruitId: result.fruitId,
-        defaultMeasurementUnitId: result.defaultMeasurementUnitId,
-        status: result.status,
-        finalTotalKg: result.finalTotalKg ?? null,
-        synced: true,
-        createdAt: result.createdAt,
-        createdByUid: uid,
-      });
+      // El id local es el mismo clientEntryId que se mandó — si esta
+      // pantalla se remonta y este insert corre dos veces para la misma
+      // jornada, la segunda es un no-op sobre la misma fila en vez de una
+      // fila duplicada.
+      await db
+        .insert(workdays)
+        .values({
+          id: clientEntryId,
+          serverId: result._id,
+          farmId: result.farmId,
+          date: result.date,
+          fruitId: result.fruitId,
+          defaultMeasurementUnitId: result.defaultMeasurementUnitId,
+          status: result.status,
+          finalTotalKg: result.finalTotalKg ?? null,
+          synced: true,
+          createdAt: result.createdAt,
+          createdByUid: uid,
+        })
+        .onConflictDoNothing();
 
-      setActiveWorkdayId(localId);
+      setActiveWorkdayId(clientEntryId);
       router.replace({
         pathname: '/workday/[id]/anotador',
-        params: { id: localId },
+        params: { id: clientEntryId },
       });
     } catch (err) {
       setError(getErrorMessage(err));

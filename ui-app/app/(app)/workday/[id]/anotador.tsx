@@ -12,16 +12,21 @@ import {
   Text,
   TextInput,
 } from 'react-native-paper';
-import type { FindHarvesterResponseDto } from '@/api/generated/anotaYaAPI.schemas';
-import { getHarvesters } from '@/api/generated/harvesters/harvesters';
-import { getMeasurementUnits } from '@/api/generated/measurement-units/measurement-units';
 import { Screen } from '@/components/Screen';
 import { strings } from '@/constants/strings';
 import { db } from '@/db/client';
-import { harvestEntries, harvesterWorkday, workdays } from '@/db/schema';
+import {
+  harvesters as harvestersTable,
+  harvestEntries,
+  harvesterWorkday,
+  measurementUnits,
+  workdays,
+} from '@/db/schema';
 import { getErrorMessage } from '@/lib/errors';
 import { generateLocalId } from '@/lib/id';
 import { spacing, TOUCH_TARGET_MIN } from '@/theme';
+
+type LocalHarvester = typeof harvestersTable.$inferSelect;
 
 interface RosterRow {
   id: string;
@@ -45,7 +50,7 @@ export default function AnotadorScreen() {
 
   const [roster, setRoster] = useState<RosterRow[]>([]);
   const [harvestersById, setHarvestersById] = useState<
-    Record<string, FindHarvesterResponseDto>
+    Record<string, LocalHarvester>
   >({});
   const [totalsByHarvester, setTotalsByHarvester] = useState<
     Record<string, EntryTotal>
@@ -75,12 +80,10 @@ export default function AnotadorScreen() {
         return;
       }
 
-      const { measurementUnitsControllerFindAll } = getMeasurementUnits();
-      const { harvestersControllerFindAll } = getHarvesters();
       const [units, harvestersResult, rosterRows, totalsRows] =
         await Promise.all([
-          measurementUnitsControllerFindAll(),
-          harvestersControllerFindAll(),
+          db.select().from(measurementUnits),
+          db.select().from(harvestersTable),
           db
             .select()
             .from(harvesterWorkday)
@@ -97,17 +100,15 @@ export default function AnotadorScreen() {
         ]);
 
       const unit = units.find(
-        (candidate) => candidate._id === workdayRow.defaultMeasurementUnitId,
+        (candidate) => candidate.id === workdayRow.defaultMeasurementUnitId,
       );
       setDefaultUnit(
-        unit
-          ? { id: unit._id, name: unit.name, kgFactor: unit.kgFactor }
-          : null,
+        unit ? { id: unit.id, name: unit.name, kgFactor: unit.kgFactor } : null,
       );
 
-      const byId: Record<string, FindHarvesterResponseDto> = {};
+      const byId: Record<string, LocalHarvester> = {};
       harvestersResult.forEach((harvester) => {
-        byId[harvester._id] = harvester;
+        byId[harvester.id] = harvester;
       });
       setHarvestersById(byId);
 

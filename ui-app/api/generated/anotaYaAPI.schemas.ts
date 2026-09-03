@@ -179,6 +179,35 @@ export interface FindHarvesterResponseDto {
   active: boolean;
 }
 
+export interface UpdateHarvesterRequestDto {
+  /** New first name of the harvester */
+  firstName?: string;
+  /** New last name of the harvester */
+  lastName?: string;
+  /**
+     * Optional nickname to help disambiguate harvesters with repeated names. Omit to leave it untouched, or pass null explicitly to clear an existing one.
+     * @nullable
+     */
+  nickname?: string | null;
+  /** Whether the harvester is active */
+  active?: boolean;
+}
+
+export interface UpdateHarvesterResponseDto {
+  /** Unique identifier of the harvester */
+  _id: string;
+  /** Farm this harvester belongs to (roster is scoped per farm) */
+  farmId: string;
+  /** First name of the harvester */
+  firstName: string;
+  /** Last name of the harvester */
+  lastName: string;
+  /** Optional nickname to help disambiguate harvesters with repeated names */
+  nickname?: string;
+  /** Whether the harvester is active */
+  active: boolean;
+}
+
 export interface CreateFruitRequestDto {
   /** Display name of the fruit, unique within the farm */
   name: string;
@@ -196,6 +225,24 @@ export interface CreateFruitResponseDto {
 }
 
 export interface FindFruitResponseDto {
+  /** Unique identifier of the fruit */
+  _id: string;
+  /** Farm this fruit belongs to (catalogs are scoped per farm) */
+  farmId: string;
+  /** Display name of the fruit, unique within the farm */
+  name: string;
+  /** Whether the fruit is active */
+  active: boolean;
+}
+
+export interface UpdateFruitRequestDto {
+  /** New display name for the fruit, unique within the farm */
+  name?: string;
+  /** Whether the fruit is active */
+  active?: boolean;
+}
+
+export interface UpdateFruitResponseDto {
   /** Unique identifier of the fruit */
   _id: string;
   /** Farm this fruit belongs to (catalogs are scoped per farm) */
@@ -239,7 +286,31 @@ export interface FindMeasurementUnitResponseDto {
   active: boolean;
 }
 
+export interface UpdateMeasurementUnitRequestDto {
+  /** New display name for the unit, unique within the farm */
+  name?: string;
+  /** Conversion factor to kilos (e.g. a 10kg crate is 10). Use 1 for direct-weighing mode. */
+  kgFactor?: number;
+  /** Whether the measurement unit is active */
+  active?: boolean;
+}
+
+export interface UpdateMeasurementUnitResponseDto {
+  /** Unique identifier of the measurement unit */
+  _id: string;
+  /** Farm this measurement unit belongs to (scoped per farm) */
+  farmId: string;
+  /** Display name of the unit, unique within the farm */
+  name: string;
+  /** Conversion factor to kilos (e.g. a 10kg crate is 10). A factor of 1 represents direct-weighing mode. */
+  kgFactor: number;
+  /** Whether the measurement unit is active */
+  active: boolean;
+}
+
 export interface CreateWorkdayRequestDto {
+  /** Client-generated id (the local workday row id) — makes retrying this call after a dropped response idempotent, same pattern as harvester-workday/harvest-entries sync */
+  clientEntryId: string;
   /** Date this workday covers (ISO 8601) */
   date: string;
   /** Fruit being harvested this workday (must exist and be active in the caller farm catalog) */
@@ -287,6 +358,8 @@ export interface CreateWorkdayResponseDto {
      * @nullable
      */
   recorderId: CreateWorkdayResponseDtoRecorderId;
+  /** Client-generated id (the originating local workday row id) used to make retrying POST /workdays idempotent */
+  clientEntryId: string;
 }
 
 /**
@@ -328,6 +401,8 @@ export interface FindWorkdayResponseDto {
      * @nullable
      */
   recorderId: FindWorkdayResponseDtoRecorderId;
+  /** Client-generated id (the originating local workday row id) used to make retrying POST /workdays idempotent */
+  clientEntryId: string;
 }
 
 /**
@@ -369,6 +444,8 @@ export interface CloseWorkdayResponseDto {
      * @nullable
      */
   recorderId: CloseWorkdayResponseDtoRecorderId;
+  /** Client-generated id (the originating local workday row id) used to make retrying POST /workdays idempotent */
+  clientEntryId: string;
 }
 
 export interface SyncHarvesterWorkdayEntryDto {
@@ -436,7 +513,7 @@ export interface SyncHarvestEntryEntryDto {
   harvesterId: string;
   /** Measurement unit used for this entry (must exist and be active in the caller farm catalog) */
   measurementUnitId: string;
-  /** Number of units delivered (or the raw kilo weight, in direct-weighing mode) */
+  /** Number of units delivered (or the raw kilo weight, in direct-weighing mode). Negative values are corrections (RF-02.3, e.g. the -1 button undoing a mis-tap) — never zero. */
   unitCount: number;
   /** When the delivery actually happened on-device (ISO 8601), not when it is synced */
   recordedAt: string;

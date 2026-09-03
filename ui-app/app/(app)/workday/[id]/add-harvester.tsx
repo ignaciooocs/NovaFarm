@@ -11,26 +11,30 @@ import {
   Text,
   TextInput,
 } from 'react-native-paper';
-import type { FindHarvesterResponseDto } from '@/api/generated/anotaYaAPI.schemas';
 import { getHarvesters } from '@/api/generated/harvesters/harvesters';
 import { Screen } from '@/components/Screen';
 import { strings } from '@/constants/strings';
 import { db } from '@/db/client';
-import { harvesterWorkday } from '@/db/schema';
+import { harvesters as harvestersTable, harvesterWorkday } from '@/db/schema';
 import { getErrorMessage } from '@/lib/errors';
 import { generateLocalId } from '@/lib/id';
 import { spacing } from '@/theme';
 
-// Buscar/listar cosechadores acá todavía requiere conexión (se pide directo
-// al server, no hay caché local del catálogo de harvesters todavía — ver el
-// gap documentado en docs/diagrams/ui-arquitectura.md). Lo que sí es 100%
-// local e instantáneo es la acción de agregar al roster (addToRoster) —
-// que es la parte que de verdad importa para RNF-01.
+type LocalHarvester = typeof harvestersTable.$inferSelect;
+
+// Buscar/listar cosechadores lee de la caché local (ver syncCatalogs, disparada
+// desde Home) en vez de pedir en vivo — así funciona sin señal para cualquier
+// cosechador que el catálogo ya conocía. Registrar uno *nuevo* sigue
+// necesitando conexión (handleQuickRegister): es una entrada nueva en el
+// catálogo del farm, no hay un modo offline para eso todavía (ver el gap
+// documentado en docs/diagrams/ui-arquitectura.md). Agregar al roster
+// (addToRoster) es 100% local e instantáneo en ambos casos — es la parte que
+// de verdad importa para RNF-01.
 export default function AddHarvesterScreen() {
   const router = useRouter();
   const { id: workdayId } = useLocalSearchParams<{ id: string }>();
 
-  const [harvesters, setHarvesters] = useState<FindHarvesterResponseDto[]>([]);
+  const [harvesters, setHarvesters] = useState<LocalHarvester[]>([]);
   const [existingIds, setExistingIds] = useState<Set<string>>(new Set());
   const [loading, setLoading] = useState(true);
   const [query, setQuery] = useState('');
@@ -44,15 +48,17 @@ export default function AddHarvesterScreen() {
   async function loadData() {
     setLoading(true);
     try {
-      const { harvestersControllerFindAll } = getHarvesters();
       const [harvestersResult, rosterRows] = await Promise.all([
-        harvestersControllerFindAll(),
+        db
+          .select()
+          .from(harvestersTable)
+          .where(eq(harvestersTable.active, true)),
         db
           .select()
           .from(harvesterWorkday)
           .where(eq(harvesterWorkday.workdayId, workdayId)),
       ]);
-      setHarvesters(harvestersResult.filter((harvester) => harvester.active));
+      setHarvesters(harvestersResult);
       setExistingIds(new Set(rosterRows.map((row) => row.harvesterId)));
     } catch (err) {
       setError(getErrorMessage(err));
@@ -122,6 +128,22 @@ export default function AddHarvesterScreen() {
         firstName: newFirstName.trim(),
         lastName: newLastName.trim(),
       });
+
+      // Espeja el harvester recién creado en la caché local al tiro — sin
+      // esto, no aparecería acá hasta el próximo syncCatalogs() (disparado
+      // desde Home), y quedaría invisible para el resto de esta sesión.
+      const row = {
+        farmId: created.farmId,
+        firstName: created.firstName,
+        lastName: created.lastName,
+        nickname: created.nickname ?? null,
+        active: created.active,
+      };
+      await db
+        .insert(harvestersTable)
+        .values({ id: created._id, ...row })
+        .onConflictDoUpdate({ target: harvestersTable.id, set: row });
+
       await addToRoster(created._id);
     } catch (err) {
       setError(getErrorMessage(err));
@@ -148,18 +170,18 @@ export default function AddHarvesterScreen() {
         ) : (
           filtered.map((harvester) => (
             <List.Item
-              key={harvester._id}
+              key={harvester.id}
               title={
                 harvester.nickname
                   ? `${harvester.firstName} ${harvester.lastName} ("${harvester.nickname}")`
                   : `${harvester.firstName} ${harvester.lastName}`
               }
-              onPress={() => addToRoster(harvester._id)}
+              onPress={() => addToRoster(harvester.id)}
               right={() => {
-                if (existingIds.has(harvester._id)) {
+                if (existingIds.has(harvester.id)) {
                   return <List.Icon icon="check" />;
                 }
-                if (addingId === harvester._id) {
+                if (addingId === harvester.id) {
                   return <ActivityIndicator size="small" />;
                 }
                 return null;

@@ -8,6 +8,7 @@ import { db } from '@/db/client';
 // eslint-disable-next-line import/no-unresolved -- generado por `pnpm db:generate`
 import migrations from '../drizzle/migrations';
 import { theme } from '@/theme';
+import { bootstrapCatalogSyncOnReconnect } from '@/lib/catalogSync';
 import { bootstrapAuthListener, bootstrapConnectivityListener } from '@/stores';
 
 export default function RootLayout() {
@@ -18,9 +19,11 @@ export default function RootLayout() {
   useEffect(() => {
     const unsubscribeAuth = bootstrapAuthListener();
     const unsubscribeConnectivity = bootstrapConnectivityListener();
+    const unsubscribeCatalogSync = bootstrapCatalogSyncOnReconnect();
     return () => {
       unsubscribeAuth();
       unsubscribeConnectivity();
+      unsubscribeCatalogSync();
     };
   }, []);
 

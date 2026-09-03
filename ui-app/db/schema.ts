@@ -53,6 +53,11 @@ export const workdays = sqliteTable('workdays', {
   finalTotalKg: real('final_total_kg'),
   synced: integer('synced', { mode: 'boolean' }).notNull().default(false),
   createdAt: text('created_at').notNull(),
+  // uid de Firebase de quien abrió la jornada en este dispositivo — sin
+  // esto, "la jornada activa" era global al dispositivo, no por cuenta: si
+  // dos cuentas distintas (dos recorders de dos cuadrillas) usaban el mismo
+  // celular para probar, la segunda cuenta veía la jornada de la primera.
+  createdByUid: text('created_by_uid').notNull().default(''),
 });
 
 // El roster del día. `workdayNumber` se calcula 100% local (máximo actual +

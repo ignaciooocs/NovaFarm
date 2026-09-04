@@ -1,0 +1,27 @@
+# Controla qué se sube al hacer un build en EAS. Sin este archivo, EAS usa
+# las reglas de .gitignore — pero en cuanto existe, las reemplaza por
+# completo (no las combina), así que hay que repetir acá lo que ya excluye
+# .gitignore, no solo agregar cosas nuevas.
+
+node_modules
+.expo
+.git
+dist
+web-build
+
+# Variables de entorno: el build en EAS las toma de `eas env:set`
+# (dashboard/CLI), nunca de este archivo — no hace falta subirlo, y es
+# mejor no hacerlo aunque hoy no tenga nada realmente secreto adentro.
+.env
+.env.*.local
+
+# Nativo / generado, se regenera en el build
+.kotlin
+*.jks
+*.p8
+*.p12
+*.key
+*.mobileprovision
+*.tsbuildinfo
+android
+ios

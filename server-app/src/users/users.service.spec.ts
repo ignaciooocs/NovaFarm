@@ -135,6 +135,35 @@ describe('UsersService', () => {
     });
   });
 
+  describe('findNamesByIds', () => {
+    it('resolves a map of id to name with a single $in query', async () => {
+      const idA = new Types.ObjectId();
+      const idB = new Types.ObjectId();
+      const exec = jest.fn().mockResolvedValue([
+        { _id: idA, name: 'Juana Perez' },
+        { _id: idB, name: 'Pedro Soto' },
+      ]);
+      const select = jest.fn().mockReturnValue({ exec });
+      userModel.find.mockReturnValue({ select });
+
+      const result = await usersService.findNamesByIds([idA, idB]);
+
+      expect(userModel.find).toHaveBeenCalledWith({
+        _id: { $in: [idA, idB] },
+      });
+      expect(select).toHaveBeenCalledWith('name');
+      expect(result.get(idA.toString())).toEqual('Juana Perez');
+      expect(result.get(idB.toString())).toEqual('Pedro Soto');
+    });
+
+    it('returns an empty map without querying when given no ids', async () => {
+      const result = await usersService.findNamesByIds([]);
+
+      expect(userModel.find).not.toHaveBeenCalled();
+      expect(result.size).toEqual(0);
+    });
+  });
+
   describe('findByFirebaseUid', () => {
     it('looks up a user by their Firebase uid', async () => {
       const doc = { _id: new Types.ObjectId(), firebaseUid: 'firebase-uid' };

@@ -59,9 +59,17 @@ export class WorkdayDto {
     description:
       'Recorder attributed to this workday, or null for guest mode (opened by an admin, not tied to a specific recorder)',
     example: '64f1a2b3c4d5e6f7a8b9c0d4',
+    type: String,
     nullable: true,
   })
   recorderId!: string | null;
+
+  @ApiPropertyOptional({
+    description:
+      'Display name of the recorder attributed to this workday. Absent for guest-mode workdays (recorderId is null).',
+    example: 'Juan Pérez',
+  })
+  recorderName?: string;
 
   @ApiProperty({
     description:

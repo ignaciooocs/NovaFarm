@@ -52,7 +52,10 @@ export class WorkdaysService {
       })
       .exec();
     if (existing) {
-      return this.toDto(existing);
+      return this.toDto(
+        existing,
+        await this.resolveRecorderName(existing.recorderId),
+      );
     }
 
     const fruit = await this.fruitsService.findActiveById(farmId, dto.fruitId);
@@ -70,7 +73,7 @@ export class WorkdaysService {
       );
     }
 
-    const recorderId = await this.resolveRecorderId(authUser);
+    const { recorderId, recorderName } = await this.resolveRecorder(authUser);
 
     try {
       const created = await this.workdayModel.create({
@@ -86,7 +89,7 @@ export class WorkdaysService {
         clientEntryId: dto.clientEntryId,
       });
 
-      return this.toDto(created);
+      return this.toDto(created, recorderName);
     } catch (error) {
       // Carrera entre dos reintentos concurrentes del mismo clientEntryId
       // (el chequeo de arriba pasó para ambos antes de que ninguno
@@ -100,7 +103,10 @@ export class WorkdaysService {
           })
           .exec();
         if (raced) {
-          return this.toDto(raced);
+          return this.toDto(
+            raced,
+            await this.resolveRecorderName(raced.recorderId),
+          );
         }
       }
 
@@ -109,6 +115,9 @@ export class WorkdaysService {
   }
 
   // Lista las jornadas de la farm, con filtro opcional por status (OPEN/CLOSED).
+  // Los nombres de los recorders (RF: "quién anotó" en el historial de
+  // ui-app) se resuelven en un solo lote por los _id distintos presentes en
+  // la página de resultados, en vez de una consulta por jornada.
   async findAll(
     farmId: string,
     filter: FindWorkdayRequestDto,
@@ -120,7 +129,24 @@ export class WorkdaysService {
       })
       .exec();
 
-    return found.map((doc) => this.toDto(doc));
+    const recorderIds = [
+      ...new Set(
+        found
+          .map((doc) => doc.recorderId?.toString())
+          .filter((id): id is string => Boolean(id)),
+      ),
+    ].map((id) => new Types.ObjectId(id));
+    const namesById =
+      recorderIds.length > 0
+        ? await this.usersService.findNamesByIds(recorderIds)
+        : new Map<string, string>();
+
+    return found.map((doc) =>
+      this.toDto(
+        doc,
+        doc.recorderId ? namesById.get(doc.recorderId.toString()) : undefined,
+      ),
+    );
   }
 
   // Busca una jornada por id dentro de la farm. A diferencia del
@@ -164,8 +190,10 @@ export class WorkdaysService {
       throw new NotFoundException('Workday not found');
     }
 
+    const recorderName = await this.resolveRecorderName(workday.recorderId);
+
     if (workday.status === 'CLOSED') {
-      return this.toDto(workday);
+      return this.toDto(workday, recorderName);
     }
 
     // $match acota la suma a los harvestEntries de esta jornada y farm;
@@ -208,22 +236,42 @@ export class WorkdaysService {
       throw new NotFoundException('Workday not found');
     }
 
-    return this.toDto(updated);
+    return this.toDto(updated, recorderName);
   }
 
-  // Si quien abre la jornada es un recorder, resuelve su _id de Mongo a
-  // partir del uid de Firebase (el token no trae el _id de Mongo, solo el
-  // uid). Si es un admin, la jornada queda en modo invitado (recorderId
-  // null) — abrirla no alcanza para atribuírsela a un recorder específico.
-  private async resolveRecorderId(
+  // Si quien abre la jornada es un recorder, resuelve su _id de Mongo (y de
+  // paso su nombre, ya viene en el mismo documento — no hace falta otra
+  // consulta) a partir del uid de Firebase (el token no trae el _id de
+  // Mongo, solo el uid). Si es un admin, la jornada queda en modo invitado
+  // (recorderId null) — abrirla no alcanza para atribuírsela a un recorder
+  // específico.
+  private async resolveRecorder(
     authUser: AuthenticatedUser,
-  ): Promise<Types.ObjectId | null> {
+  ): Promise<{ recorderId: Types.ObjectId | null; recorderName?: string }> {
     if (authUser.role !== 'recorder') {
-      return null;
+      return { recorderId: null };
     }
 
     const user = await this.usersService.findByFirebaseUid(authUser.uid);
-    return user ? user._id : null;
+    return user
+      ? { recorderId: user._id, recorderName: user.name }
+      : { recorderId: null };
+  }
+
+  // Resuelve el nombre de un recorder ya conocido (jornada existente/cerrada)
+  // a partir de su _id — usado por create() en los caminos de retry/carrera
+  // y por close(), donde solo se tiene el recorderId guardado, no el
+  // documento del usuario. undefined para modo invitado (recorderId null),
+  // sin consultar nada.
+  private async resolveRecorderName(
+    recorderId: Types.ObjectId | null | undefined,
+  ): Promise<string | undefined> {
+    if (!recorderId) {
+      return undefined;
+    }
+
+    const names = await this.usersService.findNamesByIds([recorderId]);
+    return names.get(recorderId.toString());
   }
 
   // Chequea si el error de Mongo es un choque de índice único sobre un
@@ -243,7 +291,10 @@ export class WorkdaysService {
 
   // Convierte el documento a DTO. finalTotalKg solo está presente si la
   // jornada ya se cerró; recorderId puede ser null (modo invitado).
-  private toDto(doc: WorkdayDocument): WorkdayDto {
+  // recorderName se resuelve aparte (ver resolveRecorder/resolveRecorderName)
+  // porque requiere el catálogo de usuarios, no vive en el documento de
+  // Workday — undefined cuando no aplica (modo invitado).
+  private toDto(doc: WorkdayDocument, recorderName?: string): WorkdayDto {
     return {
       _id: doc._id.toString(),
       farmId: doc.farmId.toString(),
@@ -256,6 +307,7 @@ export class WorkdaysService {
         ? Number(doc.finalTotalKg.toString())
         : undefined,
       recorderId: doc.recorderId ? doc.recorderId.toString() : null,
+      recorderName,
       clientEntryId: doc.clientEntryId,
     };
   }

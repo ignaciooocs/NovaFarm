@@ -33,6 +33,7 @@ describe('WorkdaysService', () => {
 
   const usersService = {
     findByFirebaseUid: jest.fn(),
+    findNamesByIds: jest.fn(),
   };
 
   const farmId = '507f1f77bcf86cd799439011';
@@ -89,6 +90,7 @@ describe('WorkdaysService', () => {
       const recorderMongoId = new Types.ObjectId();
       usersService.findByFirebaseUid.mockResolvedValue({
         _id: recorderMongoId,
+        name: 'Juana Perez',
       });
 
       workdayModel.create.mockResolvedValue({
@@ -120,6 +122,7 @@ describe('WorkdaysService', () => {
         }),
       );
       expect(result.recorderId).toEqual(recorderMongoId.toString());
+      expect(result.recorderName).toEqual('Juana Perez');
       expect(result.status).toEqual('OPEN');
     });
 
@@ -308,6 +311,69 @@ describe('WorkdaysService', () => {
         status: 'OPEN',
       });
     });
+
+    it('resolves recorder names in a single batch and skips guest-mode workdays', async () => {
+      const recorderAId = new Types.ObjectId();
+      const docs = [
+        {
+          _id: new Types.ObjectId(),
+          farmId: new Types.ObjectId(farmId),
+          date: new Date('2026-09-01'),
+          fruitId: new Types.ObjectId(fruitId),
+          defaultMeasurementUnitId: new Types.ObjectId(measurementUnitId),
+          status: 'CLOSED',
+          createdAt: new Date('2026-09-01T08:00:00.000Z'),
+          recorderId: recorderAId,
+          clientEntryId: 'local-a',
+        },
+        {
+          _id: new Types.ObjectId(),
+          farmId: new Types.ObjectId(farmId),
+          date: new Date('2026-09-02'),
+          fruitId: new Types.ObjectId(fruitId),
+          defaultMeasurementUnitId: new Types.ObjectId(measurementUnitId),
+          status: 'CLOSED',
+          createdAt: new Date('2026-09-02T08:00:00.000Z'),
+          recorderId: null,
+          clientEntryId: 'local-b',
+        },
+      ];
+      workdayModel.find.mockReturnValue({
+        exec: jest.fn().mockResolvedValue(docs),
+      });
+      usersService.findNamesByIds.mockResolvedValue(
+        new Map([[recorderAId.toString(), 'Juana Perez']]),
+      );
+
+      const result = await workdaysService.findAll(farmId, {
+        status: 'CLOSED',
+      });
+
+      expect(usersService.findNamesByIds).toHaveBeenCalledWith([recorderAId]);
+      expect(result[0].recorderName).toEqual('Juana Perez');
+      expect(result[1].recorderName).toBeUndefined();
+    });
+
+    it('does not look up recorder names when every workday is guest-mode', async () => {
+      const exec = jest.fn().mockResolvedValue([
+        {
+          _id: new Types.ObjectId(),
+          farmId: new Types.ObjectId(farmId),
+          date: new Date('2026-09-01'),
+          fruitId: new Types.ObjectId(fruitId),
+          defaultMeasurementUnitId: new Types.ObjectId(measurementUnitId),
+          status: 'CLOSED',
+          createdAt: new Date('2026-09-01T08:00:00.000Z'),
+          recorderId: null,
+          clientEntryId: 'local-a',
+        },
+      ]);
+      workdayModel.find.mockReturnValue({ exec });
+
+      await workdaysService.findAll(farmId, {});
+
+      expect(usersService.findNamesByIds).not.toHaveBeenCalled();
+    });
   });
 
   describe('close', () => {
@@ -455,6 +521,43 @@ describe('WorkdaysService', () => {
       await expect(
         workdaysService.close(farmId, workdayId),
       ).rejects.toBeInstanceOf(NotFoundException);
+    });
+
+    it('includes the recorder name when the workday has one attributed', async () => {
+      const recorderMongoId = new Types.ObjectId();
+      const workdayDoc = {
+        _id: new Types.ObjectId(workdayId),
+        farmId: new Types.ObjectId(farmId),
+        date: new Date('2026-09-02'),
+        fruitId: new Types.ObjectId(fruitId),
+        defaultMeasurementUnitId: new Types.ObjectId(measurementUnitId),
+        status: 'OPEN',
+        createdAt: new Date('2026-09-02T08:00:00.000Z'),
+        recorderId: recorderMongoId,
+      };
+      workdayModel.findOne.mockReturnValue({
+        exec: jest.fn().mockResolvedValue(workdayDoc),
+      });
+      harvestEntryModel.aggregate.mockResolvedValue([
+        { total: Types.Decimal128.fromString('10') },
+      ]);
+      workdayModel.findOneAndUpdate.mockReturnValue({
+        exec: jest.fn().mockResolvedValue({
+          ...workdayDoc,
+          status: 'CLOSED',
+          finalTotalKg: Types.Decimal128.fromString('10'),
+        }),
+      });
+      usersService.findNamesByIds.mockResolvedValue(
+        new Map([[recorderMongoId.toString(), 'Juana Perez']]),
+      );
+
+      const result = await workdaysService.close(farmId, workdayId);
+
+      expect(usersService.findNamesByIds).toHaveBeenCalledWith([
+        recorderMongoId,
+      ]);
+      expect(result.recorderName).toEqual('Juana Perez');
     });
 
     it('throws NotFoundException without querying when the id is not a valid ObjectId', async () => {

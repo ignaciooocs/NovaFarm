@@ -67,6 +67,24 @@ export class UsersService {
     return this.userModel.findOne({ firebaseUid }).exec();
   }
 
+  // Resuelve varios nombres a la vez a partir de sus _id de Mongo — un solo
+  // `$in` en vez de una consulta por id. Se usa para mostrar "quién anotó"
+  // junto a cada jornada en el historial (WorkdaysService.findAll), sin
+  // necesitar el equipo completo (GET /users es admin-only, ver
+  // UsersController) ni hacer N llamadas separadas.
+  async findNamesByIds(ids: Types.ObjectId[]): Promise<Map<string, string>> {
+    if (ids.length === 0) {
+      return new Map();
+    }
+
+    const found = await this.userModel
+      .find({ _id: { $in: ids } })
+      .select('name')
+      .exec();
+
+    return new Map(found.map((doc) => [doc._id.toString(), doc.name]));
+  }
+
   // Perfil propio (GET /users/me — cualquier miembro autenticado, admin o
   // recorder, ve el suyo). A diferencia de findAll(), buscar por
   // firebaseUid ya es intrínsecamente "solo el mío": el uid sale del token
@@ -101,7 +119,11 @@ export class UsersService {
     }
 
     const updated = await this.userModel
-      .findOneAndUpdate({ firebaseUid }, { $set: changes, $unset: unset }, { new: true })
+      .findOneAndUpdate(
+        { firebaseUid },
+        { $set: changes, $unset: unset },
+        { new: true },
+      )
       .exec();
 
     return updated ? this.toDto(updated) : null;

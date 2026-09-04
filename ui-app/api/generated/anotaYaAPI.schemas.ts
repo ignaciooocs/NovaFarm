@@ -342,6 +342,8 @@ export interface UpdateHarvesterResponseDto {
 export interface CreateFruitRequestDto {
   /** Display name of the fruit, unique within the farm */
   name: string;
+  /** Emoji representing the fruit. Omit to fall back to a generic fruit emoji. */
+  icon?: string;
 }
 
 export interface CreateFruitResponseDto {
@@ -351,6 +353,8 @@ export interface CreateFruitResponseDto {
   farmId: string;
   /** Display name of the fruit, unique within the farm */
   name: string;
+  /** Emoji representing the fruit, chosen freely by the admin. Falls back to a generic fruit emoji when none was set. */
+  icon: string;
   /** Whether the fruit is active */
   active: boolean;
 }
@@ -362,6 +366,8 @@ export interface FindFruitResponseDto {
   farmId: string;
   /** Display name of the fruit, unique within the farm */
   name: string;
+  /** Emoji representing the fruit, chosen freely by the admin. Falls back to a generic fruit emoji when none was set. */
+  icon: string;
   /** Whether the fruit is active */
   active: boolean;
 }
@@ -369,6 +375,8 @@ export interface FindFruitResponseDto {
 export interface UpdateFruitRequestDto {
   /** New display name for the fruit, unique within the farm */
   name?: string;
+  /** New emoji representing the fruit */
+  icon?: string;
   /** Whether the fruit is active */
   active?: boolean;
 }
@@ -380,6 +388,8 @@ export interface UpdateFruitResponseDto {
   farmId: string;
   /** Display name of the fruit, unique within the farm */
   name: string;
+  /** Emoji representing the fruit, chosen freely by the admin. Falls back to a generic fruit emoji when none was set. */
+  icon: string;
   /** Whether the fruit is active */
   active: boolean;
 }
@@ -461,12 +471,6 @@ export const CreateWorkdayResponseDtoStatus = {
   CLOSED: 'CLOSED',
 } as const;
 
-/**
- * Recorder attributed to this workday, or null for guest mode (opened by an admin, not tied to a specific recorder)
- * @nullable
- */
-export type CreateWorkdayResponseDtoRecorderId = { [key: string]: unknown } | null;
-
 export interface CreateWorkdayResponseDto {
   /** Unique identifier of the workday */
   _id: string;
@@ -488,7 +492,9 @@ export interface CreateWorkdayResponseDto {
      * Recorder attributed to this workday, or null for guest mode (opened by an admin, not tied to a specific recorder)
      * @nullable
      */
-  recorderId: CreateWorkdayResponseDtoRecorderId;
+  recorderId: string | null;
+  /** Display name of the recorder attributed to this workday. Absent for guest-mode workdays (recorderId is null). */
+  recorderName?: string;
   /** Client-generated id (the originating local workday row id) used to make retrying POST /workdays idempotent */
   clientEntryId: string;
 }
@@ -503,12 +509,6 @@ export const FindWorkdayResponseDtoStatus = {
   OPEN: 'OPEN',
   CLOSED: 'CLOSED',
 } as const;
-
-/**
- * Recorder attributed to this workday, or null for guest mode (opened by an admin, not tied to a specific recorder)
- * @nullable
- */
-export type FindWorkdayResponseDtoRecorderId = { [key: string]: unknown } | null;
 
 export interface FindWorkdayResponseDto {
   /** Unique identifier of the workday */
@@ -531,7 +531,9 @@ export interface FindWorkdayResponseDto {
      * Recorder attributed to this workday, or null for guest mode (opened by an admin, not tied to a specific recorder)
      * @nullable
      */
-  recorderId: FindWorkdayResponseDtoRecorderId;
+  recorderId: string | null;
+  /** Display name of the recorder attributed to this workday. Absent for guest-mode workdays (recorderId is null). */
+  recorderName?: string;
   /** Client-generated id (the originating local workday row id) used to make retrying POST /workdays idempotent */
   clientEntryId: string;
 }
@@ -546,12 +548,6 @@ export const CloseWorkdayResponseDtoStatus = {
   OPEN: 'OPEN',
   CLOSED: 'CLOSED',
 } as const;
-
-/**
- * Recorder attributed to this workday, or null for guest mode (opened by an admin, not tied to a specific recorder)
- * @nullable
- */
-export type CloseWorkdayResponseDtoRecorderId = { [key: string]: unknown } | null;
 
 export interface CloseWorkdayResponseDto {
   /** Unique identifier of the workday */
@@ -574,7 +570,9 @@ export interface CloseWorkdayResponseDto {
      * Recorder attributed to this workday, or null for guest mode (opened by an admin, not tied to a specific recorder)
      * @nullable
      */
-  recorderId: CloseWorkdayResponseDtoRecorderId;
+  recorderId: string | null;
+  /** Display name of the recorder attributed to this workday. Absent for guest-mode workdays (recorderId is null). */
+  recorderName?: string;
   /** Client-generated id (the originating local workday row id) used to make retrying POST /workdays idempotent */
   clientEntryId: string;
 }

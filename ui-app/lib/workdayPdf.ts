@@ -62,8 +62,10 @@ function buildHtml(data: WorkdayPdfData): string {
     <html>
       <head>
         <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
         <style>
-          body { font-family: -apple-system, Roboto, sans-serif; color: #1A1A1A; padding: 32px; }
+          * { box-sizing: border-box; }
+          body { font-family: -apple-system, Roboto, sans-serif; color: #1A1A1A; padding: 8px; }
           .brand { color: #16A34A; font-weight: 700; font-size: 12px; letter-spacing: 1px; margin-bottom: 12px; }
           h1 { font-size: 24px; margin: 0 0 4px; }
           .subtitle { color: #5C5C5C; margin-bottom: 20px; text-transform: capitalize; }
@@ -102,19 +104,18 @@ function buildHtml(data: WorkdayPdfData): string {
   `;
 }
 
-// Antes generaba el PDF y abría el share sheet directo, sin mostrarlo — el
-// usuario pidió poder verlo primero. `Print.printAsync({ html })` abre el
-// diálogo nativo de impresión (AirPrint en iOS, el Print Framework en
-// Android), que ya renderiza una vista previa real del documento antes de
-// imprimir — sin esto no hace falta un dev client ni una librería de visor
-// de PDF (react-native-webview no garantiza un render de PDF confiable en
-// Android, es un punto débil conocido de esa librería). "Guardar como PDF"
-// desde ese mismo diálogo (ambas plataformas lo ofrecen como destino de
-// impresión) cubre el caso de querer conservar/compartir el archivo
-// después, sin un botón de compartir aparte por ahora.
-export async function previewWorkdaySummaryPdf(
+// Primer intento (2026-09-04): `Print.printAsync({ html })` directo — pero
+// en iOS ese diálogo abre de entrada en la pantalla de Opciones (impresora/
+// copias/tamaño), con el documento real tapado atrás, apenas visible.
+// Confirmado con una captura del usuario: no sirve como vista previa, es un
+// flujo de impresión, no de "mirar el PDF" (que era el pedido). Ahora esta
+// función solo genera el archivo — la pantalla que la llama lo muestra en
+// un WebView propio (visor real, de entrada) y deja imprimir/compartir como
+// una acción aparte, no lo primero que se ve.
+export async function generateWorkdaySummaryPdf(
   data: WorkdayPdfData,
-): Promise<void> {
+): Promise<string> {
   const html = buildHtml(data);
-  await Print.printAsync({ html });
+  const { uri } = await Print.printToFileAsync({ html });
+  return uri;
 }

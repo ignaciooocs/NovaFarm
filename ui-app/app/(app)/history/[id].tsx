@@ -1,5 +1,9 @@
 import { useCallback, useMemo, useState } from 'react';
-import { FlatList, StyleSheet, View } from 'react-native';
+import { FlatList, Modal, Platform, StyleSheet, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { WebView } from 'react-native-webview';
+import * as Print from 'expo-print';
+import * as Sharing from 'expo-sharing';
 import { Stack, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import {
   ActivityIndicator,
@@ -16,7 +20,7 @@ import { strings } from '@/constants/strings';
 import { db } from '@/db/client';
 import { fruits, harvesters as harvestersTable } from '@/db/schema';
 import { getErrorMessage } from '@/lib/errors';
-import { previewWorkdaySummaryPdf } from '@/lib/workdayPdf';
+import { generateWorkdaySummaryPdf } from '@/lib/workdayPdf';
 import { usePalette } from '@/stores';
 import { spacing } from '@/theme';
 
@@ -54,11 +58,18 @@ export default function HistoryDetailScreen() {
   const { id: workdayServerId } = useLocalSearchParams<{ id: string }>();
   const palette = usePalette();
   const styles = useMemo(() => createStyles(palette), [palette]);
+  // Medidos acá afuera, no con un SafeAreaView adentro del Modal: el Modal
+  // presenta su contenido en una jerarquía nativa aparte, y los insets
+  // calculados ahí no son confiables (bug real, encontrado en dispositivo —
+  // los botones del visor de PDF quedaban tapados por la barra de estado).
+  const insets = useSafeAreaInsets();
 
   const [detail, setDetail] = useState<WorkdayDetail | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [exportingPdf, setExportingPdf] = useState(false);
+  const [previewUri, setPreviewUri] = useState<string | null>(null);
+  const [sharing, setSharing] = useState(false);
 
   useFocusEffect(
     useCallback(() => {
@@ -167,14 +178,42 @@ export default function HistoryDetailScreen() {
     }
     setExportingPdf(true);
     try {
-      await previewWorkdaySummaryPdf(detail);
+      const uri = await generateWorkdaySummaryPdf(detail);
+      // Distinto por plataforma a propósito: un WebView con un PDF local en
+      // Android típicamente solo dispara una descarga silenciosa en vez de
+      // mostrarlo (limitación conocida del WebView de Android, no de esta
+      // librería) — así que ahí se usa directo el diálogo nativo de
+      // impresión, que en Android sí lleva la vista previa por delante (a
+      // diferencia de iOS, que abre en Opciones — ver handlePrint/el visor
+      // de abajo, agregado justo por eso).
+      if (Platform.OS === 'android') {
+        await Print.printAsync({ uri });
+      } else {
+        setPreviewUri(uri);
+      }
     } catch {
-      // El diálogo nativo de impresión (iOS sobre todo) rechaza la promesa
-      // si se cierra sin imprimir — no es un error real que mostrarle,
-      // mismo criterio que ya usa invite-code.tsx al cancelar el share
-      // sheet: la vista previa se mostró igual, que es justo lo que se pidió.
+      // Sin conexión no debería pasar (todo el HTML se arma localmente); en
+      // Android también puede rechazar si se cierra el diálogo sin
+      // imprimir, que no es un error real que mostrarle.
     } finally {
       setExportingPdf(false);
+    }
+  }
+
+  // Acción explícita aparte del visor (que ya muestra el contenido de
+  // entrada) — comparte el archivo ya generado vía el share sheet nativo,
+  // mismo mecanismo que ya usa invite-code.tsx para el código de invitación.
+  async function handleShare() {
+    if (!previewUri) {
+      return;
+    }
+    setSharing(true);
+    try {
+      await Sharing.shareAsync(previewUri, { mimeType: 'application/pdf' });
+    } catch {
+      // Usuario canceló el share sheet — no es un error real.
+    } finally {
+      setSharing(false);
     }
   }
 
@@ -270,6 +309,35 @@ export default function HistoryDetailScreen() {
           </View>
         )}
       />
+
+      <Modal
+        visible={previewUri !== null}
+        animationType="slide"
+        onRequestClose={() => setPreviewUri(null)}
+      >
+        <View style={[styles.previewContainer, { paddingBottom: insets.bottom }]}>
+          <View style={[styles.previewHeader, { paddingTop: insets.top }]}>
+            <IconButton icon="close" onPress={() => setPreviewUri(null)} />
+            {sharing ? (
+              <ActivityIndicator size="small" style={styles.headerAction} />
+            ) : (
+              <IconButton icon="share-variant" onPress={handleShare} />
+            )}
+          </View>
+          {previewUri ? (
+            // originWhitelist: sin esto, WebView solo navega a orígenes
+            // http(s):// por defecto — un file:// nunca calza ahí, así que
+            // rechazaba cargar el PDF y se lo pasaba al sistema operativo
+            // (el warning "Can't open url: file://..." que reportó el
+            // usuario). '*' habilita también el esquema file://.
+            <WebView
+              source={{ uri: previewUri }}
+              style={styles.previewWeb}
+              originWhitelist={['*']}
+            />
+          ) : null}
+        </View>
+      </Modal>
     </Screen>
   );
 }
@@ -328,5 +396,14 @@ function createStyles(colors: ReturnType<typeof usePalette>) {
     rosterName: { flex: 1, marginLeft: spacing.sm },
     rosterTotal: { color: colors.textSecondary },
     emptyRoster: { paddingVertical: spacing.md, color: colors.textSecondary },
+    previewContainer: { flex: 1, backgroundColor: colors.surface },
+    previewHeader: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      borderBottomWidth: StyleSheet.hairlineWidth,
+      borderBottomColor: colors.border,
+    },
+    previewWeb: { flex: 1 },
   });
 }

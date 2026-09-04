@@ -186,8 +186,7 @@ export const strings = {
   settings: {
     title: 'Ajustes',
     logout: 'Cerrar sesión',
-    logoutConfirm:
-      '¿Seguro que quieres cerrar sesión? Se van a borrar los datos guardados en este dispositivo (ya sincronizados) para dejarlo limpio para la próxima cuenta.',
+    logoutConfirm: '¿Seguro que quieres cerrar sesión?',
     logoutBlockedTitle: 'No puedes cerrar sesión todavía',
     logoutBlockedMessage:
       'Hay jornadas o entregas en este dispositivo que todavía no se sincronizaron. Sincronízalas primero — si cierras sesión ahora, se perderían.',

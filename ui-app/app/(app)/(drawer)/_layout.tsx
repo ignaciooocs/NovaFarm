@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
 import { useRouter } from 'expo-router';
 import {
@@ -8,6 +9,7 @@ import {
 } from 'expo-router/drawer';
 import type { DrawerContentComponentProps } from 'expo-router/drawer';
 import { signOut } from 'firebase/auth';
+import { Button, Dialog, Portal, Text } from 'react-native-paper';
 import { strings } from '@/constants/strings';
 import { auth } from '@/lib/firebase';
 import { useAuthStore, useFarmSettingsStore, usePalette } from '@/stores';
@@ -15,10 +17,16 @@ import { colors } from '@/theme';
 
 // "Cerrar sesión" es una acción directa acá, no una pantalla propia — se
 // agrega a mano después de la lista de pantallas que arma DrawerItemList.
+// Pide confirmación antes de ejecutarla (pedido del usuario, 2026-09-03) —
+// es la única acción destructiva de un toque en todo el drawer, a
+// diferencia de activar/desactivar catálogo (reversible, sin diálogo a
+// propósito).
 function DrawerContent(props: DrawerContentComponentProps) {
   const router = useRouter();
+  const [confirmVisible, setConfirmVisible] = useState(false);
 
   async function handleLogout() {
+    setConfirmVisible(false);
     await signOut(auth);
     router.replace('/');
   }
@@ -31,8 +39,26 @@ function DrawerContent(props: DrawerContentComponentProps) {
         icon={({ color, size }) => (
           <MaterialCommunityIcons name="logout" color={color} size={size} />
         )}
-        onPress={handleLogout}
+        onPress={() => setConfirmVisible(true)}
       />
+
+      <Portal>
+        <Dialog
+          visible={confirmVisible}
+          onDismiss={() => setConfirmVisible(false)}
+        >
+          <Dialog.Title>{strings.settings.logout}</Dialog.Title>
+          <Dialog.Content>
+            <Text>{strings.settings.logoutConfirm}</Text>
+          </Dialog.Content>
+          <Dialog.Actions>
+            <Button onPress={() => setConfirmVisible(false)}>
+              {strings.common.cancel}
+            </Button>
+            <Button onPress={handleLogout}>{strings.settings.logout}</Button>
+          </Dialog.Actions>
+        </Dialog>
+      </Portal>
     </DrawerContentScrollView>
   );
 }

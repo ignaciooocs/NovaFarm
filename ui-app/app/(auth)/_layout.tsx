@@ -16,5 +16,20 @@ export default function AuthLayout() {
     return <Redirect href="/" />;
   }
 
-  return <Stack screenOptions={{ headerShown: false }} />;
+  return (
+    <Stack screenOptions={{ headerShown: false }}>
+      {/* Animación de entrada por pantalla, no por acción de navegación —
+          expo-router usa @react-navigation/native-stack, que anima según
+          la pantalla de DESTINO. AuthForm.tsx navega con router.replace()
+          (nunca push) entre estas dos, así que la pila nunca crece por
+          alternar de ida y vuelta. Direcciones pedidas por el usuario
+          (2026-09-03): registro entra desde la derecha, login desde la
+          izquierda — como avanzar/retroceder en un flujo. */}
+      <Stack.Screen name="login" options={{ animation: 'slide_from_left' }} />
+      <Stack.Screen
+        name="signup"
+        options={{ animation: 'slide_from_right' }}
+      />
+    </Stack>
+  );
 }

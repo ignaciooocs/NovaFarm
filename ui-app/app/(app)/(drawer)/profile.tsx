@@ -19,7 +19,9 @@ import { spacing } from '@/theme';
 // de un admin sobre otra cuenta, no algo que uno se hace a sí mismo).
 export default function ProfileScreen() {
   const [email, setEmail] = useState('');
-  const [role, setRole] = useState<'admin' | 'recorder'>('recorder');
+  const [role, setRole] = useState<'admin' | 'recorder' | 'supervisor'>(
+    'recorder',
+  );
   const [name, setName] = useState('');
   const [nationalId, setNationalId] = useState('');
   const [loading, setLoading] = useState(true);
@@ -84,7 +86,11 @@ export default function ProfileScreen() {
   }
 
   const roleLabel =
-    role === 'admin' ? strings.admin.roleAdmin : strings.admin.roleRecorder;
+    role === 'admin'
+      ? strings.admin.roleAdmin
+      : role === 'supervisor'
+        ? strings.admin.roleSupervisor
+        : strings.admin.roleRecorder;
 
   return (
     <Screen edges={['bottom', 'left', 'right']}>

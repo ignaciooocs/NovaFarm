@@ -13,7 +13,7 @@ import { extractBearerToken } from '../utils/extract-bearer-token';
 export interface AuthenticatedUser {
   uid: string;
   farmId: string;
-  role: 'recorder' | 'admin';
+  role: 'recorder' | 'admin' | 'supervisor';
 }
 
 // firebase-admin's DecodedIdToken types custom claims via a `[key: string]: any`
@@ -21,7 +21,7 @@ export interface AuthenticatedUser {
 // farmId/role below doesn't trip @typescript-eslint/no-unsafe-member-access.
 interface FirebaseCustomClaims {
   farmId?: string;
-  role?: 'recorder' | 'admin';
+  role?: 'recorder' | 'admin' | 'supervisor';
 }
 
 /**
@@ -55,7 +55,7 @@ export class FarmScopeGuard implements CanActivate {
     (request as Request & { user: AuthenticatedUser }).user = {
       uid: decoded.uid,
       farmId: claims.farmId,
-      role: claims.role as 'recorder' | 'admin',
+      role: claims.role as 'recorder' | 'admin' | 'supervisor',
     };
 
     return true;

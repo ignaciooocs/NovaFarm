@@ -34,10 +34,10 @@ export class UserDto {
 
   @ApiProperty({
     description: 'Role of the user within their farm',
-    enum: ['recorder', 'admin'],
+    enum: ['recorder', 'admin', 'supervisor'],
     example: 'admin',
   })
-  role!: 'recorder' | 'admin';
+  role!: 'recorder' | 'admin' | 'supervisor';
 
   @ApiProperty({
     description: 'Whether the user is active',

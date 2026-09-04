@@ -7,5 +7,6 @@ export const ROLES_KEY = 'roles';
  * RolesGuard on the same controller/route (after FarmScopeGuard, which
  * populates request.user.role) — @Roles() alone does not enforce anything.
  */
-export const Roles = (...roles: Array<'recorder' | 'admin'>) =>
-  SetMetadata(ROLES_KEY, roles);
+export const Roles = (
+  ...roles: Array<'recorder' | 'admin' | 'supervisor'>
+) => SetMetadata(ROLES_KEY, roles);

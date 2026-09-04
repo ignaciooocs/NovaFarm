@@ -71,12 +71,16 @@ function DrawerContent(props: DrawerContentComponentProps) {
 // probando). Catálogos: admin siempre los ve, y un recorder los ve si
 // farms.recordersCanManageCatalog está prendido (interruptor único por
 // farm, configurable desde Ajustes — ver lib/farmSettings.ts). "Mi equipo"
-// es distinto: admin-only siempre, sin excepción del interruptor — expone
-// datos de otras cuentas (email, rol) y ya tiene un control de acceso real
-// del lado del server (RolesGuard), no solo esta ayuda de UX.
+// es distinto: admin y supervisor siempre (2026-09-04: el rol supervisor es
+// de solo lectura, ver progreso del equipo es justo su propósito), sin
+// excepción del interruptor de catálogo — expone datos de otras cuentas
+// (email, rol) y ya tiene un control de acceso real del lado del server
+// (RolesGuard: GET /users acepta 'admin'/'supervisor'), no solo esta ayuda
+// de UX. Un recorder nunca lo ve, tenga o no prendido el interruptor.
 export default function DrawerLayout() {
   const role = useAuthStore((state) => state.claims.role);
   const isAdmin = role === 'admin';
+  const isSupervisor = role === 'supervisor';
   const recordersCanManageCatalog = useFarmSettingsStore(
     (state) => state.recordersCanManageCatalog,
   );
@@ -178,7 +182,8 @@ export default function DrawerLayout() {
         options={{
           title: strings.admin.teamTitle,
           drawerLabel: strings.admin.teamTitle,
-          drawerItemStyle: isAdmin ? undefined : { display: 'none' },
+          drawerItemStyle:
+            isAdmin || isSupervisor ? undefined : { display: 'none' },
           drawerIcon: ({ color, size }) => (
             <MaterialCommunityIcons
               name="account-multiple"

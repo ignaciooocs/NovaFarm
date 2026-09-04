@@ -4,7 +4,11 @@ import { useRouter } from 'expo-router';
 import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
 import {
   ActivityIndicator,
+  Button,
+  Dialog,
   HelperText,
+  IconButton,
+  Portal,
   Text,
   TouchableRipple,
 } from 'react-native-paper';
@@ -14,17 +18,30 @@ import { getWorkdays } from '@/api/generated/workdays/workdays';
 import { Screen } from '@/components/Screen';
 import { strings } from '@/constants/strings';
 import { getErrorMessage } from '@/lib/errors';
-import { usePalette } from '@/stores';
+import { useAuthStore, usePalette } from '@/stores';
 import { colors, spacing } from '@/theme';
 
-// Solo admin: server-app rechaza GET /users con 403 para un recorder
-// (RolesGuard) — la pantalla en sí ya está oculta del drawer para ese rol
-// (ver (drawer)/_layout.tsx), esto es la segunda capa, real, del lado del
-// server. De momento solo lista (ver el usuario en la lista) — activar/
-// desactivar y editar rol quedaron fuera a propósito por ahora.
+function roleLabelFor(role: FindUserResponseDto['role']): string {
+  if (role === 'admin') {
+    return strings.admin.roleAdmin;
+  }
+  return role === 'supervisor'
+    ? strings.admin.roleSupervisor
+    : strings.admin.roleRecorder;
+}
+
+// Admin y supervisor ven esta pantalla (server-app: GET /users acepta
+// 'admin'/'supervisor' vía RolesGuard — la pantalla ya está oculta del
+// drawer para un recorder, ver (drawer)/_layout.tsx, esto es la segunda
+// capa, real, del lado del server). Cambiar rol (recorder <-> supervisor,
+// el ascenso que pidió el usuario 2026-09-04) es admin-only — un supervisor
+// que entra acá ve exactamente lo mismo pero de solo lectura, sin el botón
+// de cambiar rol, coherente con que su rol es "solo mirar".
 export default function TeamScreen() {
   const router = useRouter();
   const palette = usePalette();
+  const viewerRole = useAuthStore((state) => state.claims.role);
+  const isAdmin = viewerRole === 'admin';
   const [users, setUsers] = useState<FindUserResponseDto[]>([]);
   // _id de la jornada abierta de cada recorder, si tiene una ahora mismo —
   // resuelto vía GET /workdays?status=OPEN (mismo endpoint que usa Home,
@@ -39,33 +56,62 @@ export default function TeamScreen() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
-    async function load() {
-      setLoading(true);
-      try {
-        const { usersControllerFindAll } = getUsers();
-        const { workdaysControllerFindAll } = getWorkdays();
-        const [usersResult, openWorkdays] = await Promise.all([
-          usersControllerFindAll(),
-          workdaysControllerFindAll({ status: 'OPEN' }),
-        ]);
-        setUsers(usersResult);
-        setActiveWorkdayByRecorder(
-          new Map(
-            openWorkdays
-              .filter((workday) => workday.recorderId)
-              .map((workday) => [workday.recorderId as string, workday._id]),
-          ),
-        );
-      } catch (err) {
-        setError(getErrorMessage(err));
-      } finally {
-        setLoading(false);
-      }
-    }
+  // Confirmar antes de cambiar rol — no es reversible de un toque sin
+  // querer como activar/desactivar catálogo, cambia permisos reales.
+  const [roleChangeTarget, setRoleChangeTarget] =
+    useState<FindUserResponseDto | null>(null);
+  const [changingRole, setChangingRole] = useState(false);
 
+  async function load() {
+    setLoading(true);
+    try {
+      const { usersControllerFindAll } = getUsers();
+      const { workdaysControllerFindAll } = getWorkdays();
+      const [usersResult, openWorkdays] = await Promise.all([
+        usersControllerFindAll(),
+        workdaysControllerFindAll({ status: 'OPEN' }),
+      ]);
+      setUsers(usersResult);
+      setActiveWorkdayByRecorder(
+        new Map(
+          openWorkdays
+            .filter((workday) => workday.recorderId)
+            .map((workday) => [workday.recorderId as string, workday._id]),
+        ),
+      );
+    } catch (err) {
+      setError(getErrorMessage(err));
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  useEffect(() => {
     load();
   }, []);
+
+  const nextRoleForTarget =
+    roleChangeTarget?.role === 'supervisor' ? 'recorder' : 'supervisor';
+
+  async function handleConfirmRoleChange() {
+    if (!roleChangeTarget) {
+      return;
+    }
+    setChangingRole(true);
+    setError(null);
+    try {
+      const { usersControllerUpdateRole } = getUsers();
+      await usersControllerUpdateRole(roleChangeTarget._id, {
+        role: nextRoleForTarget,
+      });
+      setRoleChangeTarget(null);
+      await load();
+    } catch (err) {
+      setError(getErrorMessage(err));
+    } finally {
+      setChangingRole(false);
+    }
+  }
 
   return (
     <Screen edges={['bottom', 'left', 'right']}>
@@ -83,54 +129,40 @@ export default function TeamScreen() {
           keyExtractor={(item) => item._id}
           ListEmptyComponent={<Text>{strings.admin.emptyList}</Text>}
           renderItem={({ item }) => {
-            const roleLabel =
-              item.role === 'admin'
-                ? strings.admin.roleAdmin
-                : strings.admin.roleRecorder;
             const activeWorkdayId = activeWorkdayByRecorder.get(item._id);
+            const showRoleToggle = isAdmin && item.role !== 'admin';
 
-            const rowContent = (
-              <View style={styles.row}>
-                <View style={styles.rowMain}>
-                  <View style={styles.rowTopLine}>
-                    <Text
-                      variant="titleMedium"
-                      style={styles.rowTitle}
-                      numberOfLines={1}
-                    >
-                      {item.name}
-                    </Text>
-                    {activeWorkdayId ? (
-                      <Text
-                        style={[
-                          styles.activeBadge,
-                          { color: palette.primary },
-                        ]}
-                      >
-                        {strings.home.activeWorkday}
-                      </Text>
-                    ) : null}
-                  </View>
-                  <Text style={styles.rowSubtitle} numberOfLines={1}>
-                    {item.email} · {roleLabel}
-                    {!item.active ? ` · ${strings.common.inactive}` : ''}
+            const mainContent = (
+              <View style={styles.rowMain}>
+                <View style={styles.rowTopLine}>
+                  <Text
+                    variant="titleMedium"
+                    style={styles.rowTitle}
+                    numberOfLines={1}
+                  >
+                    {item.name}
                   </Text>
+                  {activeWorkdayId ? (
+                    <Text
+                      style={[styles.activeBadge, { color: palette.primary }]}
+                    >
+                      {strings.home.activeWorkday}
+                    </Text>
+                  ) : null}
                 </View>
-                {activeWorkdayId ? (
-                  <MaterialCommunityIcons
-                    name="chevron-right"
-                    size={22}
-                    color={colors.textSecondary}
-                  />
-                ) : null}
+                <Text style={styles.rowSubtitle} numberOfLines={1}>
+                  {item.email} · {roleLabelFor(item.role)}
+                  {!item.active ? ` · ${strings.common.inactive}` : ''}
+                </Text>
               </View>
             );
 
             // Solo se puede ver (nunca editar) la jornada activa de otra
-            // persona, y solo si tiene una — sin jornada activa la fila no
-            // es tocable, no hay nada que mostrar.
-            return activeWorkdayId ? (
+            // persona, y solo si tiene una — sin jornada activa esa parte
+            // de la fila no es tocable, no hay nada que mostrar.
+            const tappableMain = activeWorkdayId ? (
               <TouchableRipple
+                style={styles.rowTappable}
                 onPress={() =>
                   router.push({
                     pathname: '/history/[id]',
@@ -138,14 +170,75 @@ export default function TeamScreen() {
                   })
                 }
               >
-                {rowContent}
+                <View style={styles.rowTappableContent}>
+                  {mainContent}
+                  <MaterialCommunityIcons
+                    name="chevron-right"
+                    size={22}
+                    color={colors.textSecondary}
+                  />
+                </View>
               </TouchableRipple>
             ) : (
-              rowContent
+              <View style={[styles.rowTappable, styles.rowTappableContent]}>
+                {mainContent}
+              </View>
+            );
+
+            return (
+              <View style={styles.row}>
+                {tappableMain}
+                {showRoleToggle ? (
+                  <IconButton
+                    icon={
+                      item.role === 'supervisor'
+                        ? 'account-arrow-left-outline'
+                        : 'account-star-outline'
+                    }
+                    size={20}
+                    accessibilityLabel={
+                      item.role === 'supervisor'
+                        ? strings.admin.makeRecorder
+                        : strings.admin.makeSupervisor
+                    }
+                    onPress={() => setRoleChangeTarget(item)}
+                  />
+                ) : null}
+              </View>
             );
           }}
         />
       )}
+
+      <Portal>
+        <Dialog
+          visible={roleChangeTarget !== null}
+          onDismiss={() => setRoleChangeTarget(null)}
+        >
+          <Dialog.Title>{strings.admin.changeRoleTitle}</Dialog.Title>
+          <Dialog.Content>
+            <Text>
+              {roleChangeTarget
+                ? strings.admin.changeRoleConfirm(
+                    roleChangeTarget.name,
+                    roleLabelFor(nextRoleForTarget),
+                  )
+                : ''}
+            </Text>
+          </Dialog.Content>
+          <Dialog.Actions>
+            <Button onPress={() => setRoleChangeTarget(null)}>
+              {strings.common.cancel}
+            </Button>
+            <Button
+              onPress={handleConfirmRoleChange}
+              loading={changingRole}
+            >
+              {strings.common.confirm}
+            </Button>
+          </Dialog.Actions>
+        </Dialog>
+      </Portal>
     </Screen>
   );
 }
@@ -155,9 +248,14 @@ const styles = StyleSheet.create({
   row: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: spacing.md,
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: colors.border,
+  },
+  rowTappable: { flex: 1 },
+  rowTappableContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: spacing.md,
   },
   rowMain: { flex: 1, marginRight: spacing.sm },
   rowTopLine: { flexDirection: 'row', alignItems: 'baseline' },

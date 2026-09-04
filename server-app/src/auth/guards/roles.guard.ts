@@ -22,7 +22,7 @@ export class RolesGuard implements CanActivate {
 
   canActivate(context: ExecutionContext): boolean {
     const requiredRoles = this.reflector.getAllAndOverride<
-      Array<'recorder' | 'admin'> | undefined
+      Array<'recorder' | 'admin' | 'supervisor'> | undefined
     >(ROLES_KEY, [context.getHandler(), context.getClass()]);
 
     if (!requiredRoles || requiredRoles.length === 0) {

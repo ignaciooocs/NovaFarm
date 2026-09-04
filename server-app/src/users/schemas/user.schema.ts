@@ -22,8 +22,8 @@ export class User {
   @Prop()
   nationalId?: string;
 
-  @Prop({ required: true, enum: ['recorder', 'admin'] })
-  role!: 'recorder' | 'admin';
+  @Prop({ required: true, enum: ['recorder', 'admin', 'supervisor'] })
+  role!: 'recorder' | 'admin' | 'supervisor';
 
   @Prop({ required: true, default: true })
   active!: boolean;

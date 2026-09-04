@@ -86,10 +86,13 @@ export const strings = {
     goToAnotador: 'Ir al Anotador',
     history: 'Historial de jornadas',
     noActiveWorkday: 'No tienes una jornada abierta',
+    supervisorEmptyState:
+      'Como supervisor, revisá "Mi equipo" para ver el progreso de la cosecha.',
     todayTeam: 'Equipo de hoy',
     workersCount: (n: number) =>
       n === 1 ? '1 cosechador trabajando hoy' : `${n} cosechadores trabajando hoy`,
     moreWorkers: (n: number) => `+${n} más`,
+    teamActiveNow: 'Equipo activo ahora',
   },
   workday: {
     openTitle: 'Abrir Jornada',
@@ -158,6 +161,12 @@ export const strings = {
     editHarvester: 'Editar cosechador',
     roleAdmin: 'Admin',
     roleRecorder: 'Anotador',
+    roleSupervisor: 'Supervisor',
+    makeSupervisor: 'Hacer supervisor',
+    makeRecorder: 'Hacer anotador',
+    changeRoleTitle: 'Cambiar rol',
+    changeRoleConfirm: (name: string, roleLabel: string) =>
+      `¿Cambiar el rol de ${name} a ${roleLabel}?`,
     fruitIconLabel: 'Emoji',
     fruitSuggestionsLabel: 'Sugerencias',
     fruitsCatalogLabel: 'Tu catálogo',

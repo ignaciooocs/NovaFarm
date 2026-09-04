@@ -1,6 +1,7 @@
 import { getModelToken } from '@nestjs/mongoose';
 import { Test, TestingModule } from '@nestjs/testing';
 import { Types } from 'mongoose';
+import { FirebaseAdminService } from '../auth/firebase-admin.service';
 import { User } from './schemas/user.schema';
 import { UsersService } from './users.service';
 
@@ -14,6 +15,10 @@ describe('UsersService', () => {
     findOneAndUpdate: jest.fn(),
   };
 
+  const firebaseAdminService = {
+    setCustomUserClaims: jest.fn(),
+  };
+
   const farmId = '507f1f77bcf86cd799439011';
 
   beforeEach(async () => {
@@ -23,6 +28,7 @@ describe('UsersService', () => {
       providers: [
         UsersService,
         { provide: getModelToken(User.name), useValue: userModel },
+        { provide: FirebaseAdminService, useValue: firebaseAdminService },
       ],
     }).compile();
 
@@ -270,6 +276,92 @@ describe('UsersService', () => {
       });
 
       expect(result).toBeNull();
+    });
+  });
+
+  describe('updateRole', () => {
+    it('promotes a recorder to supervisor, scoped by farm, and syncs the Firebase custom claim', async () => {
+      const userId = new Types.ObjectId();
+      userModel.findOne.mockReturnValue({
+        exec: jest.fn().mockResolvedValue({
+          _id: userId,
+          farmId: new Types.ObjectId(farmId),
+          firebaseUid: 'firebase-uid',
+          role: 'recorder',
+        }),
+      });
+      userModel.findOneAndUpdate.mockReturnValue({
+        exec: jest.fn().mockResolvedValue({
+          _id: userId,
+          farmId: new Types.ObjectId(farmId),
+          name: 'Juana Perez',
+          email: 'juana@example.com',
+          role: 'supervisor',
+          active: true,
+        }),
+      });
+
+      const result = await usersService.updateRole(
+        userId.toString(),
+        farmId,
+        'supervisor',
+      );
+
+      expect(userModel.findOne).toHaveBeenCalledWith({
+        _id: userId,
+        farmId: new Types.ObjectId(farmId),
+      });
+      // findOneAndUpdate con $set puntual, no fetch+mutate+save() — mismo
+      // motivo que en updateMe/workdays.close()/farms.update().
+      expect(userModel.findOneAndUpdate).toHaveBeenCalledWith(
+        { _id: userId },
+        { $set: { role: 'supervisor' } },
+        { new: true },
+      );
+      // El rol vive en dos lugares — el documento y el custom claim de
+      // Firebase, que es lo que RolesGuard de verdad lee — setCustomUserClaims
+      // reemplaza el objeto completo, así que farmId va de nuevo, no solo role.
+      expect(firebaseAdminService.setCustomUserClaims).toHaveBeenCalledWith(
+        'firebase-uid',
+        { farmId, role: 'supervisor' },
+      );
+      expect(result.role).toEqual('supervisor');
+    });
+
+    it("rejects changing an admin's role, without touching the document or Firebase claims", async () => {
+      userModel.findOne.mockReturnValue({
+        exec: jest.fn().mockResolvedValue({
+          _id: new Types.ObjectId(),
+          farmId: new Types.ObjectId(farmId),
+          firebaseUid: 'firebase-uid',
+          role: 'admin',
+        }),
+      });
+
+      await expect(
+        usersService.updateRole(
+          new Types.ObjectId().toString(),
+          farmId,
+          'supervisor',
+        ),
+      ).rejects.toThrow("Can't change an admin's role through this endpoint");
+
+      expect(userModel.findOneAndUpdate).not.toHaveBeenCalled();
+      expect(firebaseAdminService.setCustomUserClaims).not.toHaveBeenCalled();
+    });
+
+    it('throws when no user matches the given id within the caller farm', async () => {
+      userModel.findOne.mockReturnValue({
+        exec: jest.fn().mockResolvedValue(null),
+      });
+
+      await expect(
+        usersService.updateRole(
+          new Types.ObjectId().toString(),
+          farmId,
+          'supervisor',
+        ),
+      ).rejects.toThrow('User not found');
     });
   });
 });

@@ -9,6 +9,7 @@ import type {
   FindUserResponseDto,
   UpdateUserRequestDto,
   UpdateUserResponseDto,
+  UpdateUserRoleRequestDto,
   UsersControllerFindAllParams
 } from '../novaFarmAPI.schemas';
 
@@ -18,7 +19,7 @@ import { apiClient } from '../../axios-instance';
 
   export const getUsers = () => {
 /**
- * @summary List the caller farm's team (admin only)
+ * @summary List the caller farm's team (admin and supervisor — read-only for the latter)
  */
 const usersControllerFindAll = (
     params?: UsersControllerFindAllParams,
@@ -53,7 +54,22 @@ const usersControllerUpdateMe = (
     },
       );
     }
-  return {usersControllerFindAll,usersControllerFindMe,usersControllerUpdateMe}};
+  /**
+ * @summary Change a team member's role between recorder and supervisor (admin only, never admin)
+ */
+const usersControllerUpdateRole = (
+    id: string,
+    updateUserRoleRequestDto: UpdateUserRoleRequestDto,
+ ) => {
+      return apiClient<UpdateUserResponseDto>(
+      {url: `/api/v1/users/${id}/role`, method: 'PATCH',
+      headers: {'Content-Type': 'application/json', },
+      data: updateUserRoleRequestDto
+    },
+      );
+    }
+  return {usersControllerFindAll,usersControllerFindMe,usersControllerUpdateMe,usersControllerUpdateRole}};
 export type UsersControllerFindAllResult = NonNullable<Awaited<ReturnType<ReturnType<typeof getUsers>['usersControllerFindAll']>>>
 export type UsersControllerFindMeResult = NonNullable<Awaited<ReturnType<ReturnType<typeof getUsers>['usersControllerFindMe']>>>
 export type UsersControllerUpdateMeResult = NonNullable<Awaited<ReturnType<ReturnType<typeof getUsers>['usersControllerUpdateMe']>>>
+export type UsersControllerUpdateRoleResult = NonNullable<Awaited<ReturnType<ReturnType<typeof getUsers>['usersControllerUpdateRole']>>>

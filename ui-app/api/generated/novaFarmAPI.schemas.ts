@@ -62,6 +62,7 @@ export type UserDtoRole = typeof UserDtoRole[keyof typeof UserDtoRole];
 export const UserDtoRole = {
   recorder: 'recorder',
   admin: 'admin',
+  supervisor: 'supervisor',
 } as const;
 
 export interface UserDto {
@@ -107,6 +108,7 @@ export type FindUserResponseDtoRole = typeof FindUserResponseDtoRole[keyof typeo
 export const FindUserResponseDtoRole = {
   recorder: 'recorder',
   admin: 'admin',
+  supervisor: 'supervisor',
 } as const;
 
 export interface FindUserResponseDto {
@@ -145,6 +147,7 @@ export type UpdateUserResponseDtoRole = typeof UpdateUserResponseDtoRole[keyof t
 export const UpdateUserResponseDtoRole = {
   recorder: 'recorder',
   admin: 'admin',
+  supervisor: 'supervisor',
 } as const;
 
 export interface UpdateUserResponseDto {
@@ -162,6 +165,22 @@ export interface UpdateUserResponseDto {
   active: boolean;
   /** National ID (optional/nullable — not collected at quick field registration, filled in later by an admin) */
   nationalId?: string;
+}
+
+/**
+ * New role for the user — never admin, see class doc
+ */
+export type UpdateUserRoleRequestDtoRole = typeof UpdateUserRoleRequestDtoRole[keyof typeof UpdateUserRoleRequestDtoRole];
+
+
+export const UpdateUserRoleRequestDtoRole = {
+  recorder: 'recorder',
+  supervisor: 'supervisor',
+} as const;
+
+export interface UpdateUserRoleRequestDto {
+  /** New role for the user — never admin, see class doc */
+  role: UpdateUserRoleRequestDtoRole;
 }
 
 /**

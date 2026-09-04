@@ -1,6 +1,11 @@
-import { Injectable } from '@nestjs/common';
+import {
+  ForbiddenException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model, Types } from 'mongoose';
+import { FirebaseAdminService } from '../auth/firebase-admin.service';
 import { User, UserDocument } from './schemas/user.schema';
 import { FindUserRequestDto, UpdateUserRequestDto, UserDto } from './dto';
 
@@ -28,6 +33,7 @@ export interface CreateUserData {
 export class UsersService {
   constructor(
     @InjectModel(User.name) private readonly userModel: Model<User>,
+    private readonly firebaseAdminService: FirebaseAdminService,
   ) {}
 
   // Crea un usuario nuevo, siempre activo por defecto.
@@ -127,6 +133,53 @@ export class UsersService {
       .exec();
 
     return updated ? this.toDto(updated) : null;
+  }
+
+  // Asciende/reasigna a un recorder <-> supervisor (PATCH /users/:id/role,
+  // admin only — ver UsersController). Nunca toca a un admin: rechazado si
+  // el rol *actual* del usuario objetivo ya es 'admin' (defensa en
+  // profundidad además de que UpdateUserRoleRequestDto ya solo valida
+  // 'recorder'/'supervisor' como valor nuevo — este endpoint no puede crear
+  // ni sacar admins de ninguna de las dos formas). Filtra por farmId además
+  // de _id: un admin no puede tocar el rol de alguien de otra farm.
+  //
+  // El rol vive en dos lugares — el documento de Mongo (lo que devuelve
+  // findAll/findMe) y el custom claim de Firebase (lo que de verdad usa
+  // RolesGuard en cada request, ver farm-scope.guard.ts) — así que hay que
+  // actualizar los dos o el cambio no tiene efecto real hasta que a mano se
+  // llame setCustomUserClaims. setCustomUserClaims reemplaza el objeto
+  // completo de claims (no lo mergea), así que hay que volver a mandar
+  // farmId también, no solo role.
+  async updateRole(
+    id: string,
+    farmId: string,
+    role: 'recorder' | 'supervisor',
+  ): Promise<UserDto> {
+    const user = await this.userModel
+      .findOne({ _id: new Types.ObjectId(id), farmId: new Types.ObjectId(farmId) })
+      .exec();
+    if (!user) {
+      throw new NotFoundException('User not found');
+    }
+    if (user.role === 'admin') {
+      throw new ForbiddenException(
+        "Can't change an admin's role through this endpoint",
+      );
+    }
+
+    const updated = await this.userModel
+      .findOneAndUpdate({ _id: user._id }, { $set: { role } }, { new: true })
+      .exec();
+    if (!updated) {
+      throw new NotFoundException('User not found');
+    }
+
+    await this.firebaseAdminService.setCustomUserClaims(user.firebaseUid, {
+      farmId: user.farmId.toString(),
+      role,
+    });
+
+    return this.toDto(updated);
   }
 
   // Convierte el documento a DTO. nationalId puede venir undefined — es

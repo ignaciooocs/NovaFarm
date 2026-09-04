@@ -5,7 +5,7 @@ import { auth } from '../lib/firebase';
 
 interface AuthClaims {
   farmId: string | null;
-  role: 'recorder' | 'admin' | null;
+  role: 'recorder' | 'admin' | 'supervisor' | null;
 }
 
 interface AuthState {
@@ -40,7 +40,12 @@ export function bootstrapAuthListener(): () => void {
     const tokenResult = await user.getIdTokenResult();
     useAuthStore.getState().setUser(user, {
       farmId: (tokenResult.claims.farmId as string | undefined) ?? null,
-      role: (tokenResult.claims.role as 'recorder' | 'admin' | undefined) ?? null,
+      role:
+        (tokenResult.claims.role as
+          | 'recorder'
+          | 'admin'
+          | 'supervisor'
+          | undefined) ?? null,
     });
   });
 }

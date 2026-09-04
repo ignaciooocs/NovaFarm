@@ -3,6 +3,7 @@ import {
   Controller,
   Get,
   NotFoundException,
+  Param,
   Patch,
   Query,
   UseGuards,
@@ -25,6 +26,7 @@ import {
   FindUserResponseDto,
   UpdateUserRequestDto,
   UpdateUserResponseDto,
+  UpdateUserRoleRequestDto,
 } from './dto';
 
 // Solo admin por defecto: a diferencia de los catálogos (fruits/harvesters/
@@ -42,8 +44,10 @@ export class UsersController {
   constructor(private readonly usersService: UsersService) {}
 
   @Get()
+  @Roles('admin', 'supervisor')
   @ApiOperation({
-    summary: "List the caller farm's team (admin only)",
+    summary:
+      "List the caller farm's team (admin and supervisor — read-only for the latter)",
   })
   @ApiResponse({
     status: 200,
@@ -95,5 +99,24 @@ export class UsersController {
       throw new NotFoundException('User not found');
     }
     return updated;
+  }
+
+  @Patch(':id/role')
+  @Roles('admin')
+  @ApiOperation({
+    summary:
+      "Change a team member's role between recorder and supervisor (admin only, never admin)",
+  })
+  @ApiResponse({
+    status: 200,
+    description: "The user's role was updated successfully.",
+    type: UpdateUserResponseDto,
+  })
+  async updateRole(
+    @Param('id') id: string,
+    @Body() dto: UpdateUserRoleRequestDto,
+    @CurrentFarm() farmId: string,
+  ): Promise<UpdateUserResponseDto> {
+    return this.usersService.updateRole(id, farmId, dto.role);
   }
 }

@@ -56,6 +56,7 @@ erDiagram
         ObjectId _id PK
         ObjectId farmId FK
         string name "unique together with farmId, not global"
+        string icon "free-text emoji, optional, falls back to a generic default"
         boolean active
     }
 

@@ -1,9 +1,10 @@
+import { ne } from 'drizzle-orm';
 import { getFruits } from '@/api/generated/fruits/fruits';
 import { getHarvesters } from '@/api/generated/harvesters/harvesters';
 import { getMeasurementUnits } from '@/api/generated/measurement-units/measurement-units';
 import { db } from '@/db/client';
 import { fruits, harvesters, measurementUnits } from '@/db/schema';
-import { useConnectivityStore } from '@/stores';
+import { useAuthStore, useConnectivityStore } from '@/stores';
 
 let inFlight: Promise<void> | null = null;
 
@@ -28,6 +29,14 @@ export function syncCatalogs(): Promise<void> {
 }
 
 async function performSync(): Promise<void> {
+  // Sin farmId (sesión todavía sin resolver) no hay contra qué depurar la
+  // caché con seguridad — mejor no tocar nada que arriesgar un DELETE sin
+  // filtro más abajo.
+  const farmId = useAuthStore.getState().claims.farmId;
+  if (!farmId) {
+    return;
+  }
+
   try {
     const { fruitsControllerFindAll } = getFruits();
     const { harvestersControllerFindAll } = getHarvesters();
@@ -87,6 +96,19 @@ async function performSync(): Promise<void> {
           .onConflictDoUpdate({ target: measurementUnits.id, set: row })
           .run();
       });
+
+      // Purga cruzada: si este dispositivo se usó antes con otra cuenta (de
+      // otra farm), performSync() solo hacía upsert de lo nuevo y las filas
+      // de la farm anterior quedaban para siempre en la caché local — nunca
+      // se borraban. Pantallas que leen esta caché sin filtrar por farmId
+      // (ej. add-harvester.tsx) las mostraban como si fueran de la farm
+      // actual. El aislamiento multi-tenant no es negociable (ver
+      // CLAUDE.md) — se aplica también a la caché local, no solo al server.
+      tx.delete(fruits).where(ne(fruits.farmId, farmId)).run();
+      tx.delete(harvesters).where(ne(harvesters.farmId, farmId)).run();
+      tx.delete(measurementUnits)
+        .where(ne(measurementUnits.farmId, farmId))
+        .run();
     });
   } catch {
     // Sin conexión (u otro error de red/servidor): la caché local queda tal

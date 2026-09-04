@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { ScrollView, StyleSheet, View } from 'react-native';
 import { Stack, useLocalSearchParams } from 'expo-router';
-import { eq } from 'drizzle-orm';
+import { and, eq } from 'drizzle-orm';
 import {
   ActivityIndicator,
   Button,
@@ -19,7 +19,7 @@ import { db } from '@/db/client';
 import { harvesters as harvestersTable, harvesterWorkday } from '@/db/schema';
 import { getErrorMessage } from '@/lib/errors';
 import { generateLocalId } from '@/lib/id';
-import { usePalette } from '@/stores';
+import { useAuthStore, usePalette } from '@/stores';
 import { spacing } from '@/theme';
 
 type LocalHarvester = typeof harvestersTable.$inferSelect;
@@ -73,11 +73,20 @@ export default function AddHarvesterScreen() {
   async function loadData() {
     setLoading(true);
     try {
+      const farmId = useAuthStore.getState().claims.farmId;
       const [harvestersResult, rosterRows] = await Promise.all([
         db
           .select()
           .from(harvestersTable)
-          .where(eq(harvestersTable.active, true)),
+          // farmId explícito, no solo confiar en que la caché ya esté
+          // depurada por syncCatalogs() — ver el bug de cosechadores de
+          // otra farm apareciendo acá (2026-09-03).
+          .where(
+            and(
+              eq(harvestersTable.active, true),
+              eq(harvestersTable.farmId, farmId ?? ''),
+            ),
+          ),
         db
           .select()
           .from(harvesterWorkday)

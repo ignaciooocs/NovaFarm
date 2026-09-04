@@ -1,7 +1,12 @@
 import { useCallback, useMemo, useState } from 'react';
 import { FlatList, StyleSheet, View } from 'react-native';
 import { Stack, useFocusEffect, useLocalSearchParams } from 'expo-router';
-import { ActivityIndicator, HelperText, Text } from 'react-native-paper';
+import {
+  ActivityIndicator,
+  HelperText,
+  IconButton,
+  Text,
+} from 'react-native-paper';
 import { getHarvestEntries } from '@/api/generated/harvest-entries/harvest-entries';
 import { getHarvesterWorkday } from '@/api/generated/harvester-workday/harvester-workday';
 import { getWorkdays } from '@/api/generated/workdays/workdays';
@@ -11,6 +16,7 @@ import { strings } from '@/constants/strings';
 import { db } from '@/db/client';
 import { fruits, harvesters as harvestersTable } from '@/db/schema';
 import { getErrorMessage } from '@/lib/errors';
+import { previewWorkdaySummaryPdf } from '@/lib/workdayPdf';
 import { usePalette } from '@/stores';
 import { spacing } from '@/theme';
 
@@ -52,6 +58,7 @@ export default function HistoryDetailScreen() {
   const [detail, setDetail] = useState<WorkdayDetail | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [exportingPdf, setExportingPdf] = useState(false);
 
   useFocusEffect(
     useCallback(() => {
@@ -154,6 +161,23 @@ export default function HistoryDetailScreen() {
     }, [workdayServerId]),
   );
 
+  async function handleExportPdf() {
+    if (!detail) {
+      return;
+    }
+    setExportingPdf(true);
+    try {
+      await previewWorkdaySummaryPdf(detail);
+    } catch {
+      // El diálogo nativo de impresión (iOS sobre todo) rechaza la promesa
+      // si se cierra sin imprimir — no es un error real que mostrarle,
+      // mismo criterio que ya usa invite-code.tsx al cancelar el share
+      // sheet: la vista previa se mostró igual, que es justo lo que se pidió.
+    } finally {
+      setExportingPdf(false);
+    }
+  }
+
   if (loading) {
     return (
       <Screen edges={['bottom', 'left', 'right']}>
@@ -176,6 +200,16 @@ export default function HistoryDetailScreen() {
         options={{
           headerShown: true,
           title: `${detail.fruitIcon} ${detail.fruitName}`,
+          headerRight: () =>
+            exportingPdf ? (
+              <ActivityIndicator size="small" style={styles.headerAction} />
+            ) : (
+              <IconButton
+                icon="file-pdf-box"
+                onPress={handleExportPdf}
+                style={styles.headerAction}
+              />
+            ),
         }}
       />
 
@@ -245,6 +279,7 @@ export default function HistoryDetailScreen() {
 // recalcularse cuando el usuario cambia de tema en Ajustes.
 function createStyles(colors: ReturnType<typeof usePalette>) {
   return StyleSheet.create({
+    headerAction: { marginRight: spacing.xs },
     summary: { marginBottom: spacing.sm },
     headerBlock: { marginBottom: spacing.lg },
     eyebrow: { color: colors.textSecondary, textTransform: 'capitalize' },

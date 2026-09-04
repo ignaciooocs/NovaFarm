@@ -1,16 +1,18 @@
 import { useState } from 'react';
 import { StyleSheet } from 'react-native';
-import { useRouter } from 'expo-router';
+import { Stack, useRouter } from 'expo-router';
 import { Button, HelperText, Text, TextInput } from 'react-native-paper';
 import { getAuth } from '@/api/generated/auth/auth';
 import { Screen } from '@/components/Screen';
 import { strings } from '@/constants/strings';
 import { getErrorMessage } from '@/lib/errors';
 import { auth } from '@/lib/firebase';
-import { spacing } from '@/theme';
+import { usePalette } from '@/stores';
+import { colors, spacing } from '@/theme';
 
 export default function JoinFarmScreen() {
   const router = useRouter();
+  const palette = usePalette();
   const [name, setName] = useState('');
   const [invitationCode, setInvitationCode] = useState('');
   const [error, setError] = useState<string | null>(null);
@@ -42,22 +44,32 @@ export default function JoinFarmScreen() {
   }
 
   return (
-    <Screen>
-      <Text variant="headlineMedium" style={styles.title}>
-        {strings.onboarding.joinFarmTitle}
-      </Text>
+    <Screen edges={['bottom', 'left', 'right']}>
+      <Stack.Screen
+        options={{ headerShown: true, title: strings.onboarding.joinFarmTitle }}
+      />
+
+      <Text style={styles.subtitle}>{strings.onboarding.joinFarmSubtitle}</Text>
 
       <TextInput
+        mode="outlined"
         label={strings.onboarding.nameLabel}
         value={name}
         onChangeText={setName}
+        left={<TextInput.Icon icon="account-outline" />}
+        outlineColor={colors.border}
+        activeOutlineColor={palette.primary}
         style={styles.input}
       />
       <TextInput
+        mode="outlined"
         label={strings.onboarding.invitationCodeLabel}
         value={invitationCode}
         onChangeText={setInvitationCode}
         autoCapitalize="characters"
+        left={<TextInput.Icon icon="key-outline" />}
+        outlineColor={colors.border}
+        activeOutlineColor={palette.primary}
         style={styles.input}
       />
 
@@ -68,6 +80,8 @@ export default function JoinFarmScreen() {
         onPress={handleSubmit}
         loading={loading}
         disabled={!canSubmit}
+        buttonColor={palette.primary}
+        contentStyle={styles.buttonContent}
         style={styles.button}
       >
         {strings.onboarding.joinFarmButton}
@@ -77,7 +91,12 @@ export default function JoinFarmScreen() {
 }
 
 const styles = StyleSheet.create({
-  title: { marginBottom: spacing.lg },
+  subtitle: {
+    color: colors.textSecondary,
+    fontSize: 16,
+    marginBottom: spacing.lg,
+  },
   input: { marginBottom: spacing.md },
-  button: { marginTop: spacing.sm },
+  buttonContent: { paddingVertical: spacing.xs },
+  button: { marginTop: spacing.sm, borderRadius: 12 },
 });

@@ -1,12 +1,12 @@
-import { useEffect, useState } from 'react';
-import { StyleSheet } from 'react-native';
-import { useRouter } from 'expo-router';
+import { useEffect, useMemo, useState } from 'react';
+import { ScrollView, StyleSheet, View } from 'react-native';
+import { Stack, useRouter } from 'expo-router';
 import {
   ActivityIndicator,
   Button,
   HelperText,
-  Menu,
   Text,
+  TouchableRipple,
 } from 'react-native-paper';
 import type {
   FindFruitResponseDto,
@@ -15,6 +15,7 @@ import type {
 import { getFruits } from '@/api/generated/fruits/fruits';
 import { getMeasurementUnits } from '@/api/generated/measurement-units/measurement-units';
 import { getWorkdays } from '@/api/generated/workdays/workdays';
+import { OptionSelector } from '@/components/OptionSelector';
 import { Screen } from '@/components/Screen';
 import { strings } from '@/constants/strings';
 import { db } from '@/db/client';
@@ -22,11 +23,13 @@ import { getActiveWorkday } from '@/db/queries';
 import { workdays } from '@/db/schema';
 import { generateLocalId } from '@/lib/id';
 import { getErrorMessage } from '@/lib/errors';
-import { useActiveWorkdayStore, useAuthStore } from '@/stores';
-import { spacing } from '@/theme';
+import { useActiveWorkdayStore, useAuthStore, usePalette } from '@/stores';
+import { colors, spacing } from '@/theme';
 
 export default function OpenWorkdayScreen() {
   const router = useRouter();
+  const palette = usePalette();
+  const styles = useMemo(() => createStyles(palette), [palette]);
   const uid = useAuthStore((state) => state.user?.uid);
   const setActiveWorkdayId = useActiveWorkdayStore(
     (state) => state.setActiveWorkdayId,
@@ -51,8 +54,6 @@ export default function OpenWorkdayScreen() {
 
   const [fruitId, setFruitId] = useState<string | null>(null);
   const [unitId, setUnitId] = useState<string | null>(null);
-  const [fruitMenuOpen, setFruitMenuOpen] = useState(false);
-  const [unitMenuOpen, setUnitMenuOpen] = useState(false);
 
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -103,9 +104,16 @@ export default function OpenWorkdayScreen() {
     loadCatalogs();
   }, [checkingActive]);
 
-  const selectedFruit = fruits.find((fruit) => fruit._id === fruitId);
-  const selectedUnit = units.find((unit) => unit._id === unitId);
   const canSubmit = Boolean(fruitId) && Boolean(unitId) && !saving;
+
+  const todayLabel = useMemo(() => {
+    const label = new Date().toLocaleDateString('es-CL', {
+      weekday: 'long',
+      day: 'numeric',
+      month: 'long',
+    });
+    return label.charAt(0).toUpperCase() + label.slice(1);
+  }, []);
 
   async function handleSubmit() {
     if (!fruitId || !unitId || !uid) {
@@ -170,85 +178,101 @@ export default function OpenWorkdayScreen() {
   }
 
   if (fruits.length === 0 || units.length === 0) {
+    const missingFruits = fruits.length === 0;
     return (
-      <Screen>
-        <Text variant="headlineMedium" style={styles.title}>
-          {strings.workday.openTitle}
-        </Text>
-        <Text style={styles.helper}>
-          {fruits.length === 0
-            ? `${strings.admin.fruitsTitle}: ${strings.admin.emptyList}`
-            : `${strings.admin.measurementUnitsTitle}: ${strings.admin.emptyList}`}
-        </Text>
-        <Button
-          mode="contained"
-          onPress={() =>
-            router.push(fruits.length === 0 ? '/fruits' : '/measurement-units')
-          }
-        >
-          {fruits.length === 0
-            ? strings.admin.newFruit
-            : strings.admin.newMeasurementUnit}
-        </Button>
+      <Screen edges={['bottom', 'left', 'right']}>
+        <Stack.Screen
+          options={{ headerShown: true, title: strings.workday.openTitle }}
+        />
+        <View style={styles.emptyState}>
+          <Text style={styles.emptyEmoji}>{missingFruits ? '🍇' : '📦'}</Text>
+          <Text variant="titleMedium" style={styles.emptyTitle}>
+            {missingFruits
+              ? strings.admin.fruitsTitle
+              : strings.admin.measurementUnitsTitle}
+          </Text>
+          <Text style={styles.emptyHelper}>{strings.admin.emptyList}</Text>
+          <Button
+            mode="contained"
+            onPress={() =>
+              router.push(missingFruits ? '/fruits' : '/measurement-units')
+            }
+            buttonColor={palette.primary}
+            contentStyle={styles.buttonContent}
+            style={styles.button}
+          >
+            {missingFruits
+              ? strings.admin.newFruit
+              : strings.admin.newMeasurementUnit}
+          </Button>
+        </View>
       </Screen>
     );
   }
 
   return (
-    <Screen>
-      <Text variant="headlineMedium" style={styles.title}>
-        {strings.workday.openTitle}
-      </Text>
+    <Screen edges={['bottom', 'left', 'right']}>
+      <Stack.Screen
+        options={{ headerShown: true, title: strings.workday.openTitle }}
+      />
 
-      <Menu
-        visible={fruitMenuOpen}
-        onDismiss={() => setFruitMenuOpen(false)}
-        anchor={
-          <Button
-            mode="outlined"
-            onPress={() => setFruitMenuOpen(true)}
-            style={styles.selector}
-          >
-            {selectedFruit?.name ?? strings.workday.fruit}
-          </Button>
-        }
-      >
-        {fruits.map((fruit) => (
-          <Menu.Item
-            key={fruit._id}
-            title={fruit.name}
-            onPress={() => {
-              setFruitId(fruit._id);
-              setFruitMenuOpen(false);
-            }}
-          />
-        ))}
-      </Menu>
+      <Text style={styles.dateLabel}>{todayLabel}</Text>
 
-      <Menu
-        visible={unitMenuOpen}
-        onDismiss={() => setUnitMenuOpen(false)}
-        anchor={
-          <Button
-            mode="outlined"
-            onPress={() => setUnitMenuOpen(true)}
-            style={styles.selector}
-          >
-            {selectedUnit?.name ?? strings.workday.measurementUnit}
-          </Button>
-        }
+      <ScrollView
+        style={styles.scroll}
+        contentContainerStyle={styles.scrollContent}
+        showsVerticalScrollIndicator={false}
       >
-        {units.map((unit) => (
-          <Menu.Item
-            key={unit._id}
-            title={unit.name}
-            onPress={() => {
-              setUnitId(unit._id);
-              setUnitMenuOpen(false);
-            }}
-          />
-        ))}
-      </Menu>
+        <Text variant="labelLarge" style={styles.sectionLabel}>
+          {strings.workday.fruit}
+        </Text>
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.fruitRow}
+        >
+          {fruits.map((fruit) => {
+            const selected = fruit._id === fruitId;
+            return (
+              <TouchableRipple
+                key={fruit._id}
+                onPress={() => setFruitId(fruit._id)}
+                style={[styles.fruitTile, selected && styles.fruitTileSelected]}
+              >
+                <View style={styles.fruitTileBody}>
+                  <Text style={styles.fruitEmoji}>{fruit.icon}</Text>
+                  <Text
+                    style={[
+                      styles.fruitName,
+                      selected && styles.fruitNameSelected,
+                    ]}
+                    numberOfLines={1}
+                  >
+                    {fruit.name}
+                  </Text>
+                </View>
+              </TouchableRipple>
+            );
+          })}
+        </ScrollView>
+
+        <Text variant="labelLarge" style={styles.sectionLabel}>
+          {strings.workday.measurementUnit}
+        </Text>
+        <OptionSelector
+          value={unitId}
+          onChange={setUnitId}
+          style={styles.unitSelector}
+          options={units.map((unit) => ({
+            value: unit._id,
+            short: unit.name,
+            description: strings.admin.unitEquivalence(
+              unit.name,
+              unit.kgFactor,
+            ),
+          }))}
+        />
+      </ScrollView>
 
       {error ? <HelperText type="error">{error}</HelperText> : null}
 
@@ -257,6 +281,8 @@ export default function OpenWorkdayScreen() {
         onPress={handleSubmit}
         loading={saving}
         disabled={!canSubmit}
+        buttonColor={palette.primary}
+        contentStyle={styles.buttonContent}
         style={styles.button}
       >
         {strings.workday.open}
@@ -265,9 +291,56 @@ export default function OpenWorkdayScreen() {
   );
 }
 
-const styles = StyleSheet.create({
-  title: { marginBottom: spacing.lg },
-  helper: { marginBottom: spacing.md },
-  selector: { marginBottom: spacing.md, alignItems: 'flex-start' },
-  button: { marginTop: spacing.sm },
-});
+function createStyles(palette: ReturnType<typeof usePalette>) {
+  return StyleSheet.create({
+    dateLabel: {
+      color: colors.textSecondary,
+      fontSize: 16,
+      textTransform: 'capitalize',
+      marginBottom: spacing.md,
+    },
+    scroll: { flex: 1 },
+    scrollContent: { paddingBottom: spacing.md },
+    sectionLabel: { marginBottom: spacing.sm, color: colors.textSecondary },
+    // Fila horizontal deslizable en vez de una grilla que envuelve — con
+    // varias frutas ocupaba demasiado alto de la pantalla antes de llegar
+    // siquiera a la unidad de medida (pedido del usuario, 2026-09-03).
+    fruitRow: {
+      gap: spacing.sm,
+      paddingBottom: spacing.xs,
+      marginBottom: spacing.lg,
+      alignItems: 'flex-start',
+    },
+    fruitTile: {
+      width: 84,
+      borderRadius: 16,
+      borderWidth: 1,
+      borderColor: colors.border,
+      backgroundColor: colors.surface,
+    },
+    fruitTileSelected: {
+      backgroundColor: palette.primarySoft,
+      borderColor: palette.primary,
+    },
+    fruitTileBody: {
+      alignItems: 'center',
+      justifyContent: 'center',
+      paddingVertical: spacing.sm,
+      paddingHorizontal: spacing.xs,
+    },
+    fruitEmoji: { fontSize: 28, marginBottom: 2 },
+    fruitName: { fontWeight: 'bold', fontSize: 12, textAlign: 'center' },
+    fruitNameSelected: { color: palette.primary },
+    unitSelector: { marginBottom: spacing.md },
+    buttonContent: { paddingVertical: spacing.xs },
+    button: { marginTop: spacing.sm, borderRadius: 12 },
+    emptyState: { flex: 1, alignItems: 'center', justifyContent: 'center' },
+    emptyEmoji: { fontSize: 48, marginBottom: spacing.md },
+    emptyTitle: { marginBottom: spacing.xs },
+    emptyHelper: {
+      color: colors.textSecondary,
+      marginBottom: spacing.lg,
+      textAlign: 'center',
+    },
+  });
+}

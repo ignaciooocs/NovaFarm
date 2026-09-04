@@ -24,6 +24,7 @@ export const strings = {
     retry: 'Reintentar',
     error: 'Ocurrió un error',
     inactive: 'Inactiva',
+    skip: 'Omitir',
   },
   auth: {
     brand: 'AnotaYa',
@@ -42,17 +43,39 @@ export const strings = {
   },
   onboarding: {
     roleQuestion: '¿Cómo vas a usar AnotaYa?',
+    // Título corto (fila del selector) + texto completo original (queda
+    // como descripción debajo) — mismo ajuste que farmType* de abajo.
+    roleAdminShort: 'Administrador',
     roleAdmin: 'Administro un equipo o trabajo de forma independiente',
+    roleRecorderShort: 'Anotador',
     roleRecorder: 'Voy a anotar cosechas de un equipo existente',
     nameLabel: 'Tu nombre',
     farmNameLabel: 'Nombre de tu farm',
+    createFarmTitle: 'Crea tu farm',
+    createFarmSubtitle: 'Completa los datos para empezar',
+    farmTypeQuestion: '¿Cómo la vas a usar?',
+    // Título corto (cabe en una fila) + descripción (el texto largo
+    // original, ahora con todo el ancho de la pantalla para leerse bien —
+    // antes vivían solos dentro de un SegmentedButtons de 2 columnas, sin
+    // espacio para el texto completo).
+    farmTypeOrganizationShort: 'Para mi equipo',
     farmTypeOrganization: 'Crear farm para mi equipo',
+    farmTypeIndependentShort: 'Independiente',
     farmTypeIndependent: 'Trabajar de forma independiente',
     createFarmButton: 'Crear farm',
+    invitationCodeTitle: '¡Tu farm está lista!',
     invitationCodeLabel: 'Código de invitación',
     invitationCodeShare: 'Comparte este código con tu equipo para que se unan',
+    shareButton: 'Compartir código',
+    shareMessage: (code: string) =>
+      `Únete a mi equipo en AnotaYa con el código: ${code}`,
     joinFarmTitle: 'Unirme a una farm',
+    joinFarmSubtitle: 'Ingresa el código que te compartió tu equipo',
     joinFarmButton: 'Unirme',
+    starterFruitsTitle: 'Arma tu catálogo',
+    starterFruitsSubtitle:
+      'Elige las frutas con las que trabajas — puedes agregar más después desde Frutas.',
+    starterFruitsAddButton: 'Agregar y continuar',
   },
   home: {
     title: 'Inicio',
@@ -87,6 +110,10 @@ export const strings = {
     recordedBy: (name: string) => `Anotado por ${name}`,
     openLabel: 'Jornada en curso',
     syncedSoFar: 'Total sincronizado hasta ahora',
+    pdfHarvesterColumn: 'Cosechador',
+    pdfCountColumn: 'Unidades',
+    pdfKgColumn: 'Kg',
+    pdfEmptyRoster: 'Sin cosechadores registrados.',
   },
   anotador: {
     title: 'Anotador',
@@ -130,6 +157,11 @@ export const strings = {
     roleAdmin: 'Admin',
     roleRecorder: 'Anotador',
     fruitIconLabel: 'Emoji',
+    fruitSuggestionsLabel: 'Sugerencias',
+    fruitsCatalogLabel: 'Tu catálogo',
+    addSuggestionTitle: 'Agregar fruta',
+    addSuggestionConfirm: (icon: string, name: string) =>
+      `¿Agregar ${icon} ${name} a tu catálogo?`,
     activeWorkdayEntries: 'En la jornada activa',
     unitEquivalence: (name: string, kgFactor: number) =>
       `1 ${name} = ${kgFactor} kg`,

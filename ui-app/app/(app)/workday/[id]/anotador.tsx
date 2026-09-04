@@ -438,6 +438,19 @@ export default function AnotadorScreen() {
                 setWeightMode(value as 'add' | 'discount')
               }
               style={styles.weightModeToggle}
+              // SegmentedButtons no tiene una prop directa para el color del
+              // tab seleccionado — Paper lo pinta con
+              // theme.colors.secondaryContainer, que por defecto es el
+              // naranjo fijo de `secondary` (mismo motivo por el que se
+              // veía igual en el onboarding). Override acotado al color
+              // primario del tema activo, consistente con el resto de la
+              // app (mismo patrón ya usado en AuthForm).
+              theme={{
+                colors: {
+                  secondaryContainer: palette.primary,
+                  onSecondaryContainer: palette.surface,
+                },
+              }}
               buttons={[
                 { value: 'add', label: strings.anotador.addWeight },
                 { value: 'discount', label: strings.anotador.discountWeight },

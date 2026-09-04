@@ -1,22 +1,24 @@
 import { useState } from 'react';
 import { StyleSheet } from 'react-native';
-import { isAxiosError } from 'axios';
-import { useRouter } from 'expo-router';
-import { Button, HelperText, SegmentedButtons, Text, TextInput } from 'react-native-paper';
+import { Stack, useRouter } from 'expo-router';
+import { Button, HelperText, Text, TextInput } from 'react-native-paper';
 import { getAuth } from '@/api/generated/auth/auth';
+import { OptionSelector } from '@/components/OptionSelector';
 import { Screen } from '@/components/Screen';
 import { strings } from '@/constants/strings';
 import { getErrorMessage } from '@/lib/errors';
 import { auth } from '@/lib/firebase';
-import { spacing } from '@/theme';
+import { usePalette } from '@/stores';
+import { colors, spacing } from '@/theme';
+
+type FarmType = 'organization' | 'independent';
 
 export default function CreateFarmScreen() {
   const router = useRouter();
+  const palette = usePalette();
   const [name, setName] = useState('');
   const [farmName, setFarmName] = useState('');
-  const [farmType, setFarmType] = useState<'organization' | 'independent'>(
-    'organization',
-  );
+  const [farmType, setFarmType] = useState<FarmType>('organization');
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
@@ -46,57 +48,66 @@ export default function CreateFarmScreen() {
           params: { code: result.farm.invitationCode },
         });
       } else {
-        router.replace('/home');
+        router.replace('/starter-fruits');
       }
     } catch (err) {
       setError(getErrorMessage(err));
-      // Temporal: confirma la URL exacta que se pidió y qué contestó el
-      // servidor — se saca una vez que el 404 esté diagnosticado.
-      if (isAxiosError(err)) {
-        console.log('Request URL:', (err.config?.baseURL ?? '') + (err.config?.url ?? ''));
-        console.log('Response data:', err.response?.data);
-      }
-      console.log('Error creating farm:', err);
     } finally {
       setLoading(false);
     }
   }
 
   return (
-    <Screen>
-      <Text variant="headlineMedium" style={styles.title}>
-        {strings.onboarding.farmNameLabel}
-      </Text>
+    <Screen edges={['bottom', 'left', 'right']}>
+      <Stack.Screen
+        options={{
+          headerShown: true,
+          title: strings.onboarding.createFarmTitle,
+        }}
+      />
+
+      <Text style={styles.subtitle}>{strings.onboarding.createFarmSubtitle}</Text>
 
       <TextInput
+        mode="outlined"
         label={strings.onboarding.nameLabel}
         value={name}
         onChangeText={setName}
+        left={<TextInput.Icon icon="account-outline" />}
+        outlineColor={colors.border}
+        activeOutlineColor={palette.primary}
         style={styles.input}
       />
       <TextInput
+        mode="outlined"
         label={strings.onboarding.farmNameLabel}
         value={farmName}
         onChangeText={setFarmName}
+        left={<TextInput.Icon icon="sprout-outline" />}
+        outlineColor={colors.border}
+        activeOutlineColor={palette.primary}
         style={styles.input}
       />
 
-      <SegmentedButtons
+      <Text variant="labelLarge" style={styles.optionsLabel}>
+        {strings.onboarding.farmTypeQuestion}
+      </Text>
+      <OptionSelector
         value={farmType}
-        onValueChange={(value) =>
-          setFarmType(value as 'organization' | 'independent')
-        }
-        buttons={[
+        onChange={setFarmType}
+        style={styles.optionsGroup}
+        options={[
           {
             value: 'organization',
-            label: strings.onboarding.farmTypeOrganization,
+            short: strings.onboarding.farmTypeOrganizationShort,
+            description: strings.onboarding.farmTypeOrganization,
           },
           {
             value: 'independent',
-            label: strings.onboarding.farmTypeIndependent,
+            short: strings.onboarding.farmTypeIndependentShort,
+            description: strings.onboarding.farmTypeIndependent,
           },
         ]}
-        style={styles.input}
       />
 
       {error ? <HelperText type="error">{error}</HelperText> : null}
@@ -106,6 +117,8 @@ export default function CreateFarmScreen() {
         onPress={handleSubmit}
         loading={loading}
         disabled={!canSubmit}
+        buttonColor={palette.primary}
+        contentStyle={styles.buttonContent}
         style={styles.button}
       >
         {strings.onboarding.createFarmButton}
@@ -115,7 +128,14 @@ export default function CreateFarmScreen() {
 }
 
 const styles = StyleSheet.create({
-  title: { marginBottom: spacing.lg },
+  subtitle: {
+    color: colors.textSecondary,
+    fontSize: 16,
+    marginBottom: spacing.lg,
+  },
   input: { marginBottom: spacing.md },
-  button: { marginTop: spacing.sm },
+  optionsLabel: { marginBottom: spacing.xs, color: colors.textSecondary },
+  optionsGroup: { marginBottom: spacing.md },
+  buttonContent: { paddingVertical: spacing.xs },
+  button: { marginTop: spacing.sm, borderRadius: 12 },
 });

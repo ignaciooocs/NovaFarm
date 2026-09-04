@@ -1,9 +1,11 @@
 import { useEffect, useMemo, useState } from 'react';
-import { FlatList, Pressable, StyleSheet, View } from 'react-native';
+import { FlatList, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import {
   ActivityIndicator,
   Button,
+  Chip,
   Dialog,
+  Divider,
   FAB,
   HelperText,
   IconButton,
@@ -16,6 +18,7 @@ import { getFruits } from '@/api/generated/fruits/fruits';
 import { Screen } from '@/components/Screen';
 import { DEFAULT_FRUIT_ICON } from '@/constants/fruitIcon';
 import { strings } from '@/constants/strings';
+import { SUGGESTED_FRUITS, type SuggestedFruit } from '@/constants/suggestedFruits';
 import { getErrorMessage } from '@/lib/errors';
 import { usePalette } from '@/stores';
 import { spacing } from '@/theme';
@@ -41,7 +44,44 @@ export default function FruitsScreen() {
   const [icon, setIcon] = useState(DEFAULT_FRUIT_ICON);
   const [saving, setSaving] = useState(false);
   const [togglingId, setTogglingId] = useState<string | null>(null);
+  const [addingSuggestion, setAddingSuggestion] = useState<string | null>(
+    null,
+  );
+  // Confirmar antes de crear — un chip es fácil de tocar sin querer al lado
+  // de la grilla real, y a diferencia de activar/desactivar (reversible de
+  // un toque) esto crea una fila nueva de verdad.
+  const [confirmingSuggestion, setConfirmingSuggestion] =
+    useState<SuggestedFruit | null>(null);
   const [error, setError] = useState<string | null>(null);
+
+  // Sugerencias que la farm todavía no tiene (mismo criterio que el nombre
+  // único que ya exige el server) — comparado contra el catálogo completo,
+  // no solo el activo: una fruta desactivada sigue "ya existiendo" para
+  // este propósito, no tendría sentido volver a sugerirla.
+  const availableSuggestions = useMemo(
+    () =>
+      SUGGESTED_FRUITS.filter(
+        (suggestion) =>
+          !fruits.some(
+            (fruit) =>
+              fruit.name.trim().toLowerCase() ===
+              suggestion.name.toLowerCase(),
+          ),
+      ),
+    [fruits],
+  );
+
+  // FlatList con numColumns=2 + columnWrapperStyle "space-around": cuando la
+  // última fila tiene un solo ítem (cantidad impar), ese ítem queda
+  // centrado en su fila en vez de alineado bajo la primera columna — se ve
+  // "flotando" en el medio en vez de ordenado. `null` de relleno ocupa la
+  // segunda columna sin renderizar nada (ver renderItem), así la fila se
+  // reparte igual que las anteriores y el último ítem real queda a la
+  // izquierda.
+  const gridData = useMemo<(FindFruitResponseDto | null)[]>(
+    () => (fruits.length % 2 === 0 ? fruits : [...fruits, null]),
+    [fruits],
+  );
 
   async function loadFruits() {
     setLoading(true);
@@ -118,24 +158,86 @@ export default function FruitsScreen() {
     }
   }
 
+  // Tocar un chip solo abre la confirmación (ver confirmingSuggestion) — la
+  // creación real pasa acá, sin abrir el diálogo completo de nombre+emoji:
+  // el pedido era justamente no tener que tocar el FAB + llenar un
+  // formulario para las frutas más comunes, la confirmación es el único
+  // paso extra.
+  async function handleConfirmAddSuggestion() {
+    if (!confirmingSuggestion) {
+      return;
+    }
+    const suggestion = confirmingSuggestion;
+    setAddingSuggestion(suggestion.name);
+    setError(null);
+    try {
+      const { fruitsControllerCreate } = getFruits();
+      await fruitsControllerCreate({
+        name: suggestion.name,
+        icon: suggestion.icon,
+      });
+      setConfirmingSuggestion(null);
+      await loadFruits();
+    } catch (err) {
+      setError(getErrorMessage(err));
+    } finally {
+      setAddingSuggestion(null);
+    }
+  }
+
   return (
     <Screen edges={['bottom', 'left', 'right']}>
-      <Text variant="headlineMedium" style={styles.title}>
-        {strings.admin.fruitsTitle}
-      </Text>
-
       {error ? <HelperText type="error">{error}</HelperText> : null}
 
       {loading ? (
         <ActivityIndicator />
       ) : (
         <FlatList
-          data={fruits}
-          keyExtractor={(item) => item._id}
+          data={gridData}
+          keyExtractor={(item, index) => item?._id ?? `placeholder-${index}`}
           numColumns={2}
           columnWrapperStyle={styles.gridRow}
+          ListHeaderComponent={
+            <Text style={styles.sectionLabel}>
+              {strings.admin.fruitsCatalogLabel}
+            </Text>
+          }
           ListEmptyComponent={<Text>{strings.admin.emptyList}</Text>}
-          renderItem={({ item }) => (
+          // Catálogo primero, sugerencias al final — como footer del mismo
+          // FlatList en vez de un ScrollView aparte debajo: dos scrolls
+          // compitiendo por altura en la misma columna sin una de las dos
+          // acotada es justo lo que hacía que los chips se estiraran a
+          // ocupar toda la pantalla (bug real, encontrado en el celular).
+          ListFooterComponent={
+            availableSuggestions.length > 0 ? (
+              <>
+                <Divider style={styles.divider} />
+                <Text style={styles.sectionLabel}>
+                  {strings.admin.fruitSuggestionsLabel}
+                </Text>
+                <ScrollView
+                  horizontal
+                  showsHorizontalScrollIndicator={false}
+                  contentContainerStyle={styles.suggestionsRow}
+                >
+                  {availableSuggestions.map((suggestion) => (
+                    <Chip
+                      key={suggestion.name}
+                      onPress={() => setConfirmingSuggestion(suggestion)}
+                      style={styles.suggestionChip}
+                    >
+                      {`${suggestion.icon} ${suggestion.name}`}
+                    </Chip>
+                  ))}
+                </ScrollView>
+              </>
+            ) : null
+          }
+          renderItem={({ item }) => {
+            if (item === null) {
+              return <View style={styles.tilePlaceholder} />;
+            }
+            return (
             <View style={styles.tile}>
               <Pressable
                 onPress={() => openEditDialog(item)}
@@ -170,7 +272,8 @@ export default function FruitsScreen() {
                 />
               )}
             </View>
-          )}
+            );
+          }}
         />
       )}
 
@@ -214,6 +317,34 @@ export default function FruitsScreen() {
             </Button>
           </Dialog.Actions>
         </Dialog>
+
+        <Dialog
+          visible={confirmingSuggestion !== null}
+          onDismiss={() => setConfirmingSuggestion(null)}
+        >
+          <Dialog.Title>{strings.admin.addSuggestionTitle}</Dialog.Title>
+          <Dialog.Content>
+            <Text>
+              {confirmingSuggestion
+                ? strings.admin.addSuggestionConfirm(
+                    confirmingSuggestion.icon,
+                    confirmingSuggestion.name,
+                  )
+                : ''}
+            </Text>
+          </Dialog.Content>
+          <Dialog.Actions>
+            <Button onPress={() => setConfirmingSuggestion(null)}>
+              {strings.common.cancel}
+            </Button>
+            <Button
+              onPress={handleConfirmAddSuggestion}
+              loading={addingSuggestion !== null}
+            >
+              {strings.common.add}
+            </Button>
+          </Dialog.Actions>
+        </Dialog>
       </Portal>
     </Screen>
   );
@@ -224,7 +355,21 @@ export default function FruitsScreen() {
 // recalcularse cuando el usuario cambia de tema en Ajustes.
 function createStyles(colors: ReturnType<typeof usePalette>) {
   return StyleSheet.create({
-    title: { marginBottom: spacing.md },
+    sectionLabel: {
+      color: colors.textSecondary,
+      marginBottom: spacing.xs,
+      textTransform: 'uppercase',
+      fontSize: 12,
+      fontWeight: '700',
+      letterSpacing: 0.5,
+    },
+    suggestionsRow: {
+      gap: spacing.xs,
+      paddingBottom: spacing.xs,
+      alignItems: 'flex-start',
+    },
+    suggestionChip: { backgroundColor: colors.primarySoft },
+    divider: { marginVertical: spacing.md },
     gridRow: { justifyContent: 'space-around' },
     tile: {
       width: '44%',
@@ -238,6 +383,14 @@ function createStyles(colors: ReturnType<typeof usePalette>) {
       // sacó después de probarlo (2026-09-03) — el fondo solo se veía mejor.
       backgroundColor: colors.primarySoft,
       borderRadius: 20,
+    },
+    // Mismo tamaño que `tile` pero sin fondo/contenido — rellena la segunda
+    // columna de una fila impar para que el último ítem real quede alineado
+    // a la izquierda en vez de centrado (ver gridData más arriba).
+    tilePlaceholder: {
+      width: '44%',
+      aspectRatio: 1,
+      marginBottom: spacing.lg,
     },
     tileBody: {
       flex: 1,

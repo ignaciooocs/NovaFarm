@@ -1,7 +1,11 @@
 import { ConflictException, Injectable } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model, Types } from 'mongoose';
-import { Fruit, FruitDocument } from './schemas/fruit.schema';
+import {
+  DEFAULT_FRUIT_ICON,
+  Fruit,
+  FruitDocument,
+} from './schemas/fruit.schema';
 import {
   CreateFruitRequestDto,
   FindFruitRequestDto,
@@ -30,6 +34,7 @@ export class FruitsService {
       const created = await this.fruitModel.create({
         farmId: new Types.ObjectId(farmId),
         name: dto.name,
+        icon: dto.icon ?? DEFAULT_FRUIT_ICON,
         active: true,
       });
 
@@ -93,9 +98,12 @@ export class FruitsService {
       return null;
     }
 
-    const changes: Partial<Pick<Fruit, 'name' | 'active'>> = {};
+    const changes: Partial<Pick<Fruit, 'name' | 'icon' | 'active'>> = {};
     if (dto.name !== undefined) {
       changes.name = dto.name;
+    }
+    if (dto.icon !== undefined) {
+      changes.icon = dto.icon;
     }
     if (dto.active !== undefined) {
       changes.active = dto.active;
@@ -137,12 +145,14 @@ export class FruitsService {
     );
   }
 
-  // Convierte el documento de Mongoose al DTO de respuesta.
+  // Convierte el documento de Mongoose al DTO de respuesta. icon usa el
+  // fallback genérico si la fruta se creó antes de que este campo existiera.
   private toDto(doc: FruitDocument): FruitDto {
     return {
       _id: doc._id.toString(),
       farmId: doc.farmId.toString(),
       name: doc.name,
+      icon: doc.icon ?? DEFAULT_FRUIT_ICON,
       active: doc.active,
     };
   }

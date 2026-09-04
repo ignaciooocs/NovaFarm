@@ -24,6 +24,13 @@ export class FruitDto {
   name!: string;
 
   @ApiProperty({
+    description:
+      'Emoji representing the fruit, chosen freely by the admin. Falls back to a generic fruit emoji when none was set.',
+    example: '🍋',
+  })
+  icon!: string;
+
+  @ApiProperty({
     description: 'Whether the fruit is active',
     example: true,
   })

@@ -52,6 +52,7 @@ async function performSync(): Promise<void> {
         const row = {
           farmId: fruit.farmId,
           name: fruit.name,
+          icon: fruit.icon,
           active: fruit.active,
         };
         tx.insert(fruits)

@@ -31,12 +31,13 @@ describe('FruitsService', () => {
   });
 
   describe('create', () => {
-    it('creates a fruit scoped to the caller farm', async () => {
+    it('creates a fruit scoped to the caller farm, defaulting the icon when none is given', async () => {
       const createdId = new Types.ObjectId();
       fruitModel.create.mockResolvedValue({
         _id: createdId,
         farmId: new Types.ObjectId(farmId),
         name: 'Lemon',
+        icon: '🍎',
         active: true,
       });
 
@@ -45,12 +46,34 @@ describe('FruitsService', () => {
       expect(fruitModel.create).toHaveBeenCalledWith({
         farmId: new Types.ObjectId(farmId),
         name: 'Lemon',
+        icon: '🍎',
         active: true,
       });
       expect(result).toEqual({
         _id: createdId.toString(),
         farmId,
         name: 'Lemon',
+        icon: '🍎',
+        active: true,
+      });
+    });
+
+    it('creates a fruit with the icon given by the caller instead of the default', async () => {
+      const createdId = new Types.ObjectId();
+      fruitModel.create.mockResolvedValue({
+        _id: createdId,
+        farmId: new Types.ObjectId(farmId),
+        name: 'Lemon',
+        icon: '🍋',
+        active: true,
+      });
+
+      await fruitsService.create(farmId, { name: 'Lemon', icon: '🍋' });
+
+      expect(fruitModel.create).toHaveBeenCalledWith({
+        farmId: new Types.ObjectId(farmId),
+        name: 'Lemon',
+        icon: '🍋',
         active: true,
       });
     });
@@ -74,6 +97,7 @@ describe('FruitsService', () => {
           _id: new Types.ObjectId(),
           farmId: new Types.ObjectId(farmId),
           name: 'Lemon',
+          icon: '🍋',
           active: true,
         },
       ];
@@ -90,9 +114,28 @@ describe('FruitsService', () => {
           _id: docs[0]._id.toString(),
           farmId,
           name: 'Lemon',
+          icon: '🍋',
           active: true,
         },
       ]);
+    });
+
+    it('falls back to the generic icon for a fruit created before icon existed', async () => {
+      const docs = [
+        {
+          _id: new Types.ObjectId(),
+          farmId: new Types.ObjectId(farmId),
+          name: 'Lemon',
+          active: true,
+          // sin icon, a propósito — simula un documento de antes de este campo
+        },
+      ];
+      const exec = jest.fn().mockResolvedValue(docs);
+      fruitModel.find.mockReturnValue({ exec });
+
+      const result = await fruitsService.findAll(farmId, {});
+
+      expect(result[0].icon).toEqual('🍎');
     });
 
     it('lists fruits scoped to the caller farm filtered by active', async () => {
@@ -115,6 +158,7 @@ describe('FruitsService', () => {
         _id: fruitId,
         farmId: new Types.ObjectId(farmId),
         name: 'Lemon',
+        icon: '🍋',
         active: true,
       };
       const exec = jest.fn().mockResolvedValue(doc);
@@ -134,6 +178,7 @@ describe('FruitsService', () => {
         _id: fruitId.toString(),
         farmId,
         name: 'Lemon',
+        icon: '🍋',
         active: true,
       });
     });
@@ -200,6 +245,29 @@ describe('FruitsService', () => {
         { $set: { active: false } },
         { new: true },
       );
+    });
+
+    it('changes the icon without touching name or active', async () => {
+      fruitModel.findOneAndUpdate.mockReturnValue({
+        exec: jest.fn().mockResolvedValue({
+          _id: fruitId,
+          farmId: new Types.ObjectId(farmId),
+          name: 'Lemon',
+          icon: '🍋',
+          active: true,
+        }),
+      });
+
+      const result = await fruitsService.update(farmId, fruitId.toString(), {
+        icon: '🍋',
+      });
+
+      expect(fruitModel.findOneAndUpdate).toHaveBeenCalledWith(
+        { _id: fruitId.toString(), farmId: new Types.ObjectId(farmId) },
+        { $set: { icon: '🍋' } },
+        { new: true },
+      );
+      expect(result?.icon).toEqual('🍋');
     });
 
     it('reactivates a fruit that was deactivated (no active filter on the query)', async () => {

@@ -1,0 +1,1 @@
+ALTER TABLE `fruits` ADD `icon` text;

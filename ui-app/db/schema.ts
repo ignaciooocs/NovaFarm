@@ -9,6 +9,11 @@ export const fruits = sqliteTable('fruits', {
   id: text('id').primaryKey(), // = _id del server
   farmId: text('farm_id').notNull(),
   name: text('name').notNull(),
+  // Emoji elegido por el admin (ver fruits.schema.ts en server-app) —
+  // nullable porque una fila sincronizada antes de que este campo existiera
+  // no tiene por qué backfillearse a mano, se completa solo en el próximo
+  // syncCatalogs(). Las pantallas que lo muestran caen a un emoji genérico.
+  icon: text('icon'),
   active: integer('active', { mode: 'boolean' }).notNull().default(true),
 });
 

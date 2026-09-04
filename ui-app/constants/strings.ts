@@ -188,9 +188,9 @@ export const strings = {
     logout: 'Cerrar sesión',
     logoutConfirm:
       '¿Seguro que quieres cerrar sesión? Se van a borrar los datos guardados en este dispositivo (ya sincronizados) para dejarlo limpio para la próxima cuenta.',
-    logoutBlockedTitle: 'No podés cerrar sesión todavía',
+    logoutBlockedTitle: 'No puedes cerrar sesión todavía',
     logoutBlockedMessage:
-      'Hay jornadas o entregas en este dispositivo que todavía no se sincronizaron. Sincronizalas primero — si cerrás sesión ahora, se perderían.',
+      'Hay jornadas o entregas en este dispositivo que todavía no se sincronizaron. Sincronízalas primero — si cierras sesión ahora, se perderían.',
     goToSync: 'Ir a Sincronizar',
     farmInfo: 'Información de la farm',
     recordersCanManageCatalog: 'Anotadores pueden ver el catálogo',

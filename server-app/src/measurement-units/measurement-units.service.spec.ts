@@ -281,11 +281,9 @@ describe('MeasurementUnitsService', () => {
     });
 
     it('returns null without querying when the id is not a valid ObjectId', async () => {
-      const result = await measurementUnitsService.update(
-        farmId,
-        'not-an-id',
-        { name: 'Crate 10kg' },
-      );
+      const result = await measurementUnitsService.update(farmId, 'not-an-id', {
+        name: 'Crate 10kg',
+      });
 
       expect(measurementUnitModel.findOneAndUpdate).not.toHaveBeenCalled();
       expect(result).toBeNull();

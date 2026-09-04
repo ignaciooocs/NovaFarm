@@ -97,8 +97,9 @@ export class HarvestersService {
       return null;
     }
 
-    const changes: Partial<Pick<Harvester, 'firstName' | 'lastName' | 'active'>> &
-      { nickname?: string } = {};
+    const changes: Partial<
+      Pick<Harvester, 'firstName' | 'lastName' | 'active'>
+    > & { nickname?: string } = {};
     const unset: Record<string, 1> = {};
 
     if (dto.firstName !== undefined) {

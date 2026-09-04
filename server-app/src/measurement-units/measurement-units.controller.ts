@@ -83,11 +83,7 @@ export class MeasurementUnitsController {
     @Param('id') id: string,
     @Body() dto: UpdateMeasurementUnitRequestDto,
   ): Promise<UpdateMeasurementUnitResponseDto> {
-    const updated = await this.measurementUnitsService.update(
-      farmId,
-      id,
-      dto,
-    );
+    const updated = await this.measurementUnitsService.update(farmId, id, dto);
     if (!updated) {
       throw new NotFoundException(
         'Measurement unit not found in the caller farm catalog',

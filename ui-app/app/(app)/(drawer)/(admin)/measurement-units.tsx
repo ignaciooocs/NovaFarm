@@ -7,7 +7,6 @@ import {
   FAB,
   HelperText,
   IconButton,
-  List,
   Portal,
   Text,
   TextInput,
@@ -17,7 +16,7 @@ import { getMeasurementUnits } from '@/api/generated/measurement-units/measureme
 import { Screen } from '@/components/Screen';
 import { strings } from '@/constants/strings';
 import { getErrorMessage } from '@/lib/errors';
-import { spacing } from '@/theme';
+import { colors, spacing } from '@/theme';
 
 export default function MeasurementUnitsScreen() {
   const [units, setUnits] = useState<FindMeasurementUnitResponseDto[]>([]);
@@ -126,38 +125,37 @@ export default function MeasurementUnitsScreen() {
           keyExtractor={(item) => item._id}
           ListEmptyComponent={<Text>{strings.admin.emptyList}</Text>}
           renderItem={({ item }) => (
-            <List.Item
-              title={item.name}
-              description={
-                `${item.kgFactor} kg` +
-                (item.active ? '' : ` · ${strings.common.inactive}`)
-              }
-              right={() =>
-                togglingId === item._id ? (
-                  <ActivityIndicator
-                    size="small"
-                    style={styles.rowActivity}
+            <View style={styles.row}>
+              <View style={styles.rowText}>
+                <Text variant="titleMedium" numberOfLines={1}>
+                  {item.name}
+                </Text>
+                <Text style={styles.rowSubtitle}>
+                  {strings.admin.unitEquivalence(item.name, item.kgFactor)}
+                  {!item.active ? ` · ${strings.common.inactive}` : ''}
+                </Text>
+              </View>
+              {togglingId === item._id ? (
+                <ActivityIndicator size="small" style={styles.rowActivity} />
+              ) : (
+                <View style={styles.rowActions}>
+                  <IconButton
+                    icon="pencil"
+                    accessibilityLabel={strings.common.edit}
+                    onPress={() => openEditDialog(item)}
                   />
-                ) : (
-                  <View style={styles.rowActions}>
-                    <IconButton
-                      icon="pencil"
-                      accessibilityLabel={strings.common.edit}
-                      onPress={() => openEditDialog(item)}
-                    />
-                    <IconButton
-                      icon={item.active ? 'eye-off' : 'eye'}
-                      accessibilityLabel={
-                        item.active
-                          ? strings.common.deactivate
-                          : strings.common.activate
-                      }
-                      onPress={() => handleToggleActive(item)}
-                    />
-                  </View>
-                )
-              }
-            />
+                  <IconButton
+                    icon={item.active ? 'eye-off' : 'eye'}
+                    accessibilityLabel={
+                      item.active
+                        ? strings.common.deactivate
+                        : strings.common.activate
+                    }
+                    onPress={() => handleToggleActive(item)}
+                  />
+                </View>
+              )}
+            </View>
           )}
         />
       )}
@@ -204,6 +202,15 @@ const styles = StyleSheet.create({
   title: { marginBottom: spacing.md },
   input: { marginBottom: spacing.sm },
   fab: { position: 'absolute', right: spacing.lg, bottom: spacing.lg },
+  row: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: spacing.md,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: colors.border,
+  },
+  rowText: { flex: 1, marginRight: spacing.sm },
+  rowSubtitle: { color: colors.textSecondary, marginTop: 2 },
   rowActions: { flexDirection: 'row' },
   rowActivity: { alignSelf: 'center', marginHorizontal: spacing.lg },
 });

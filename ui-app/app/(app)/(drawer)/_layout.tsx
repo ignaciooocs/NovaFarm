@@ -11,9 +11,12 @@ import type { DrawerContentComponentProps } from 'expo-router/drawer';
 import { signOut } from 'firebase/auth';
 import { Button, Dialog, Portal, Text } from 'react-native-paper';
 import { strings } from '@/constants/strings';
+import { clearLocalData, hasUnsyncedData } from '@/db/queries';
 import { auth } from '@/lib/firebase';
 import { useAuthStore, useFarmSettingsStore, usePalette } from '@/stores';
 import { colors } from '@/theme';
+
+type LogoutDialog = 'none' | 'confirm' | 'blocked';
 
 // "Cerrar sesión" es una acción directa acá, no una pantalla propia — se
 // agrega a mano después de la lista de pantallas que arma DrawerItemList.
@@ -21,12 +24,26 @@ import { colors } from '@/theme';
 // es la única acción destructiva de un toque en todo el drawer, a
 // diferencia de activar/desactivar catálogo (reversible, sin diálogo a
 // propósito).
+//
+// Limpia toda la base local al confirmar (2026-09-04) — nada la vaciaba
+// nunca antes, así que datos de una cuenta/farm vieja se quedaban para
+// siempre en el dispositivo. Antes de eso, chequea hasUnsyncedData(): si
+// queda algo sin sincronizar, bloquea el cierre de sesión en vez de
+// preguntar no más — mismo criterio que ya usa el cierre de jornada
+// (RF-01.2), perder una entrega de cosecha real no es aceptable solo por
+// dejar el celular limpio.
 function DrawerContent(props: DrawerContentComponentProps) {
   const router = useRouter();
-  const [confirmVisible, setConfirmVisible] = useState(false);
+  const [logoutDialog, setLogoutDialog] = useState<LogoutDialog>('none');
 
-  async function handleLogout() {
-    setConfirmVisible(false);
+  async function handleLogoutPress() {
+    const blocked = await hasUnsyncedData();
+    setLogoutDialog(blocked ? 'blocked' : 'confirm');
+  }
+
+  async function handleConfirmLogout() {
+    setLogoutDialog('none');
+    await clearLocalData();
     await signOut(auth);
     router.replace('/');
   }
@@ -39,23 +56,48 @@ function DrawerContent(props: DrawerContentComponentProps) {
         icon={({ color, size }) => (
           <MaterialCommunityIcons name="logout" color={color} size={size} />
         )}
-        onPress={() => setConfirmVisible(true)}
+        onPress={handleLogoutPress}
       />
 
       <Portal>
         <Dialog
-          visible={confirmVisible}
-          onDismiss={() => setConfirmVisible(false)}
+          visible={logoutDialog === 'confirm'}
+          onDismiss={() => setLogoutDialog('none')}
         >
           <Dialog.Title>{strings.settings.logout}</Dialog.Title>
           <Dialog.Content>
             <Text>{strings.settings.logoutConfirm}</Text>
           </Dialog.Content>
           <Dialog.Actions>
-            <Button onPress={() => setConfirmVisible(false)}>
+            <Button onPress={() => setLogoutDialog('none')}>
               {strings.common.cancel}
             </Button>
-            <Button onPress={handleLogout}>{strings.settings.logout}</Button>
+            <Button onPress={handleConfirmLogout}>
+              {strings.settings.logout}
+            </Button>
+          </Dialog.Actions>
+        </Dialog>
+
+        <Dialog
+          visible={logoutDialog === 'blocked'}
+          onDismiss={() => setLogoutDialog('none')}
+        >
+          <Dialog.Title>{strings.settings.logoutBlockedTitle}</Dialog.Title>
+          <Dialog.Content>
+            <Text>{strings.settings.logoutBlockedMessage}</Text>
+          </Dialog.Content>
+          <Dialog.Actions>
+            <Button onPress={() => setLogoutDialog('none')}>
+              {strings.common.close}
+            </Button>
+            <Button
+              onPress={() => {
+                setLogoutDialog('none');
+                router.push('/sync');
+              }}
+            >
+              {strings.settings.goToSync}
+            </Button>
           </Dialog.Actions>
         </Dialog>
       </Portal>

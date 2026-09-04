@@ -143,9 +143,12 @@ describe('FarmsService', () => {
         exec: jest.fn().mockResolvedValue(null),
       });
 
-      const result = await farmsService.update(new Types.ObjectId().toString(), {
-        recordersCanManageCatalog: false,
-      });
+      const result = await farmsService.update(
+        new Types.ObjectId().toString(),
+        {
+          recordersCanManageCatalog: false,
+        },
+      );
 
       expect(result).toBeNull();
     });

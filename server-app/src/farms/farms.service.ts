@@ -86,10 +86,7 @@ export class FarmsService {
   // findOneAndUpdate con $set puntual, no fetch+mutate+save(): igual que en
   // workdays.close(), .save() revalidaría el documento completo y
   // reventaría en farms creadas antes de que este campo existiera.
-  async update(
-    id: string,
-    dto: UpdateFarmRequestDto,
-  ): Promise<FarmDto | null> {
+  async update(id: string, dto: UpdateFarmRequestDto): Promise<FarmDto | null> {
     if (!Types.ObjectId.isValid(id)) {
       return null;
     }

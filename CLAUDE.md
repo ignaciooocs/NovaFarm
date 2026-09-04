@@ -16,7 +16,7 @@ Full requirements: [docs/REQUIREMENTS.md](docs/REQUIREMENTS.md) (written in Span
 
 ## Project Overview
 
-AnotaYa (also referred to as AnotaCampo / AnotaAgro) digitizes manual fruit-harvest tracking currently done on paper in the field. It replaces pen-and-paper tally marks with a fast mobile interface for recording harvest deliveries per worker, while working fully offline in areas without network coverage.
+NovaFarm (formerly AnotaYa, also referred to during earlier planning as AnotaCampo / AnotaAgro) digitizes manual fruit-harvest tracking currently done on paper in the field. It replaces pen-and-paper tally marks with a fast mobile interface for recording harvest deliveries per worker, while working fully offline in areas without network coverage.
 
 ## Architecture
 
@@ -57,7 +57,7 @@ pnpm generate:api   # orval — regenerate the typed API client (needs server-ap
 
 `ui-app/AGENTS.md` (referenced from `ui-app/CLAUDE.md`) flags that Expo APIs have changed recently — check the versioned docs at the SDK version in `ui-app/package.json` (`expo` dependency) before writing Expo-specific code.
 
-`pnpm generate:api` (in `ui-app/`) regenerates the typed API client from `server-app`'s live OpenAPI spec via `orval` (`orval.config.js`) — **requires `server-app` running locally** (reads `http://localhost:3000/api-docs-json`, overridable via `ANOTAYA_API_SPEC_URL`). Generates axios-based client functions into `ui-app/api/generated/` (one file per controller tag, e.g. `farms.ts`), routed through the shared instance in `ui-app/api/axios-instance.ts` (`AXIOS_INSTANCE` — configure `baseURL`/auth interceptors there, not per call site). Generated output is committed to git, not gitignored — regenerating requires a running server, so a fresh clone would otherwise have no usable client until someone stands up `server-app` + Mongo first. Re-run it after any DTO/controller change in `server-app`.
+`pnpm generate:api` (in `ui-app/`) regenerates the typed API client from `server-app`'s live OpenAPI spec via `orval` (`orval.config.js`) — **requires `server-app` running locally** (reads `http://localhost:3000/api-docs-json`, overridable via `NOVAFARM_API_SPEC_URL`). Generates axios-based client functions into `ui-app/api/generated/` (one file per controller tag, e.g. `farms.ts`), routed through the shared instance in `ui-app/api/axios-instance.ts` (`AXIOS_INSTANCE` — configure `baseURL`/auth interceptors there, not per call site). Generated output is committed to git, not gitignored — regenerating requires a running server, so a fresh clone would otherwise have no usable client until someone stands up `server-app` + Mongo first. Re-run it after any DTO/controller change in `server-app`.
 
 ### Data model (MongoDB collections, server-app)
 

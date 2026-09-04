@@ -8,7 +8,7 @@ import {
   Text,
   TouchableRipple,
 } from 'react-native-paper';
-import type { FindWorkdayResponseDto } from '@/api/generated/anotaYaAPI.schemas';
+import type { FindWorkdayResponseDto } from '@/api/generated/novaFarmAPI.schemas';
 import { getWorkdays } from '@/api/generated/workdays/workdays';
 import { Screen } from '@/components/Screen';
 import { DEFAULT_FRUIT_ICON } from '@/constants/fruitIcon';

@@ -1,9 +1,9 @@
 {
   "expo": {
-    "name": "ui-app",
-    "slug": "ui-app",
+    "name": "NovaFarm",
+    "slug": "novafarm",
     "version": "1.0.0",
-    "scheme": "anotaya",
+    "scheme": "novafarm",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",

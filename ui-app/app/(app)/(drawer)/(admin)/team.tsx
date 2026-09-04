@@ -8,7 +8,7 @@ import {
   Text,
   TouchableRipple,
 } from 'react-native-paper';
-import type { FindUserResponseDto } from '@/api/generated/anotaYaAPI.schemas';
+import type { FindUserResponseDto } from '@/api/generated/novaFarmAPI.schemas';
 import { getUsers } from '@/api/generated/users/users';
 import { getWorkdays } from '@/api/generated/workdays/workdays';
 import { Screen } from '@/components/Screen';

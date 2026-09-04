@@ -11,7 +11,7 @@ import {
   Text,
   TextInput,
 } from 'react-native-paper';
-import type { FindMeasurementUnitResponseDto } from '@/api/generated/anotaYaAPI.schemas';
+import type { FindMeasurementUnitResponseDto } from '@/api/generated/novaFarmAPI.schemas';
 import { getMeasurementUnits } from '@/api/generated/measurement-units/measurement-units';
 import { Screen } from '@/components/Screen';
 import { strings } from '@/constants/strings';

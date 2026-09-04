@@ -1,14 +1,14 @@
 services:
   mongo:
     image: mongo:7
-    container_name: anotaya-mongo
+    container_name: novafarm-mongo
     restart: unless-stopped
     ports:
       - "27017:27017"
     environment:
       MONGO_INITDB_ROOT_USERNAME: ${MONGO_ROOT_USER:-admin}
       MONGO_INITDB_ROOT_PASSWORD: ${MONGO_ROOT_PASSWORD:?set MONGO_ROOT_PASSWORD in server-app/.env}
-      MONGO_INITDB_DATABASE: ${MONGO_INITDB_DATABASE:-anotaya}
+      MONGO_INITDB_DATABASE: ${MONGO_INITDB_DATABASE:-novafarm}
     volumes:
       - mongo-data:/data/db
 
@@ -16,7 +16,7 @@ services:
     build:
       context: .
       target: dev
-    container_name: anotaya-server
+    container_name: novafarm-server
     restart: unless-stopped
     ports:
       - "3000:3000"
@@ -24,7 +24,7 @@ services:
       # Always points at the "mongo" service above (not .env's MONGODB_URI_ATLAS,
       # which is meant for host-based `pnpm start:dev` and may hold a real Atlas
       # URL) — keeps `docker-compose up` self-contained and never touching real data.
-      MONGODB_URI_ATLAS: mongodb://${MONGO_ROOT_USER:-admin}:${MONGO_ROOT_PASSWORD:?set MONGO_ROOT_PASSWORD in server-app/.env}@mongo:27017/${MONGO_INITDB_DATABASE:-anotaya}?authSource=admin
+      MONGODB_URI_ATLAS: mongodb://${MONGO_ROOT_USER:-admin}:${MONGO_ROOT_PASSWORD:?set MONGO_ROOT_PASSWORD in server-app/.env}@mongo:27017/${MONGO_INITDB_DATABASE:-novafarm}?authSource=admin
       # Firebase Admin SDK credentials, passed through from server-app/.env
       # (see .env.example) — needed even in the local Docker setup since
       # auth verification always hits the real Firebase project.

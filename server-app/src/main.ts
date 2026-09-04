@@ -3,6 +3,8 @@ import { ValidationPipe } from '@nestjs/common';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import { AppModule } from './app.module';
 
+const APP_NAME = 'NovaFarm';
+
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
 
@@ -27,8 +29,8 @@ async function bootstrap() {
 
   if (process.env.NODE_ENV !== 'production') {
     const config = new DocumentBuilder()
-      .setTitle('AnotaYa API')
-      .setDescription('API del backend de AnotaYa (server-app)')
+      .setTitle(`${APP_NAME} API`)
+      .setDescription(`API del backend de ${APP_NAME} (server-app)`)
       .setVersion('1.0')
       .addBearerAuth()
       .build();

@@ -13,7 +13,7 @@ import {
   Text,
   TextInput,
 } from 'react-native-paper';
-import type { FindHarvesterResponseDto } from '@/api/generated/anotaYaAPI.schemas';
+import type { FindHarvesterResponseDto } from '@/api/generated/novaFarmAPI.schemas';
 import { getHarvesters } from '@/api/generated/harvesters/harvesters';
 import { Screen } from '@/components/Screen';
 import { strings } from '@/constants/strings';

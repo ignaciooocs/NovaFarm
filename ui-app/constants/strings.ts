@@ -7,6 +7,8 @@
 // app tiene un solo idioma de destino, así que un objeto de constantes es
 // suficiente y no agrega una dependencia ni una capa de indirección de más.
 
+import { APP_NAME } from './appName';
+
 export const strings = {
   common: {
     save: 'Guardar',
@@ -27,7 +29,7 @@ export const strings = {
     skip: 'Omitir',
   },
   auth: {
-    brand: 'AnotaYa',
+    brand: APP_NAME,
     loginTitle: 'Iniciar sesión',
     signupTitle: 'Crear cuenta',
     email: 'Correo electrónico',
@@ -42,7 +44,7 @@ export const strings = {
     hasAccount: '¿Ya tienes cuenta? Inicia sesión',
   },
   onboarding: {
-    roleQuestion: '¿Cómo vas a usar AnotaYa?',
+    roleQuestion: `¿Cómo vas a usar ${APP_NAME}?`,
     // Título corto (fila del selector) + texto completo original (queda
     // como descripción debajo) — mismo ajuste que farmType* de abajo.
     roleAdminShort: 'Administrador',
@@ -68,7 +70,7 @@ export const strings = {
     invitationCodeShare: 'Comparte este código con tu equipo para que se unan',
     shareButton: 'Compartir código',
     shareMessage: (code: string) =>
-      `Únete a mi equipo en AnotaYa con el código: ${code}`,
+      `Únete a mi equipo en ${APP_NAME} con el código: ${code}`,
     joinFarmTitle: 'Unirme a una farm',
     joinFarmSubtitle: 'Ingresa el código que te compartió tu equipo',
     joinFarmButton: 'Unirme',

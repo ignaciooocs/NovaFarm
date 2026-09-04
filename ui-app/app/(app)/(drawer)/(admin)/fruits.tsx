@@ -13,7 +13,7 @@ import {
   Text,
   TextInput,
 } from 'react-native-paper';
-import type { FindFruitResponseDto } from '@/api/generated/anotaYaAPI.schemas';
+import type { FindFruitResponseDto } from '@/api/generated/novaFarmAPI.schemas';
 import { getFruits } from '@/api/generated/fruits/fruits';
 import { Screen } from '@/components/Screen';
 import { DEFAULT_FRUIT_ICON } from '@/constants/fruitIcon';

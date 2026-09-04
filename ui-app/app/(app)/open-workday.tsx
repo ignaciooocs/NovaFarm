@@ -11,7 +11,7 @@ import {
 import type {
   FindFruitResponseDto,
   FindMeasurementUnitResponseDto,
-} from '@/api/generated/anotaYaAPI.schemas';
+} from '@/api/generated/novaFarmAPI.schemas';
 import { getFruits } from '@/api/generated/fruits/fruits';
 import { getMeasurementUnits } from '@/api/generated/measurement-units/measurement-units';
 import { getWorkdays } from '@/api/generated/workdays/workdays';

@@ -34,7 +34,10 @@ import {
 // estado) que un recorder no debería poder listar. Primer uso real de
 // RolesGuard en el proyecto. Las rutas /me son la excepción explícita —
 // cualquiera puede ver/editar su propio perfil, sea cual sea su rol — así
-// que sobreescriben el @Roles('admin') de la clase con su propio @Roles().
+// que sobreescriben el @Roles('admin') de la clase con su propio @Roles(),
+// listando los tres roles explícitamente (bug real, 2026-09-04: al agregar
+// 'supervisor' se actualizó findAll() pero no /me, así que un supervisor
+// recién ascendido se encontraba con un 403 apenas abría Perfil).
 @ApiTags('users')
 @ApiBearerAuth()
 @UseGuards(FarmScopeGuard, RolesGuard)
@@ -62,7 +65,7 @@ export class UsersController {
   }
 
   @Get('me')
-  @Roles('admin', 'recorder')
+  @Roles('admin', 'recorder', 'supervisor')
   @ApiOperation({ summary: "Get the caller's own user profile" })
   @ApiResponse({
     status: 200,
@@ -80,7 +83,7 @@ export class UsersController {
   }
 
   @Patch('me')
-  @Roles('admin', 'recorder')
+  @Roles('admin', 'recorder', 'supervisor')
   @ApiOperation({
     summary:
       "Update the caller's own user profile (name and/or nationalId only)",

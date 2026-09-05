@@ -16,7 +16,7 @@ import { auth } from '@/lib/firebase';
 import { useAuthStore, useFarmSettingsStore, usePalette } from '@/stores';
 import { colors } from '@/theme';
 
-type LogoutDialog = 'none' | 'confirm' | 'blocked';
+type LogoutDialog = 'none' | 'confirm' | 'blocked-unsynced';
 
 // "Cerrar sesión" es una acción directa acá, no una pantalla propia — se
 // agrega a mano después de la lista de pantallas que arma DrawerItemList.
@@ -27,18 +27,26 @@ type LogoutDialog = 'none' | 'confirm' | 'blocked';
 //
 // Limpia toda la base local al confirmar (2026-09-04) — nada la vaciaba
 // nunca antes, así que datos de una cuenta/farm vieja se quedaban para
-// siempre en el dispositivo. Antes de eso, chequea hasUnsyncedData(): si
-// queda algo sin sincronizar, bloquea el cierre de sesión en vez de
-// preguntar no más — mismo criterio que ya usa el cierre de jornada
-// (RF-01.2), perder una entrega de cosecha real no es aceptable solo por
-// dejar el celular limpio.
+// siempre en el dispositivo. Bloquea el cierre de sesión (no solo pregunta)
+// si queda algo sin sincronizar — mismo criterio que ya usa el cierre de
+// jornada (RF-01.2), perder cosecha real no es aceptable.
+//
+// Ya NO bloquea por tener una jornada abierta (sí lo hizo brevemente,
+// revertido el mismo día): una jornada abierta pero ya sincronizada es
+// segura de perder localmente porque getActiveWorkdayWithRecovery()
+// (ver lib/recoverActiveWorkday.ts) la reconstruye sola al volver a entrar
+// con la misma cuenta, leyendo el clientEntryId que el server ya le
+// devuelve. Bloquear ahí no protegía nada que no se pudiera recuperar, solo
+// molestaba — sobre todo pensando en el sistema multirol (ver
+// ui-arquitectura.md), donde cambiar de rol nunca debería depender de
+// cerrar sesión para empezar.
 function DrawerContent(props: DrawerContentComponentProps) {
   const router = useRouter();
   const [logoutDialog, setLogoutDialog] = useState<LogoutDialog>('none');
 
   async function handleLogoutPress() {
     const blocked = await hasUnsyncedData();
-    setLogoutDialog(blocked ? 'blocked' : 'confirm');
+    setLogoutDialog(blocked ? 'blocked-unsynced' : 'confirm');
   }
 
   async function handleConfirmLogout() {
@@ -79,7 +87,7 @@ function DrawerContent(props: DrawerContentComponentProps) {
         </Dialog>
 
         <Dialog
-          visible={logoutDialog === 'blocked'}
+          visible={logoutDialog === 'blocked-unsynced'}
           onDismiss={() => setLogoutDialog('none')}
         >
           <Dialog.Title>{strings.settings.logoutBlockedTitle}</Dialog.Title>

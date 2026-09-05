@@ -67,7 +67,10 @@ export async function hasUnsyncedData(): Promise<boolean> {
 // al cambiar de farm) y quedaba data huérfana de una cuenta/farm que ya no
 // existe en el server. Los catálogos son puro caché (se vuelven a traer
 // solteros en el próximo syncCatalogs()), así que no hay riesgo en
-// borrarlos también, no solo las tablas de captura.
+// borrarlos también, no solo las tablas de captura. Borrar una jornada
+// ABIERTA acá tampoco es definitivo — si sigue abierta en el server,
+// getActiveWorkdayWithRecovery() (lib/recoverActiveWorkday.ts) la
+// reconstruye sola la próxima vez que la misma cuenta vuelva a entrar.
 export async function clearLocalData(): Promise<void> {
   await db.transaction((tx) => {
     tx.delete(harvestEntries).run();

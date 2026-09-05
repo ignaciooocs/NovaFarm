@@ -19,10 +19,10 @@ import { OptionSelector } from '@/components/OptionSelector';
 import { Screen } from '@/components/Screen';
 import { strings } from '@/constants/strings';
 import { db } from '@/db/client';
-import { getActiveWorkday } from '@/db/queries';
 import { workdays } from '@/db/schema';
 import { generateLocalId } from '@/lib/id';
 import { getErrorMessage } from '@/lib/errors';
+import { getActiveWorkdayWithRecovery } from '@/lib/recoverActiveWorkday';
 import { useActiveWorkdayStore, useAuthStore, usePalette } from '@/stores';
 import { colors, spacing } from '@/theme';
 
@@ -64,7 +64,7 @@ export default function OpenWorkdayScreen() {
     }
 
     async function checkActive() {
-      const activeWorkday = await getActiveWorkday(uid!);
+      const activeWorkday = await getActiveWorkdayWithRecovery(uid!);
       if (activeWorkday) {
         router.replace({
           pathname: '/workday/[id]/anotador',

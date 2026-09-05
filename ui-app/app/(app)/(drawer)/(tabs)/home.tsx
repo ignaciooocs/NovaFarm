@@ -14,7 +14,6 @@ import { Screen } from '@/components/Screen';
 import { DEFAULT_FRUIT_ICON } from '@/constants/fruitIcon';
 import { strings } from '@/constants/strings';
 import { db } from '@/db/client';
-import { getActiveWorkday } from '@/db/queries';
 import {
   fruits,
   harvesters as harvestersTable,
@@ -24,6 +23,7 @@ import {
 } from '@/db/schema';
 import { syncCatalogs } from '@/lib/catalogSync';
 import { syncFarmSettings } from '@/lib/farmSettings';
+import { getActiveWorkdayWithRecovery } from '@/lib/recoverActiveWorkday';
 import { useActiveWorkdayStore, useAuthStore, usePalette } from '@/stores';
 import { spacing } from '@/theme';
 
@@ -221,7 +221,7 @@ export default function HomeScreen() {
       (async () => {
         setLoading(true);
         try {
-          const workday = await getActiveWorkday(uid);
+          const workday = await getActiveWorkdayWithRecovery(uid);
           if (cancelled) {
             return;
           }

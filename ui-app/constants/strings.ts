@@ -27,6 +27,7 @@ export const strings = {
     error: 'Ocurrió un error',
     inactive: 'Inactiva',
     skip: 'Omitir',
+    copy: 'Copiar',
   },
   auth: {
     brand: APP_NAME,

@@ -10,6 +10,8 @@ import type {
   CreateHarvesterResponseDto,
   FindHarvesterResponseDto,
   HarvestersControllerFindAllParams,
+  SyncHarvesterRequestDto,
+  SyncHarvesterResponseDto,
   UpdateHarvesterRequestDto,
   UpdateHarvesterResponseDto
 } from '../novaFarmAPI.schemas';
@@ -45,6 +47,19 @@ const harvestersControllerFindAll = (
       );
     }
   /**
+ * @summary Upload a batch of harvesters registered offline in the field. Always returns 200 with a per-item result.
+ */
+const harvestersControllerSync = (
+    syncHarvesterRequestDto: SyncHarvesterRequestDto,
+ ) => {
+      return apiClient<SyncHarvesterResponseDto[]>(
+      {url: `/api/v1/harvesters/sync`, method: 'POST',
+      headers: {'Content-Type': 'application/json', },
+      data: syncHarvesterRequestDto
+    },
+      );
+    }
+  /**
  * @summary Partially update a harvester in the caller farm roster (edit and/or activate/deactivate)
  */
 const harvestersControllerUpdate = (
@@ -58,7 +73,8 @@ const harvestersControllerUpdate = (
     },
       );
     }
-  return {harvestersControllerCreate,harvestersControllerFindAll,harvestersControllerUpdate}};
+  return {harvestersControllerCreate,harvestersControllerFindAll,harvestersControllerSync,harvestersControllerUpdate}};
 export type HarvestersControllerCreateResult = NonNullable<Awaited<ReturnType<ReturnType<typeof getHarvesters>['harvestersControllerCreate']>>>
 export type HarvestersControllerFindAllResult = NonNullable<Awaited<ReturnType<ReturnType<typeof getHarvesters>['harvestersControllerFindAll']>>>
+export type HarvestersControllerSyncResult = NonNullable<Awaited<ReturnType<ReturnType<typeof getHarvesters>['harvestersControllerSync']>>>
 export type HarvestersControllerUpdateResult = NonNullable<Awaited<ReturnType<ReturnType<typeof getHarvesters>['harvestersControllerUpdate']>>>

@@ -302,6 +302,45 @@ export interface CreateHarvesterResponseDto {
   active: boolean;
 }
 
+export interface SyncHarvesterEntryDto {
+  /** Client-generated id (the originating SQLite row id) — makes retrying this exact entry idempotent */
+  clientEntryId: string;
+  /** First name of the harvester */
+  firstName: string;
+  /** Last name of the harvester */
+  lastName: string;
+  /** Optional nickname to help disambiguate harvesters with repeated names */
+  nickname?: string;
+}
+
+export interface SyncHarvesterRequestDto {
+  /** Batch of harvesters registered offline */
+  entries: SyncHarvesterEntryDto[];
+}
+
+/**
+ * Outcome of this entry
+ */
+export type SyncHarvesterResponseDtoStatus = typeof SyncHarvesterResponseDtoStatus[keyof typeof SyncHarvesterResponseDtoStatus];
+
+
+export const SyncHarvesterResponseDtoStatus = {
+  created: 'created',
+  'already-synced': 'already-synced',
+  rejected: 'rejected',
+} as const;
+
+export interface SyncHarvesterResponseDto {
+  /** Echoes the clientEntryId this result corresponds to */
+  clientEntryId: string;
+  /** Outcome of this entry */
+  status: SyncHarvesterResponseDtoStatus;
+  /** Present when status is "rejected" */
+  reason?: string;
+  /** Server-assigned id, present when status is not "rejected" */
+  _id?: string;
+}
+
 export interface FindHarvesterResponseDto {
   /** Unique identifier of the harvester */
   _id: string;

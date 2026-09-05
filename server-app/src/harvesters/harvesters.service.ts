@@ -6,8 +6,13 @@ import {
   CreateHarvesterRequestDto,
   FindHarvesterRequestDto,
   HarvesterDto,
+  SyncHarvesterEntryDto,
+  SyncHarvesterResponseDto,
   UpdateHarvesterRequestDto,
 } from './dto';
+
+// Código de error de Mongo para llave duplicada (choque de índice único).
+const MONGO_DUPLICATE_KEY_ERROR_CODE = 11000;
 
 /**
  * Catálogo de cosechadores (trabajadores) de una farm — registro rápido en
@@ -38,6 +43,93 @@ export class HarvestersService {
     });
 
     return this.toDto(created);
+  }
+
+  // Sube un batch de cosechadores registrados offline en terreno
+  // (add-harvester.tsx, ver ui-arquitectura.md). Cada entrada se procesa
+  // independiente: si el clientEntryId ya existe, es un reintento —
+  // devuelve already-synced sin crear de nuevo. Si no, crea, y si Mongo tira
+  // un choque de índice único sobre clientEntryId (carrera entre reintentos
+  // concurrentes) re-consulta y devuelve already-synced en vez de fallar.
+  // Nunca lanza un error HTTP: como en los demás endpoints /sync, un
+  // resultado por ítem es la respuesta, no una excepción.
+  async sync(
+    farmId: string,
+    entries: SyncHarvesterEntryDto[],
+  ): Promise<SyncHarvesterResponseDto[]> {
+    const results: SyncHarvesterResponseDto[] = [];
+    for (const entry of entries) {
+      results.push(await this.syncOne(farmId, entry));
+    }
+    return results;
+  }
+
+  private async syncOne(
+    farmId: string,
+    entry: SyncHarvesterEntryDto,
+  ): Promise<SyncHarvesterResponseDto> {
+    const existing = await this.harvesterModel
+      .findOne({
+        farmId: new Types.ObjectId(farmId),
+        clientEntryId: entry.clientEntryId,
+      })
+      .exec();
+
+    if (existing) {
+      return {
+        clientEntryId: entry.clientEntryId,
+        status: 'already-synced',
+        _id: existing._id.toString(),
+      };
+    }
+
+    try {
+      const created = await this.harvesterModel.create({
+        farmId: new Types.ObjectId(farmId),
+        firstName: entry.firstName,
+        lastName: entry.lastName,
+        nickname: entry.nickname,
+        clientEntryId: entry.clientEntryId,
+        active: true,
+      });
+
+      return {
+        clientEntryId: entry.clientEntryId,
+        status: 'created',
+        _id: created._id.toString(),
+      };
+    } catch (error) {
+      if (this.isDuplicateKeyOn(error, 'clientEntryId')) {
+        const raced = await this.harvesterModel
+          .findOne({
+            farmId: new Types.ObjectId(farmId),
+            clientEntryId: entry.clientEntryId,
+          })
+          .exec();
+        return {
+          clientEntryId: entry.clientEntryId,
+          status: 'already-synced',
+          _id: raced?._id.toString(),
+        };
+      }
+
+      throw error;
+    }
+  }
+
+  // Chequea si el error de Mongo es un choque de índice único sobre un
+  // campo específico (código 11000 + keyPattern[field]).
+  private isDuplicateKeyOn(error: unknown, field: string): boolean {
+    return (
+      typeof error === 'object' &&
+      error !== null &&
+      'code' in error &&
+      (error as { code?: number }).code === MONGO_DUPLICATE_KEY_ERROR_CODE &&
+      'keyPattern' in error &&
+      Boolean(
+        (error as { keyPattern?: Record<string, unknown> }).keyPattern?.[field],
+      )
+    );
   }
 
   // Lista los cosechadores de la farm, con filtro opcional por estado activo/inactivo.

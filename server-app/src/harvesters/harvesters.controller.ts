@@ -23,6 +23,8 @@ import {
   CreateHarvesterResponseDto,
   FindHarvesterRequestDto,
   FindHarvesterResponseDto,
+  SyncHarvesterRequestDto,
+  SyncHarvesterResponseDto,
   UpdateHarvesterRequestDto,
   UpdateHarvesterResponseDto,
 } from './dto';
@@ -48,6 +50,24 @@ export class HarvestersController {
     @Body() dto: CreateHarvesterRequestDto,
   ): Promise<CreateHarvesterResponseDto> {
     return this.harvestersService.create(farmId, dto);
+  }
+
+  @Post('sync')
+  @ApiOperation({
+    summary:
+      'Upload a batch of harvesters registered offline in the field. ' +
+      'Always returns 200 with a per-item result.',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Per-item sync result, one per submitted entry.',
+    type: [SyncHarvesterResponseDto],
+  })
+  async sync(
+    @CurrentFarm() farmId: string,
+    @Body() dto: SyncHarvesterRequestDto,
+  ): Promise<SyncHarvesterResponseDto[]> {
+    return this.harvestersService.sync(farmId, dto.entries);
   }
 
   @Get()

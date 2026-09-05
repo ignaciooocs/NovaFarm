@@ -118,6 +118,110 @@ describe('HarvestersService', () => {
     });
   });
 
+  describe('sync', () => {
+    it('creates a new harvester from a clientEntryId not seen before', async () => {
+      const createdId = new Types.ObjectId();
+      harvesterModel.findOne.mockReturnValue({
+        exec: jest.fn().mockResolvedValue(null),
+      });
+      harvesterModel.create.mockResolvedValue({
+        _id: createdId,
+        farmId: new Types.ObjectId(farmId),
+        firstName: 'Juan',
+        lastName: 'Perez',
+        clientEntryId: 'local-1',
+        active: true,
+      });
+
+      const result = await harvestersService.sync(farmId, [
+        { clientEntryId: 'local-1', firstName: 'Juan', lastName: 'Perez' },
+      ]);
+
+      expect(harvesterModel.create).toHaveBeenCalledWith({
+        farmId: new Types.ObjectId(farmId),
+        firstName: 'Juan',
+        lastName: 'Perez',
+        nickname: undefined,
+        clientEntryId: 'local-1',
+        active: true,
+      });
+      expect(result).toEqual([
+        {
+          clientEntryId: 'local-1',
+          status: 'created',
+          _id: createdId.toString(),
+        },
+      ]);
+    });
+
+    it('returns already-synced on a retry with the same clientEntryId, without creating again', async () => {
+      const existingId = new Types.ObjectId();
+      harvesterModel.findOne.mockReturnValue({
+        exec: jest.fn().mockResolvedValue({
+          _id: existingId,
+          farmId: new Types.ObjectId(farmId),
+          clientEntryId: 'local-1',
+        }),
+      });
+
+      const result = await harvestersService.sync(farmId, [
+        { clientEntryId: 'local-1', firstName: 'Juan', lastName: 'Perez' },
+      ]);
+
+      expect(harvesterModel.create).not.toHaveBeenCalled();
+      expect(result).toEqual([
+        {
+          clientEntryId: 'local-1',
+          status: 'already-synced',
+          _id: existingId.toString(),
+        },
+      ]);
+    });
+
+    it('resolves a concurrent duplicate clientEntryId race to already-synced instead of throwing', async () => {
+      const racedId = new Types.ObjectId();
+      harvesterModel.findOne
+        .mockReturnValueOnce({ exec: jest.fn().mockResolvedValue(null) })
+        .mockReturnValueOnce({
+          exec: jest.fn().mockResolvedValue({
+            _id: racedId,
+            farmId: new Types.ObjectId(farmId),
+            clientEntryId: 'local-1',
+          }),
+        });
+      harvesterModel.create.mockRejectedValue({
+        code: 11000,
+        keyPattern: { farmId: 1, clientEntryId: 1 },
+      });
+
+      const result = await harvestersService.sync(farmId, [
+        { clientEntryId: 'local-1', firstName: 'Juan', lastName: 'Perez' },
+      ]);
+
+      expect(harvesterModel.findOne).toHaveBeenCalledTimes(2);
+      expect(result).toEqual([
+        {
+          clientEntryId: 'local-1',
+          status: 'already-synced',
+          _id: racedId.toString(),
+        },
+      ]);
+    });
+
+    it('propagates an unrelated error from create without swallowing it', async () => {
+      harvesterModel.findOne.mockReturnValue({
+        exec: jest.fn().mockResolvedValue(null),
+      });
+      harvesterModel.create.mockRejectedValue(new Error('boom'));
+
+      await expect(
+        harvestersService.sync(farmId, [
+          { clientEntryId: 'local-1', firstName: 'Juan', lastName: 'Perez' },
+        ]),
+      ).rejects.toThrow('boom');
+    });
+  });
+
   describe('findAll', () => {
     it('lists harvesters scoped to the caller farm without a filter', async () => {
       const docs = [

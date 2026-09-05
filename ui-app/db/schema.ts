@@ -17,6 +17,14 @@ export const fruits = sqliteTable('fruits', {
   active: integer('active', { mode: 'boolean' }).notNull().default(true),
 });
 
+// `synced` es lo único que rompe la regla de "caché de solo lectura" del
+// comentario de arriba: un cosechador registrado en el campo sin conexión
+// (add-harvester.tsx) se inserta acá con `id` local y `synced: false` antes
+// de existir en el server — default `true` porque todo lo que ya llega vía
+// syncCatalogs() (con `_id` real del server) está sincronizado por
+// definición. Ver lib/harvesterSync.ts para cómo se resuelve: al subirlo,
+// `id` se reescribe en cascada por el `_id` real en esta fila y en toda
+// referencia (harvester_workday.harvester_id, harvest_entries.harvester_id).
 export const harvesters = sqliteTable('harvesters', {
   id: text('id').primaryKey(),
   farmId: text('farm_id').notNull(),
@@ -24,6 +32,7 @@ export const harvesters = sqliteTable('harvesters', {
   lastName: text('last_name').notNull(),
   nickname: text('nickname'),
   active: integer('active', { mode: 'boolean' }).notNull().default(true),
+  synced: integer('synced', { mode: 'boolean' }).notNull().default(true),
 });
 
 export const measurementUnits = sqliteTable('measurement_units', {

@@ -12,7 +12,6 @@ import {
   TextInput,
   TouchableRipple,
 } from 'react-native-paper';
-import { getHarvesters } from '@/api/generated/harvesters/harvesters';
 import { Screen } from '@/components/Screen';
 import { strings } from '@/constants/strings';
 import { db } from '@/db/client';
@@ -26,12 +25,11 @@ type LocalHarvester = typeof harvestersTable.$inferSelect;
 
 // Buscar/listar cosechadores lee de la caché local (ver syncCatalogs, disparada
 // desde Home) en vez de pedir en vivo — así funciona sin señal para cualquier
-// cosechador que el catálogo ya conocía. Registrar uno *nuevo* sigue
-// necesitando conexión (quickRegister): es una entrada nueva en el catálogo
-// del farm, no hay un modo offline para eso todavía (ver el gap documentado
-// en docs/diagrams/ui-arquitectura.md). Agregar al roster (addToRoster) es
-// 100% local e instantáneo en ambos casos — es la parte que de verdad
-// importa para RNF-01.
+// cosechador que el catálogo ya conocía. Registrar uno *nuevo* (quickRegister)
+// también es 100% local ahora — escribe primero en SQLite con `synced: false`
+// y se sube después desde Sincronizar Jornada (ver lib/harvesterSync.ts),
+// mismo patrón que el resto de la captura offline (RNF-01). Agregar al
+// roster (addToRoster) sigue siendo 100% local e instantáneo en ambos casos.
 //
 // Un solo campo hace de buscador Y de origen del registro nuevo (pedido del
 // usuario, 2026-09-03: en terreno el anotador va preguntando nombre por
@@ -161,30 +159,21 @@ export default function AddHarvesterScreen() {
     setRegistering(true);
     setError(null);
     try {
-      const { harvestersControllerCreate } = getHarvesters();
-      const created = await harvestersControllerCreate({
+      const farmId = useAuthStore.getState().claims.farmId;
+      const id = generateLocalId();
+      const row = {
+        farmId: farmId ?? '',
         firstName: firstName.trim(),
         lastName: lastName.trim(),
-      });
-
-      // Espeja el harvester recién creado en la caché local al tiro — sin
-      // esto, no aparecería acá hasta el próximo syncCatalogs() (disparado
-      // desde Home), y quedaría invisible para el resto de esta sesión.
-      const row = {
-        farmId: created.farmId,
-        firstName: created.firstName,
-        lastName: created.lastName,
-        nickname: created.nickname ?? null,
-        active: created.active,
+        nickname: null,
+        active: true,
+        synced: false,
       };
-      await db
-        .insert(harvestersTable)
-        .values({ id: created._id, ...row })
-        .onConflictDoUpdate({ target: harvestersTable.id, set: row });
-      setHarvesters((prev) => [...prev, { id: created._id, ...row }]);
+      await db.insert(harvestersTable).values({ id, ...row });
+      setHarvesters((prev) => [...prev, { id, ...row }]);
 
       setCreateDialogOpen(false);
-      await addToRoster(created._id);
+      await addToRoster(id);
     } catch (err) {
       setError(getErrorMessage(err));
     } finally {

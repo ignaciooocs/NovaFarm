@@ -312,22 +312,38 @@ export default function AnotadorScreen() {
     <Screen edges={['bottom', 'left', 'right']}>
       <Stack.Screen options={{ headerShown: true, title: strings.anotador.title }} />
 
-      <Text variant="headlineSmall" style={styles.grandTotal}>
-        {strings.anotador.grandTotal}: {grandTotalKg.toFixed(2)} {strings.anotador.kg}
-      </Text>
+      <View style={styles.summaryCard}>
+        <Text style={styles.summaryLabel}>{strings.anotador.grandTotal}</Text>
+        <View style={styles.summaryRow}>
+          <Text style={styles.summaryValue}>
+            {grandTotalKg.toFixed(2)}
+            <Text style={styles.summaryUnit}> {strings.anotador.kg}</Text>
+          </Text>
+          <Text style={styles.summaryMeta}>
+            {strings.history.workersCount(roster.length)}
+          </Text>
+        </View>
+      </View>
 
       <View style={styles.linkRow}>
-        <Button mode="text" onPress={() => router.push('/sync')}>
+        <Button
+          mode="outlined"
+          icon="cloud-upload-outline"
+          onPress={() => router.push('/sync')}
+          style={styles.linkButton}
+        >
           {strings.sync.title}
         </Button>
         <Button
-          mode="text"
+          mode="outlined"
+          icon="flag-checkered"
           onPress={() =>
             router.push({
               pathname: '/workday/[id]/close',
               params: { id: workdayId },
             })
           }
+          style={styles.linkButton}
         >
           {strings.workday.closeTitle}
         </Button>
@@ -524,12 +540,45 @@ export default function AnotadorScreen() {
 // cuando el usuario cambia de tema en Ajustes.
 function createStyles(colors: ReturnType<typeof usePalette>) {
   return StyleSheet.create({
-    grandTotal: { marginBottom: spacing.xs, fontWeight: '700' },
-    linkRow: {
-      flexDirection: 'row',
-      justifyContent: 'space-between',
+    // Mismo tile redondeado con fondo primarySoft que ya usan el código de
+    // invitación (Ajustes) y el total de Cerrar Jornada. Compacto a
+    // propósito: acá abajo va el roster con los botones de anotar, que es
+    // lo que de verdad necesita el espacio vertical.
+    summaryCard: {
+      backgroundColor: colors.primarySoft,
+      borderRadius: 16,
+      paddingHorizontal: spacing.md,
+      paddingVertical: spacing.sm,
       marginBottom: spacing.sm,
     },
+    // Plana, no el estilo de encabezado de sección (mayúsculas + 700): ese
+    // es para títulos sobre listas, y dentro del tile competía con el
+    // número. Mismo tratamiento que la etiqueta del total en Inicio y en
+    // Cerrar Jornada.
+    summaryLabel: { color: colors.textSecondary, fontSize: 13 },
+    summaryRow: {
+      flexDirection: 'row',
+      alignItems: 'baseline',
+      justifyContent: 'space-between',
+    },
+    summaryValue: {
+      color: colors.primary,
+      fontWeight: '800',
+      fontSize: 32,
+      lineHeight: 38,
+    },
+    summaryUnit: {
+      fontSize: 15,
+      fontWeight: '600',
+      color: colors.textSecondary,
+    },
+    summaryMeta: { color: colors.textSecondary },
+    linkRow: {
+      flexDirection: 'row',
+      gap: spacing.sm,
+      marginBottom: spacing.sm,
+    },
+    linkButton: { flex: 1 },
     list: { paddingBottom: spacing.xl * 2 },
     row: {
       paddingVertical: spacing.lg,

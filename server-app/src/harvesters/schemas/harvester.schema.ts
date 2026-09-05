@@ -22,6 +22,24 @@ export class Harvester {
 
   @Prop({ required: true, default: true })
   active!: boolean;
+
+  // Client-generated id (ui-app's local harvester row id) — only present for
+  // harvesters registered offline in the field via POST /harvesters/sync
+  // (same idempotency pattern as workdays/harvesterWorkday/harvestEntries).
+  // A harvester created by an admin from the catalog screen (POST
+  // /harvesters, unchanged) never has one. Optional, not required.
+  @Prop()
+  clientEntryId?: string;
 }
 
 export const HarvesterSchema = SchemaFactory.createForClass(Harvester);
+// Partial: most documents never have clientEntryId (admin-created), and a
+// plain unique index would treat all of those "missing" values as one
+// repeated value and collide after the second one.
+HarvesterSchema.index(
+  { farmId: 1, clientEntryId: 1 },
+  {
+    unique: true,
+    partialFilterExpression: { clientEntryId: { $exists: true } },
+  },
+);

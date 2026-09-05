@@ -1,15 +1,18 @@
 import { useEffect, useState } from 'react';
-import { StyleSheet } from 'react-native';
-import { useLocalSearchParams, useRouter } from 'expo-router';
+import { StyleSheet, View } from 'react-native';
+import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
 import { and, eq } from 'drizzle-orm';
+import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
 import { ActivityIndicator, Button, HelperText, Text } from 'react-native-paper';
 import { getWorkdays } from '@/api/generated/workdays/workdays';
 import { Screen } from '@/components/Screen';
+import { DEFAULT_FRUIT_ICON } from '@/constants/fruitIcon';
 import { strings } from '@/constants/strings';
 import { db } from '@/db/client';
-import { harvestEntries, harvesterWorkday, workdays } from '@/db/schema';
+import { fruits, harvestEntries, harvesterWorkday, workdays } from '@/db/schema';
 import { getErrorMessage } from '@/lib/errors';
-import { spacing } from '@/theme';
+import { usePalette } from '@/stores';
+import { colors, spacing } from '@/theme';
 
 type WorkdayRow = typeof workdays.$inferSelect;
 
@@ -19,9 +22,12 @@ type WorkdayRow = typeof workdays.$inferSelect;
 // a Sincronizar, para que el total congelado no quede incompleto.
 export default function CloseWorkdayScreen() {
   const router = useRouter();
+  const palette = usePalette();
   const { id: workdayId } = useLocalSearchParams<{ id: string }>();
 
   const [workday, setWorkday] = useState<WorkdayRow | null>(null);
+  const [fruitName, setFruitName] = useState('');
+  const [fruitIcon, setFruitIcon] = useState(DEFAULT_FRUIT_ICON);
   const [pendingCount, setPendingCount] = useState(0);
   const [localTotalKg, setLocalTotalKg] = useState(0);
   const [loading, setLoading] = useState(true);
@@ -41,8 +47,9 @@ export default function CloseWorkdayScreen() {
           return;
         }
 
-        const [pendingRoster, pendingEntries, allEntries] = await Promise.all(
-          [
+        const [fruitRow, pendingRoster, pendingEntries, allEntries] =
+          await Promise.all([
+            db.select().from(fruits).where(eq(fruits.id, row.fruitId)),
             db
               .select()
               .from(harvesterWorkday)
@@ -65,9 +72,10 @@ export default function CloseWorkdayScreen() {
               .select()
               .from(harvestEntries)
               .where(eq(harvestEntries.workdayId, workdayId)),
-          ],
-        );
+          ]);
 
+        setFruitName(fruitRow[0]?.name ?? '');
+        setFruitIcon(fruitRow[0]?.icon ?? DEFAULT_FRUIT_ICON);
         setPendingCount(pendingRoster.length + pendingEntries.length);
         setLocalTotalKg(
           allEntries.reduce((sum, entry) => sum + entry.totalKg, 0),
@@ -108,53 +116,74 @@ export default function CloseWorkdayScreen() {
     }
   }
 
-  if (loading) {
-    return (
-      <Screen>
-        <ActivityIndicator />
-      </Screen>
-    );
-  }
-
-  if (!workday) {
-    return (
-      <Screen>
-        <Text>{strings.errors.generic}</Text>
-      </Screen>
-    );
-  }
-
   return (
-    <Screen>
-      <Text variant="headlineMedium" style={styles.title}>
-        {strings.workday.closeTitle}
-      </Text>
-      <Text variant="titleMedium" style={styles.total}>
-        {strings.workday.totalKg}: {localTotalKg.toFixed(2)}{' '}
-        {strings.anotador.kg}
-      </Text>
+    <Screen edges={['bottom', 'left', 'right']}>
+      <Stack.Screen
+        options={{ headerShown: true, title: strings.workday.closeTitle }}
+      />
 
-      {pendingCount > 0 ? (
-        <>
-          <HelperText type="error" visible style={styles.pendingWarning}>
-            {strings.workday.pendingBeforeClose(pendingCount)}
-          </HelperText>
-          <Button mode="contained" onPress={() => router.push('/sync')}>
-            {strings.sync.title}
-          </Button>
-        </>
+      {loading ? (
+        <ActivityIndicator style={styles.loading} />
+      ) : !workday ? (
+        <Text>{strings.errors.generic}</Text>
       ) : (
         <>
-          <Text style={styles.confirm}>{strings.workday.closeConfirm}</Text>
-          {error ? <HelperText type="error">{error}</HelperText> : null}
-          <Button
-            mode="contained"
-            onPress={handleClose}
-            loading={closing}
-            disabled={closing}
+          <Text variant="titleLarge" style={styles.fruitName}>
+            {fruitIcon} {fruitName}
+          </Text>
+          <Text style={styles.dateText}>
+            {new Date(workday.date).toLocaleDateString('es-CL', {
+              weekday: 'long',
+              day: 'numeric',
+              month: 'long',
+            })}
+          </Text>
+
+          <View
+            style={[styles.totalCard, { backgroundColor: palette.primarySoft }]}
           >
-            {strings.workday.close}
-          </Button>
+            <Text style={styles.totalLabel}>{strings.workday.totalKg}</Text>
+            <Text style={[styles.totalValue, { color: palette.primary }]}>
+              {localTotalKg.toFixed(2)}
+              <Text style={styles.totalUnit}> {strings.anotador.kg}</Text>
+            </Text>
+          </View>
+
+          {pendingCount > 0 ? (
+            <View style={styles.blockedState}>
+              <MaterialCommunityIcons
+                name="cloud-alert-outline"
+                size={40}
+                color={colors.warning}
+              />
+              <Text style={styles.blockedText}>
+                {strings.workday.pendingBeforeClose(pendingCount)}
+              </Text>
+              <Button
+                mode="contained"
+                onPress={() => router.push('/sync')}
+                style={styles.button}
+              >
+                {strings.sync.title}
+              </Button>
+            </View>
+          ) : (
+            <View style={styles.confirmState}>
+              <Text style={styles.confirmText}>
+                {strings.workday.closeConfirm}
+              </Text>
+              {error ? <HelperText type="error">{error}</HelperText> : null}
+              <Button
+                mode="contained"
+                onPress={handleClose}
+                loading={closing}
+                disabled={closing}
+                style={styles.button}
+              >
+                {strings.workday.close}
+              </Button>
+            </View>
+          )}
         </>
       )}
     </Screen>
@@ -162,8 +191,29 @@ export default function CloseWorkdayScreen() {
 }
 
 const styles = StyleSheet.create({
-  title: { marginBottom: spacing.sm },
-  total: { marginBottom: spacing.lg },
-  confirm: { marginBottom: spacing.md },
-  pendingWarning: { marginBottom: spacing.md },
+  loading: { marginTop: spacing.xl },
+  fruitName: { fontWeight: '700' },
+  dateText: {
+    color: colors.textSecondary,
+    marginBottom: spacing.lg,
+    textTransform: 'capitalize',
+  },
+  totalCard: {
+    borderRadius: 16,
+    paddingVertical: spacing.md,
+    paddingHorizontal: spacing.md,
+    marginBottom: spacing.lg,
+  },
+  totalLabel: { color: colors.textSecondary, fontSize: 13 },
+  totalValue: {
+    fontWeight: '800',
+    fontSize: 36,
+    lineHeight: 42,
+  },
+  totalUnit: { fontSize: 16, fontWeight: '600', color: colors.textSecondary },
+  blockedState: { alignItems: 'center', gap: spacing.sm, paddingTop: spacing.md },
+  blockedText: { color: colors.textSecondary, textAlign: 'center' },
+  confirmState: { gap: spacing.sm },
+  confirmText: { color: colors.textSecondary },
+  button: { marginTop: spacing.md, alignSelf: 'stretch' },
 });

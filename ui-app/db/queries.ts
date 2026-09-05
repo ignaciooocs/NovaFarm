@@ -57,7 +57,21 @@ export async function hasUnsyncedData(): Promise<boolean> {
     .from(harvestEntries)
     .where(eq(harvestEntries.synced, false))
     .limit(1);
-  return Boolean(pendingEntry);
+  if (pendingEntry) {
+    return true;
+  }
+
+  // Un cosechador registrado offline (add-harvester.tsx) sin sincronizar
+  // todavía no existe en el server en absoluto — a diferencia de una
+  // jornada abierta-pero-sincronizada (que getActiveWorkdayWithRecovery()
+  // puede reconstruir), acá no hay ninguna copia que recuperar si
+  // clearLocalData() lo borra.
+  const [pendingHarvester] = await db
+    .select({ id: harvesters.id })
+    .from(harvesters)
+    .where(eq(harvesters.synced, false))
+    .limit(1);
+  return Boolean(pendingHarvester);
 }
 
 // Vacía toda la base local (jornadas/roster/entregas capturadas + catálogos

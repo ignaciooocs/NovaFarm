@@ -142,9 +142,20 @@ export const strings = {
   },
   sync: {
     title: 'Sincronizar',
+    subtitle: 'Sube lo que anotaste sin conexión.',
     pendingCount: (count: number) =>
       count === 1 ? '1 anotación pendiente de subir' : `${count} anotaciones pendientes de subir`,
     synced: 'Todo sincronizado',
+    syncedHelp: 'No queda nada pendiente por subir.',
+    pendingSectionTitle: 'Pendiente de sincronizar',
+    pendingHarvesters: (n: number) =>
+      n === 1 ? '1 cosechador nuevo' : `${n} cosechadores nuevos`,
+    pendingRoster: (n: number) =>
+      n === 1
+        ? '1 cosechador agregado a la jornada'
+        : `${n} cosechadores agregados a la jornada`,
+    pendingEntries: (n: number) =>
+      n === 1 ? '1 anotación' : `${n} anotaciones`,
     syncButton: 'Sincronizar Jornada',
     syncing: 'Sincronizando...',
     rejectedItems: 'No se pudieron subir algunos registros',

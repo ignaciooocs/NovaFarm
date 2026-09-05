@@ -55,7 +55,7 @@ describe('AuthService', () => {
         farmId,
         name: 'Juana Perez',
         email: firebaseUser.email,
-        role: 'admin',
+        roles: ['admin'],
         active: true,
       });
 
@@ -74,12 +74,12 @@ describe('AuthService', () => {
           name: 'Juana Perez',
           email: firebaseUser.email,
           firebaseUid: firebaseUser.uid,
-          role: 'admin',
+          roles: ['admin'],
         }),
       );
       expect(firebaseAdminService.setCustomUserClaims).toHaveBeenCalledWith(
         firebaseUser.uid,
-        { farmId, role: 'admin' },
+        { farmId, roles: ['admin'] },
       );
       expect(result.farm._id).toBe(farmId);
       expect(result.user._id).toBe('user-1');
@@ -116,7 +116,7 @@ describe('AuthService', () => {
         farmId,
         name: 'Pedro Gonzalez',
         email: firebaseUser.email,
-        role: 'recorder',
+        roles: ['recorder'],
         active: true,
       });
 
@@ -129,11 +129,11 @@ describe('AuthService', () => {
         'ABC12345',
       );
       expect(usersService.create).toHaveBeenCalledWith(
-        expect.objectContaining({ role: 'recorder' }),
+        expect.objectContaining({ roles: ['recorder'] }),
       );
       expect(firebaseAdminService.setCustomUserClaims).toHaveBeenCalledWith(
         firebaseUser.uid,
-        { farmId, role: 'recorder' },
+        { farmId, roles: ['recorder'] },
       );
       expect(result.farm._id).toBe(farmId);
       expect(result.user._id).toBe('user-2');

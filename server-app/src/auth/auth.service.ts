@@ -17,7 +17,7 @@ import { FirebaseUser } from './guards/firebase-auth.guard';
 
 /**
  * Orquesta el registro de cuentas nuevas: crea (o busca) la farm, crea el
- * usuario en Mongo, y publica los custom claims (farmId/role) en Firebase
+ * usuario en Mongo, y publica los custom claims (farmId/roles) en Firebase
  * que el resto del backend usa para el scoping multi-tenant (FarmScopeGuard).
  */
 @Injectable()
@@ -31,7 +31,7 @@ export class AuthService {
   // Registra un admin: crea una farm nueva ("para mi equipo" o
   // "independiente", misma acción de backend, solo cambia el type) y el
   // usuario admin asociado, y publica los claims en Firebase para que el
-  // token del usuario quede con farmId/role desde ese momento.
+  // token del usuario quede con farmId/roles desde ese momento.
   async registerAdmin(
     firebaseUser: FirebaseUser,
     dto: RegisterAdminRequestDto,
@@ -48,12 +48,12 @@ export class AuthService {
       name: dto.name,
       email: firebaseUser.email,
       firebaseUid: firebaseUser.uid,
-      role: 'admin',
+      roles: ['admin'],
     });
 
     await this.firebaseAdminService.setCustomUserClaims(firebaseUser.uid, {
       farmId: farm._id,
-      role: 'admin',
+      roles: ['admin'],
     });
 
     return { farm, user };
@@ -81,12 +81,12 @@ export class AuthService {
       name: dto.name,
       email: firebaseUser.email,
       firebaseUid: firebaseUser.uid,
-      role: 'recorder',
+      roles: ['recorder'],
     });
 
     await this.firebaseAdminService.setCustomUserClaims(firebaseUser.uid, {
       farmId: farm._id,
-      role: 'recorder',
+      roles: ['recorder'],
     });
 
     return { farm, user };

@@ -23,6 +23,7 @@ import {
 } from '@/db/schema';
 import { syncCatalogs } from '@/lib/catalogSync';
 import { syncFarmSettings } from '@/lib/farmSettings';
+import { useCapabilities } from '@/lib/permissions';
 import { getActiveWorkdayWithRecovery } from '@/lib/recoverActiveWorkday';
 import { useActiveWorkdayStore, useAuthStore, usePalette } from '@/stores';
 import { spacing } from '@/theme';
@@ -194,7 +195,7 @@ export default function HomeScreen() {
   // nunca abre jornadas, así que acá no tiene sentido ofrecerle el botón
   // "Abrir Jornada" (nada se lo bloquea del lado del server todavía, es
   // puramente evitar la confusión de un flujo que no le corresponde).
-  const isSupervisor = useAuthStore((state) => state.claims.role === 'supervisor');
+  const canRecord = useCapabilities().canRecord;
   const setActiveWorkdayId = useActiveWorkdayStore(
     (state) => state.setActiveWorkdayId,
   );
@@ -333,18 +334,18 @@ export default function HomeScreen() {
             ) : (
               <View style={styles.emptyState}>
                 <Text style={styles.emptyStateText}>
-                  {isSupervisor
-                    ? strings.home.supervisorEmptyState
-                    : strings.home.noActiveWorkday}
+                  {canRecord
+                    ? strings.home.noActiveWorkday
+                    : strings.home.supervisorEmptyState}
                 </Text>
-                {isSupervisor ? null : (
+                {canRecord ? (
                   <Button
                     mode="contained"
                     onPress={() => router.push('/open-workday')}
                   >
                     {strings.home.openWorkday}
                   </Button>
-                )}
+                ) : null}
               </View>
             )}
 

@@ -1,5 +1,5 @@
 import {
-  ForbiddenException,
+  BadRequestException,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
@@ -19,7 +19,7 @@ export interface CreateUserData {
   name: string;
   email: string;
   firebaseUid: string;
-  role: 'recorder' | 'admin';
+  roles: Array<'recorder' | 'admin'>;
 }
 
 /**
@@ -43,7 +43,7 @@ export class UsersService {
       name: data.name,
       email: data.email,
       firebaseUid: data.firebaseUid,
-      role: data.role,
+      roles: data.roles,
       active: true,
     });
 
@@ -135,40 +135,56 @@ export class UsersService {
     return updated ? this.toDto(updated) : null;
   }
 
-  // Asciende/reasigna a un recorder <-> supervisor (PATCH /users/:id/role,
-  // admin only — ver UsersController). Nunca toca a un admin: rechazado si
-  // el rol *actual* del usuario objetivo ya es 'admin' (defensa en
-  // profundidad además de que UpdateUserRoleRequestDto ya solo valida
-  // 'recorder'/'supervisor' como valor nuevo — este endpoint no puede crear
-  // ni sacar admins de ninguna de las dos formas). Filtra por farmId además
-  // de _id: un admin no puede tocar el rol de alguien de otra farm.
+  // Reasigna el set de roles recorder/supervisor de un miembro del equipo
+  // (PATCH /users/:id/roles, admin only — ver UsersController). El admin
+  // manda el set final deseado de esos dos, nunca "cambia de uno a otro".
+  // Si el objetivo ya es admin (ej. el caso "admin que también anota", ver
+  // ui-arquitectura.md §5), el rol admin se preserva siempre — este
+  // endpoint solo agrega/quita recorder/supervisor *encima* de él, nunca se
+  // lo puede sacar (UpdateUserRolesRequestDto tampoco deja mandar 'admin'
+  // como valor nuevo, así que tampoco se lo puede otorgar a alguien más).
+  // Por eso un admin sí puede terminar con roles: [] de recorder/supervisor
+  // (solo admin, sin extras) mientras que a un no-admin no se lo deja
+  // vaciar — un usuario sin ningún rol no podría hacer nada en la farm.
+  // Filtra por farmId además de _id: un admin no puede tocar los roles de
+  // alguien de otra farm.
   //
-  // El rol vive en dos lugares — el documento de Mongo (lo que devuelve
+  // Los roles viven en dos lugares — el documento de Mongo (lo que devuelve
   // findAll/findMe) y el custom claim de Firebase (lo que de verdad usa
   // RolesGuard en cada request, ver farm-scope.guard.ts) — así que hay que
   // actualizar los dos o el cambio no tiene efecto real hasta que a mano se
   // llame setCustomUserClaims. setCustomUserClaims reemplaza el objeto
   // completo de claims (no lo mergea), así que hay que volver a mandar
-  // farmId también, no solo role.
-  async updateRole(
+  // farmId también, no solo roles.
+  async updateRoles(
     id: string,
     farmId: string,
-    role: 'recorder' | 'supervisor',
+    roles: Array<'recorder' | 'supervisor'>,
   ): Promise<UserDto> {
     const user = await this.userModel
-      .findOne({ _id: new Types.ObjectId(id), farmId: new Types.ObjectId(farmId) })
+      .findOne({
+        _id: new Types.ObjectId(id),
+        farmId: new Types.ObjectId(farmId),
+      })
       .exec();
     if (!user) {
       throw new NotFoundException('User not found');
     }
-    if (user.role === 'admin') {
-      throw new ForbiddenException(
-        "Can't change an admin's role through this endpoint",
-      );
+
+    const isAdmin = user.roles.includes('admin');
+    if (!isAdmin && roles.length === 0) {
+      throw new BadRequestException('A user must have at least one role');
     }
+    const finalRoles: Array<'recorder' | 'admin' | 'supervisor'> = isAdmin
+      ? ['admin', ...roles]
+      : roles;
 
     const updated = await this.userModel
-      .findOneAndUpdate({ _id: user._id }, { $set: { role } }, { new: true })
+      .findOneAndUpdate(
+        { _id: user._id },
+        { $set: { roles: finalRoles } },
+        { new: true },
+      )
       .exec();
     if (!updated) {
       throw new NotFoundException('User not found');
@@ -176,7 +192,7 @@ export class UsersService {
 
     await this.firebaseAdminService.setCustomUserClaims(user.firebaseUid, {
       farmId: user.farmId.toString(),
-      role,
+      roles: finalRoles,
     });
 
     return this.toDto(updated);
@@ -190,7 +206,7 @@ export class UsersService {
       farmId: doc.farmId.toString(),
       name: doc.name,
       email: doc.email,
-      role: doc.role,
+      roles: doc.roles,
       active: doc.active,
       nationalId: doc.nationalId,
     };

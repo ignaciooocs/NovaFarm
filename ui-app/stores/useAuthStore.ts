@@ -3,9 +3,14 @@ import { onIdTokenChanged } from 'firebase/auth';
 import { create } from 'zustand';
 import { auth } from '../lib/firebase';
 
+export type Role = 'recorder' | 'admin' | 'supervisor';
+
 interface AuthClaims {
   farmId: string | null;
-  role: 'recorder' | 'admin' | 'supervisor' | null;
+  // Un usuario puede tener varios roles asignados a la vez (sistema
+  // multirol, ver ui-arquitectura.md §5) — cuál de ellos está "activo" en
+  // este momento es estado local aparte, ver useActiveRoleStore.
+  roles: Role[];
 }
 
 interface AuthState {
@@ -20,7 +25,7 @@ interface AuthState {
 
 export const useAuthStore = create<AuthState>((set) => ({
   user: null,
-  claims: { farmId: null, role: null },
+  claims: { farmId: null, roles: [] },
   isBootstrapping: true,
   setUser: (user, claims) => set({ user, claims, isBootstrapping: false }),
 }));
@@ -29,23 +34,18 @@ export const useAuthStore = create<AuthState>((set) => ({
 // onIdTokenChanged (no onAuthStateChanged) a propósito: también dispara
 // cuando el token se refresca, que es justo lo que pasa después del
 // onboarding cuando el cliente fuerza getIdToken(true) para recibir las
-// claims farmId/role recién asignadas (ver auth.controller.ts en server-app).
+// claims farmId/roles recién asignadas (ver auth.controller.ts en server-app).
 export function bootstrapAuthListener(): () => void {
   return onIdTokenChanged(auth, async (user) => {
     if (!user) {
-      useAuthStore.getState().setUser(null, { farmId: null, role: null });
+      useAuthStore.getState().setUser(null, { farmId: null, roles: [] });
       return;
     }
 
     const tokenResult = await user.getIdTokenResult();
     useAuthStore.getState().setUser(user, {
       farmId: (tokenResult.claims.farmId as string | undefined) ?? null,
-      role:
-        (tokenResult.claims.role as
-          | 'recorder'
-          | 'admin'
-          | 'supervisor'
-          | undefined) ?? null,
+      roles: (tokenResult.claims.roles as Role[] | undefined) ?? [],
     });
   });
 }

@@ -13,6 +13,7 @@ import { Button, Dialog, Portal, Text } from 'react-native-paper';
 import { strings } from '@/constants/strings';
 import { clearLocalData, hasUnsyncedData } from '@/db/queries';
 import { auth } from '@/lib/firebase';
+import { useCapabilities } from '@/lib/permissions';
 import { useAuthStore, useFarmSettingsStore, usePalette } from '@/stores';
 import { colors } from '@/theme';
 
@@ -118,23 +119,27 @@ function DrawerContent(props: DrawerContentComponentProps) {
 // el drawer (como "Inicio") a propósito, aunque Inicio también viva en la
 // barra de tabs: Perfil/Ajustes/catálogos no tienen barra de tabs, así que
 // sin este ítem no había forma de volver desde ahí (bug real, encontrado
-// probando). Catálogos: admin siempre los ve, y un recorder los ve si
-// farms.recordersCanManageCatalog está prendido (interruptor único por
-// farm, configurable desde Ajustes — ver lib/farmSettings.ts). "Mi equipo"
-// es distinto: admin y supervisor siempre (2026-09-04: el rol supervisor es
-// de solo lectura, ver progreso del equipo es justo su propósito), sin
-// excepción del interruptor de catálogo — expone datos de otras cuentas
-// (email, rol) y ya tiene un control de acceso real del lado del server
-// (RolesGuard: GET /users acepta 'admin'/'supervisor'), no solo esta ayuda
-// de UX. Un recorder nunca lo ve, tenga o no prendido el interruptor.
+// probando). Catálogos: quien puede administrarlos por rol siempre los ve,
+// y un recorder los ve si farms.recordersCanManageCatalog está prendido
+// (interruptor único por farm, configurable desde Ajustes — ver
+// lib/farmSettings.ts). "Mi equipo" es distinto: admin y supervisor siempre
+// (2026-09-04: el rol supervisor es de solo lectura, ver progreso del
+// equipo es justo su propósito), sin excepción del interruptor de catálogo
+// — expone datos de otras cuentas (email, roles) y ya tiene un control de
+// acceso real del lado del server (RolesGuard: GET /users acepta
+// 'admin'/'supervisor'), no solo esta ayuda de UX. Un recorder puro nunca
+// lo ve, tenga o no prendido el interruptor. "Cambiar modo" (sistema
+// multirol, ui-arquitectura.md §5) solo aparece si la cuenta tiene más de
+// un rol asignado — con uno solo no hay entre qué elegir.
 export default function DrawerLayout() {
-  const role = useAuthStore((state) => state.claims.role);
-  const isAdmin = role === 'admin';
-  const isSupervisor = role === 'supervisor';
+  const roles = useAuthStore((state) => state.claims.roles);
+  const hasMultipleRoles = roles.length > 1;
+  const capabilities = useCapabilities();
   const recordersCanManageCatalog = useFarmSettingsStore(
     (state) => state.recordersCanManageCatalog,
   );
-  const canManageCatalog = isAdmin || recordersCanManageCatalog;
+  const canManageCatalog =
+    capabilities.canManageCatalog || recordersCanManageCatalog;
   const palette = usePalette();
 
   return (
@@ -232,11 +237,27 @@ export default function DrawerLayout() {
         options={{
           title: strings.admin.teamTitle,
           drawerLabel: strings.admin.teamTitle,
-          drawerItemStyle:
-            isAdmin || isSupervisor ? undefined : { display: 'none' },
+          drawerItemStyle: capabilities.canViewTeam
+            ? undefined
+            : { display: 'none' },
           drawerIcon: ({ color, size }) => (
             <MaterialCommunityIcons
               name="account-multiple"
+              color={color}
+              size={size}
+            />
+          ),
+        }}
+      />
+      <Drawer.Screen
+        name="switch-role"
+        options={{
+          title: strings.switchRole.title,
+          drawerLabel: strings.switchRole.title,
+          drawerItemStyle: hasMultipleRoles ? undefined : { display: 'none' },
+          drawerIcon: ({ color, size }) => (
+            <MaterialCommunityIcons
+              name="account-switch"
               color={color}
               size={size}
             />

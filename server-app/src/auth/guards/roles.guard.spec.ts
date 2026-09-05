@@ -6,12 +6,12 @@ describe('RolesGuard', () => {
   let rolesGuard: RolesGuard;
   const reflector = { getAllAndOverride: jest.fn() } as unknown as Reflector;
 
-  function contextWith(role: 'recorder' | 'admin'): ExecutionContext {
+  function contextWith(roles: Array<'recorder' | 'admin'>): ExecutionContext {
     return {
       getHandler: () => jest.fn(),
       getClass: () => jest.fn(),
       switchToHttp: () => ({
-        getRequest: () => ({ user: { uid: 'u', farmId: 'f', role } }),
+        getRequest: () => ({ user: { uid: 'u', farmId: 'f', roles } }),
       }),
     } as unknown as ExecutionContext;
   }
@@ -24,19 +24,27 @@ describe('RolesGuard', () => {
   it('allows the request when the route has no @Roles() metadata', () => {
     (reflector.getAllAndOverride as jest.Mock).mockReturnValue(undefined);
 
-    expect(rolesGuard.canActivate(contextWith('recorder'))).toBe(true);
+    expect(rolesGuard.canActivate(contextWith(['recorder']))).toBe(true);
   });
 
   it('allows the request when the caller has one of the required roles', () => {
     (reflector.getAllAndOverride as jest.Mock).mockReturnValue(['admin']);
 
-    expect(rolesGuard.canActivate(contextWith('admin'))).toBe(true);
+    expect(rolesGuard.canActivate(contextWith(['admin']))).toBe(true);
+  });
+
+  it('allows the request when the caller holds several roles and only one is required', () => {
+    (reflector.getAllAndOverride as jest.Mock).mockReturnValue(['admin']);
+
+    expect(rolesGuard.canActivate(contextWith(['recorder', 'admin']))).toBe(
+      true,
+    );
   });
 
   it('throws ForbiddenException when the caller lacks a required role', () => {
     (reflector.getAllAndOverride as jest.Mock).mockReturnValue(['admin']);
 
-    expect(() => rolesGuard.canActivate(contextWith('recorder'))).toThrow(
+    expect(() => rolesGuard.canActivate(contextWith(['recorder']))).toThrow(
       ForbiddenException,
     );
   });

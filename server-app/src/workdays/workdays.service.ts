@@ -239,16 +239,18 @@ export class WorkdaysService {
     return this.toDto(updated, recorderName);
   }
 
-  // Si quien abre la jornada es un recorder, resuelve su _id de Mongo (y de
-  // paso su nombre, ya viene en el mismo documento — no hace falta otra
-  // consulta) a partir del uid de Firebase (el token no trae el _id de
-  // Mongo, solo el uid). Si es un admin, la jornada queda en modo invitado
-  // (recorderId null) — abrirla no alcanza para atribuírsela a un recorder
-  // específico.
+  // Si quien abre la jornada tiene el rol recorder asignado (sin importar
+  // qué otros roles tenga, ni cuál sea su "modo activo" en la UI — el server
+  // no conoce ese concepto, ver ui-arquitectura.md), resuelve su _id de
+  // Mongo (y de paso su nombre, ya viene en el mismo documento — no hace
+  // falta otra consulta) a partir del uid de Firebase (el token no trae el
+  // _id de Mongo, solo el uid). Si no tiene ese rol (admin puro,
+  // supervisor), la jornada queda en modo invitado (recorderId null) —
+  // abrirla no alcanza para atribuírsela a un recorder específico.
   private async resolveRecorder(
     authUser: AuthenticatedUser,
   ): Promise<{ recorderId: Types.ObjectId | null; recorderName?: string }> {
-    if (authUser.role !== 'recorder') {
+    if (!authUser.roles.includes('recorder')) {
       return { recorderId: null };
     }
 

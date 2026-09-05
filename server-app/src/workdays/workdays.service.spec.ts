@@ -107,7 +107,7 @@ describe('WorkdaysService', () => {
 
       const result = await workdaysService.create(
         farmId,
-        { uid: 'firebase-uid', farmId, role: 'recorder' },
+        { uid: 'firebase-uid', farmId, roles: ['recorder'] },
         dto,
       );
 
@@ -151,7 +151,7 @@ describe('WorkdaysService', () => {
 
       const result = await workdaysService.create(
         farmId,
-        { uid: 'firebase-uid', farmId, role: 'admin' },
+        { uid: 'firebase-uid', farmId, roles: ['admin'] },
         dto,
       );
 
@@ -169,7 +169,7 @@ describe('WorkdaysService', () => {
       await expect(
         workdaysService.create(
           farmId,
-          { uid: 'u', farmId, role: 'admin' },
+          { uid: 'u', farmId, roles: ['admin'] },
           dto,
         ),
       ).rejects.toBeInstanceOf(NotFoundException);
@@ -188,7 +188,7 @@ describe('WorkdaysService', () => {
       await expect(
         workdaysService.create(
           farmId,
-          { uid: 'u', farmId, role: 'admin' },
+          { uid: 'u', farmId, roles: ['admin'] },
           dto,
         ),
       ).rejects.toBeInstanceOf(NotFoundException);
@@ -213,7 +213,7 @@ describe('WorkdaysService', () => {
 
       const result = await workdaysService.create(
         farmId,
-        { uid: 'u', farmId, role: 'admin' },
+        { uid: 'u', farmId, roles: ['admin'] },
         dto,
       );
 
@@ -258,7 +258,7 @@ describe('WorkdaysService', () => {
 
       const result = await workdaysService.create(
         farmId,
-        { uid: 'u', farmId, role: 'admin' },
+        { uid: 'u', farmId, roles: ['admin'] },
         dto,
       );
 
@@ -281,7 +281,7 @@ describe('WorkdaysService', () => {
       await expect(
         workdaysService.create(
           farmId,
-          { uid: 'u', farmId, role: 'admin' },
+          { uid: 'u', farmId, roles: ['admin'] },
           dto,
         ),
       ).rejects.toThrow('boom');

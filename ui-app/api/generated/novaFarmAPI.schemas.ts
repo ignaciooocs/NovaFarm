@@ -53,13 +53,10 @@ export interface FarmDto {
   recordersCanManageCatalog: boolean;
 }
 
-/**
- * Role of the user within their farm
- */
-export type UserDtoRole = typeof UserDtoRole[keyof typeof UserDtoRole];
+export type UserDtoRolesItem = typeof UserDtoRolesItem[keyof typeof UserDtoRolesItem];
 
 
-export const UserDtoRole = {
+export const UserDtoRolesItem = {
   recorder: 'recorder',
   admin: 'admin',
   supervisor: 'supervisor',
@@ -74,8 +71,8 @@ export interface UserDto {
   name: string;
   /** Email address of the user */
   email: string;
-  /** Role of the user within their farm */
-  role: UserDtoRole;
+  /** Roles assigned to the user within their farm — a user can hold more than one at once */
+  roles: UserDtoRolesItem[];
   /** Whether the user is active */
   active: boolean;
   /** National ID (optional/nullable — not collected at quick field registration, filled in later by an admin) */
@@ -99,13 +96,10 @@ export interface RegisterRecorderResponseDto {
   user: UserDto;
 }
 
-/**
- * Role of the user within their farm
- */
-export type FindUserResponseDtoRole = typeof FindUserResponseDtoRole[keyof typeof FindUserResponseDtoRole];
+export type FindUserResponseDtoRolesItem = typeof FindUserResponseDtoRolesItem[keyof typeof FindUserResponseDtoRolesItem];
 
 
-export const FindUserResponseDtoRole = {
+export const FindUserResponseDtoRolesItem = {
   recorder: 'recorder',
   admin: 'admin',
   supervisor: 'supervisor',
@@ -120,8 +114,8 @@ export interface FindUserResponseDto {
   name: string;
   /** Email address of the user */
   email: string;
-  /** Role of the user within their farm */
-  role: FindUserResponseDtoRole;
+  /** Roles assigned to the user within their farm — a user can hold more than one at once */
+  roles: FindUserResponseDtoRolesItem[];
   /** Whether the user is active */
   active: boolean;
   /** National ID (optional/nullable — not collected at quick field registration, filled in later by an admin) */
@@ -138,13 +132,10 @@ export interface UpdateUserRequestDto {
   nationalId?: string | null;
 }
 
-/**
- * Role of the user within their farm
- */
-export type UpdateUserResponseDtoRole = typeof UpdateUserResponseDtoRole[keyof typeof UpdateUserResponseDtoRole];
+export type UpdateUserResponseDtoRolesItem = typeof UpdateUserResponseDtoRolesItem[keyof typeof UpdateUserResponseDtoRolesItem];
 
 
-export const UpdateUserResponseDtoRole = {
+export const UpdateUserResponseDtoRolesItem = {
   recorder: 'recorder',
   admin: 'admin',
   supervisor: 'supervisor',
@@ -159,28 +150,25 @@ export interface UpdateUserResponseDto {
   name: string;
   /** Email address of the user */
   email: string;
-  /** Role of the user within their farm */
-  role: UpdateUserResponseDtoRole;
+  /** Roles assigned to the user within their farm — a user can hold more than one at once */
+  roles: UpdateUserResponseDtoRolesItem[];
   /** Whether the user is active */
   active: boolean;
   /** National ID (optional/nullable — not collected at quick field registration, filled in later by an admin) */
   nationalId?: string;
 }
 
-/**
- * New role for the user — never admin, see class doc
- */
-export type UpdateUserRoleRequestDtoRole = typeof UpdateUserRoleRequestDtoRole[keyof typeof UpdateUserRoleRequestDtoRole];
+export type UpdateUserRolesRequestDtoRolesItem = typeof UpdateUserRolesRequestDtoRolesItem[keyof typeof UpdateUserRolesRequestDtoRolesItem];
 
 
-export const UpdateUserRoleRequestDtoRole = {
+export const UpdateUserRolesRequestDtoRolesItem = {
   recorder: 'recorder',
   supervisor: 'supervisor',
 } as const;
 
-export interface UpdateUserRoleRequestDto {
-  /** New role for the user — never admin, see class doc */
-  role: UpdateUserRoleRequestDtoRole;
+export interface UpdateUserRolesRequestDto {
+  /** Desired recorder/supervisor roles for the user — never admin, see class doc. Can be empty when the target is already an admin. */
+  roles: UpdateUserRolesRequestDtoRolesItem[];
 }
 
 /**

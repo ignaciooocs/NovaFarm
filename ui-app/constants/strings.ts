@@ -163,11 +163,10 @@ export const strings = {
     roleAdmin: 'Admin',
     roleRecorder: 'Anotador',
     roleSupervisor: 'Supervisor',
-    makeSupervisor: 'Hacer supervisor',
-    makeRecorder: 'Hacer anotador',
-    changeRoleTitle: 'Cambiar rol',
-    changeRoleConfirm: (name: string, roleLabel: string) =>
-      `¿Cambiar el rol de ${name} a ${roleLabel}?`,
+    manageRoles: 'Editar roles',
+    manageRolesTitle: (name: string) => `Roles de ${name}`,
+    manageRolesEmpty: 'Selecciona al menos un rol.',
+    manageRolesAdminNote: 'Además de administrador, ¿qué otros roles tiene?',
     fruitIconLabel: 'Emoji',
     fruitSuggestionsLabel: 'Sugerencias',
     fruitsCatalogLabel: 'Tu catálogo',
@@ -209,6 +208,11 @@ export const strings = {
     title: 'Perfil',
     nationalIdLabel: 'RUT',
     saved: 'Guardado',
+  },
+  switchRole: {
+    title: 'Cambiar modo',
+    subtitle:
+      'Elige con qué rol quieres usar la app ahora. Puedes cambiar cuando quieras, sin cerrar sesión.',
   },
   errors: {
     generic: 'Algo salió mal. Intenta de nuevo.',

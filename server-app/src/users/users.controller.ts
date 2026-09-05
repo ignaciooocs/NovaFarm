@@ -26,7 +26,7 @@ import {
   FindUserResponseDto,
   UpdateUserRequestDto,
   UpdateUserResponseDto,
-  UpdateUserRoleRequestDto,
+  UpdateUserRolesRequestDto,
 } from './dto';
 
 // Solo admin por defecto: a diferencia de los catálogos (fruits/harvesters/
@@ -104,22 +104,24 @@ export class UsersController {
     return updated;
   }
 
-  @Patch(':id/role')
+  @Patch(':id/roles')
   @Roles('admin')
   @ApiOperation({
     summary:
-      "Change a team member's role between recorder and supervisor (admin only, never admin)",
+      "Reassign a team member's recorder/supervisor roles (admin only). Never " +
+      'grants/revokes admin itself — if the target is already an admin, that ' +
+      'role is preserved and this only adds/removes recorder/supervisor on top of it.',
   })
   @ApiResponse({
     status: 200,
-    description: "The user's role was updated successfully.",
+    description: "The user's roles were updated successfully.",
     type: UpdateUserResponseDto,
   })
-  async updateRole(
+  async updateRoles(
     @Param('id') id: string,
-    @Body() dto: UpdateUserRoleRequestDto,
+    @Body() dto: UpdateUserRolesRequestDto,
     @CurrentFarm() farmId: string,
   ): Promise<UpdateUserResponseDto> {
-    return this.usersService.updateRole(id, farmId, dto.role);
+    return this.usersService.updateRoles(id, farmId, dto.roles);
   }
 }

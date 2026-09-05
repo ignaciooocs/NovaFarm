@@ -15,7 +15,7 @@ export interface FirebaseUser {
 
 /**
  * Verifies the caller presents a valid Firebase ID token. Does NOT require
- * farmId/role custom claims to be present — use this alone on routes that
+ * farmId/roles custom claims to be present — use this alone on routes that
  * run before onboarding completes (e.g. auth/register/*). For routes that
  * need tenant scope, use FarmScopeGuard instead.
  */

@@ -13,14 +13,14 @@ import { strings } from '@/constants/strings';
 import { getErrorMessage } from '@/lib/errors';
 import { spacing } from '@/theme';
 
-// Solo perfil propio — editar el rol o desactivar la propia cuenta no
+// Solo perfil propio — editar los roles o desactivar la propia cuenta no
 // entra acá (mismos motivos que en UpdateUserRequestDto del lado del
-// server: el rol tiene casos límite sin resolver, y active es una acción
-// de un admin sobre otra cuenta, no algo que uno se hace a sí mismo).
+// server: los roles tienen casos límite sin resolver, y active es una
+// acción de un admin sobre otra cuenta, no algo que uno se hace a sí mismo).
 export default function ProfileScreen() {
   const [email, setEmail] = useState('');
-  const [role, setRole] = useState<'admin' | 'recorder' | 'supervisor'>(
-    'recorder',
+  const [roles, setRoles] = useState<Array<'admin' | 'recorder' | 'supervisor'>>(
+    [],
   );
   const [name, setName] = useState('');
   const [nationalId, setNationalId] = useState('');
@@ -36,7 +36,7 @@ export default function ProfileScreen() {
         const { usersControllerFindMe } = getUsers();
         const user = await usersControllerFindMe();
         setEmail(user.email);
-        setRole(user.role);
+        setRoles(user.roles);
         setName(user.name);
         setNationalId(user.nationalId ?? '');
       } catch (err) {
@@ -85,12 +85,15 @@ export default function ProfileScreen() {
     );
   }
 
-  const roleLabel =
-    role === 'admin'
-      ? strings.admin.roleAdmin
-      : role === 'supervisor'
-        ? strings.admin.roleSupervisor
-        : strings.admin.roleRecorder;
+  const rolesLabel = roles
+    .map((role) =>
+      role === 'admin'
+        ? strings.admin.roleAdmin
+        : role === 'supervisor'
+          ? strings.admin.roleSupervisor
+          : strings.admin.roleRecorder,
+    )
+    .join(', ');
 
   return (
     <Screen edges={['bottom', 'left', 'right']}>
@@ -99,7 +102,7 @@ export default function ProfileScreen() {
       </Text>
 
       <Text style={styles.readOnlyRow}>{email}</Text>
-      <Text style={styles.readOnlyRow}>{roleLabel}</Text>
+      <Text style={styles.readOnlyRow}>{rolesLabel}</Text>
 
       <TextInput
         label={strings.common.name}

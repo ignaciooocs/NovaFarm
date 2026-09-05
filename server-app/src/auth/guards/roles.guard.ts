@@ -10,9 +10,12 @@ import { ROLES_KEY } from '../decorators/roles.decorator';
 import { AuthenticatedUser } from './farm-scope.guard';
 
 /**
- * Restricts a route to the role(s) declared via @Roles(). Reads
- * request.user.role, so it must run after FarmScopeGuard on the same
- * route: @UseGuards(FarmScopeGuard, RolesGuard). A route with no @Roles()
+ * Restricts a route to the role(s) declared via @Roles() — authorizes if
+ * the caller has *any* of them, since a user can hold several at once (the
+ * server never needs to know which one is the caller's currently "active"
+ * mode, that's local-only client state). Reads request.user.roles, so it
+ * must run after FarmScopeGuard on the same route:
+ * @UseGuards(FarmScopeGuard, RolesGuard). A route with no @Roles()
  * decorator is left unrestricted by this guard (falls through to true) —
  * @Roles() is what opts a route into role-checking, not this guard alone.
  */
@@ -33,7 +36,7 @@ export class RolesGuard implements CanActivate {
       .switchToHttp()
       .getRequest<Request & { user: AuthenticatedUser }>();
 
-    if (!requiredRoles.includes(request.user.role)) {
+    if (!requiredRoles.some((role) => request.user.roles.includes(role))) {
       throw new ForbiddenException('This action requires a different role');
     }
 

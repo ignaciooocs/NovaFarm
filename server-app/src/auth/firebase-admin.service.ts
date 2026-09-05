@@ -7,7 +7,7 @@ import * as admin from 'firebase-admin';
  * credenciales directamente — ui-app se autentica contra Firebase
  * Authentication del lado del cliente, y este servicio solo verifica el ID
  * token que el cliente presenta, y (durante el onboarding) setea los custom
- * claims farmId/role que viajan en cada token siguiente.
+ * claims farmId/roles que viajan en cada token siguiente.
  */
 @Injectable()
 export class FirebaseAdminService {
@@ -41,12 +41,12 @@ export class FirebaseAdminService {
   }
 
   // Verifica un ID token de Firebase y devuelve su payload decodificado
-  // (incluye uid, email, y los custom claims farmId/role una vez seteados).
+  // (incluye uid, email, y los custom claims farmId/roles una vez seteados).
   async verifyIdToken(token: string): Promise<admin.auth.DecodedIdToken> {
     return admin.auth(this.app).verifyIdToken(token);
   }
 
-  // Setea los custom claims (farmId, role) en la cuenta de Firebase del
+  // Setea los custom claims (farmId, roles) en la cuenta de Firebase del
   // usuario. Quedan embebidos en el ID token, y son justo lo que
   // FarmScopeGuard lee para hacer el scoping multi-tenant en cada request.
   async setCustomUserClaims(

@@ -33,7 +33,7 @@ export class AuthController {
     description:
       'Requires a valid Firebase ID token (the account must already exist ' +
       'in Firebase Authentication; ui-app signs up/in against Firebase ' +
-      'directly). After a successful call, the farmId/role custom claims ' +
+      'directly). After a successful call, the farmId/roles custom claims ' +
       'are set on the Firebase user — the client must force a token ' +
       'refresh (getIdToken(true)) before calling any endpoint protected by ' +
       'FarmScopeGuard, since the ID token already held in memory predates ' +
@@ -61,7 +61,7 @@ export class AuthController {
     description:
       'Requires a valid Firebase ID token (the account must already exist ' +
       'in Firebase Authentication; ui-app signs up/in against Firebase ' +
-      'directly). After a successful call, the farmId/role custom claims ' +
+      'directly). After a successful call, the farmId/roles custom claims ' +
       'are set on the Firebase user — the client must force a token ' +
       'refresh (getIdToken(true)) before calling any endpoint protected by ' +
       'FarmScopeGuard, since the ID token already held in memory predates ' +

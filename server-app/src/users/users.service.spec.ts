@@ -43,7 +43,7 @@ describe('UsersService', () => {
         farmId: new Types.ObjectId(farmId),
         name: 'Juana Perez',
         email: 'juana@example.com',
-        role: 'recorder',
+        roles: ['recorder'],
         active: true,
       });
 
@@ -52,7 +52,7 @@ describe('UsersService', () => {
         name: 'Juana Perez',
         email: 'juana@example.com',
         firebaseUid: 'firebase-uid',
-        role: 'recorder',
+        roles: ['recorder'],
       });
 
       expect(userModel.create).toHaveBeenCalledWith({
@@ -60,7 +60,7 @@ describe('UsersService', () => {
         name: 'Juana Perez',
         email: 'juana@example.com',
         firebaseUid: 'firebase-uid',
-        role: 'recorder',
+        roles: ['recorder'],
         active: true,
       });
       expect(result).toEqual({
@@ -68,7 +68,7 @@ describe('UsersService', () => {
         farmId,
         name: 'Juana Perez',
         email: 'juana@example.com',
-        role: 'recorder',
+        roles: ['recorder'],
         active: true,
         nationalId: undefined,
       });
@@ -83,7 +83,7 @@ describe('UsersService', () => {
           farmId: new Types.ObjectId(farmId),
           name: 'Juana Perez',
           email: 'juana@example.com',
-          role: 'admin',
+          roles: ['admin'],
           active: true,
         },
       ];
@@ -101,7 +101,7 @@ describe('UsersService', () => {
           farmId,
           name: 'Juana Perez',
           email: 'juana@example.com',
-          role: 'admin',
+          roles: ['admin'],
           active: true,
           nationalId: undefined,
         },
@@ -128,7 +128,7 @@ describe('UsersService', () => {
           name: 'Juana Perez',
           email: 'juana@example.com',
           firebaseUid: 'firebase-uid',
-          role: 'admin',
+          roles: ['admin'],
           active: true,
         },
       ];
@@ -193,7 +193,7 @@ describe('UsersService', () => {
         farmId: new Types.ObjectId(farmId),
         name: 'Juana Perez',
         email: 'juana@example.com',
-        role: 'recorder',
+        roles: ['recorder'],
         active: true,
       });
       userModel.findOne.mockReturnValue({ exec });
@@ -226,7 +226,7 @@ describe('UsersService', () => {
           farmId: new Types.ObjectId(farmId),
           name: 'Juana Gonzalez',
           email: 'juana@example.com',
-          role: 'recorder',
+          roles: ['recorder'],
           active: true,
         }),
       });
@@ -252,7 +252,7 @@ describe('UsersService', () => {
           farmId: new Types.ObjectId(farmId),
           name: 'Juana Perez',
           email: 'juana@example.com',
-          role: 'recorder',
+          roles: ['recorder'],
           active: true,
         }),
       });
@@ -279,15 +279,15 @@ describe('UsersService', () => {
     });
   });
 
-  describe('updateRole', () => {
-    it('promotes a recorder to supervisor, scoped by farm, and syncs the Firebase custom claim', async () => {
+  describe('updateRoles', () => {
+    it('reassigns roles (recorder + supervisor), scoped by farm, and syncs the Firebase custom claim', async () => {
       const userId = new Types.ObjectId();
       userModel.findOne.mockReturnValue({
         exec: jest.fn().mockResolvedValue({
           _id: userId,
           farmId: new Types.ObjectId(farmId),
           firebaseUid: 'firebase-uid',
-          role: 'recorder',
+          roles: ['recorder'],
         }),
       });
       userModel.findOneAndUpdate.mockReturnValue({
@@ -296,16 +296,15 @@ describe('UsersService', () => {
           farmId: new Types.ObjectId(farmId),
           name: 'Juana Perez',
           email: 'juana@example.com',
-          role: 'supervisor',
+          roles: ['recorder', 'supervisor'],
           active: true,
         }),
       });
 
-      const result = await usersService.updateRole(
-        userId.toString(),
-        farmId,
+      const result = await usersService.updateRoles(userId.toString(), farmId, [
+        'recorder',
         'supervisor',
-      );
+      ]);
 
       expect(userModel.findOne).toHaveBeenCalledWith({
         _id: userId,
@@ -315,36 +314,104 @@ describe('UsersService', () => {
       // motivo que en updateMe/workdays.close()/farms.update().
       expect(userModel.findOneAndUpdate).toHaveBeenCalledWith(
         { _id: userId },
-        { $set: { role: 'supervisor' } },
+        { $set: { roles: ['recorder', 'supervisor'] } },
         { new: true },
       );
-      // El rol vive en dos lugares — el documento y el custom claim de
+      // Los roles viven en dos lugares — el documento y el custom claim de
       // Firebase, que es lo que RolesGuard de verdad lee — setCustomUserClaims
-      // reemplaza el objeto completo, así que farmId va de nuevo, no solo role.
+      // reemplaza el objeto completo, así que farmId va de nuevo, no solo roles.
       expect(firebaseAdminService.setCustomUserClaims).toHaveBeenCalledWith(
         'firebase-uid',
-        { farmId, role: 'supervisor' },
+        { farmId, roles: ['recorder', 'supervisor'] },
       );
-      expect(result.role).toEqual('supervisor');
+      expect(result.roles).toEqual(['recorder', 'supervisor']);
     });
 
-    it("rejects changing an admin's role, without touching the document or Firebase claims", async () => {
+    it('adds recorder on top of an admin without dropping the admin role (admin-anotador case)', async () => {
+      const userId = new Types.ObjectId();
+      userModel.findOne.mockReturnValue({
+        exec: jest.fn().mockResolvedValue({
+          _id: userId,
+          farmId: new Types.ObjectId(farmId),
+          firebaseUid: 'firebase-uid',
+          roles: ['admin'],
+        }),
+      });
+      userModel.findOneAndUpdate.mockReturnValue({
+        exec: jest.fn().mockResolvedValue({
+          _id: userId,
+          farmId: new Types.ObjectId(farmId),
+          name: 'Juana Perez',
+          email: 'juana@example.com',
+          roles: ['admin', 'recorder'],
+          active: true,
+        }),
+      });
+
+      const result = await usersService.updateRoles(userId.toString(), farmId, [
+        'recorder',
+      ]);
+
+      expect(userModel.findOneAndUpdate).toHaveBeenCalledWith(
+        { _id: userId },
+        { $set: { roles: ['admin', 'recorder'] } },
+        { new: true },
+      );
+      expect(firebaseAdminService.setCustomUserClaims).toHaveBeenCalledWith(
+        'firebase-uid',
+        { farmId, roles: ['admin', 'recorder'] },
+      );
+      expect(result.roles).toEqual(['admin', 'recorder']);
+    });
+
+    it('allows clearing recorder/supervisor on an admin down to no extras (still just admin)', async () => {
+      const userId = new Types.ObjectId();
+      userModel.findOne.mockReturnValue({
+        exec: jest.fn().mockResolvedValue({
+          _id: userId,
+          farmId: new Types.ObjectId(farmId),
+          firebaseUid: 'firebase-uid',
+          roles: ['admin', 'recorder'],
+        }),
+      });
+      userModel.findOneAndUpdate.mockReturnValue({
+        exec: jest.fn().mockResolvedValue({
+          _id: userId,
+          farmId: new Types.ObjectId(farmId),
+          name: 'Juana Perez',
+          email: 'juana@example.com',
+          roles: ['admin'],
+          active: true,
+        }),
+      });
+
+      const result = await usersService.updateRoles(
+        userId.toString(),
+        farmId,
+        [],
+      );
+
+      expect(userModel.findOneAndUpdate).toHaveBeenCalledWith(
+        { _id: userId },
+        { $set: { roles: ['admin'] } },
+        { new: true },
+      );
+      expect(result.roles).toEqual(['admin']);
+    });
+
+    it('rejects leaving a non-admin with an empty roles array', async () => {
       userModel.findOne.mockReturnValue({
         exec: jest.fn().mockResolvedValue({
           _id: new Types.ObjectId(),
           farmId: new Types.ObjectId(farmId),
           firebaseUid: 'firebase-uid',
-          role: 'admin',
+          roles: ['recorder'],
         }),
       });
 
       await expect(
-        usersService.updateRole(
-          new Types.ObjectId().toString(),
-          farmId,
-          'supervisor',
-        ),
-      ).rejects.toThrow("Can't change an admin's role through this endpoint");
+        usersService.updateRoles(new Types.ObjectId().toString(), farmId, []),
+      ).rejects.toThrow('A user must have at least one role');
 
       expect(userModel.findOneAndUpdate).not.toHaveBeenCalled();
       expect(firebaseAdminService.setCustomUserClaims).not.toHaveBeenCalled();
@@ -356,11 +423,9 @@ describe('UsersService', () => {
       });
 
       await expect(
-        usersService.updateRole(
-          new Types.ObjectId().toString(),
-          farmId,
+        usersService.updateRoles(new Types.ObjectId().toString(), farmId, [
           'supervisor',
-        ),
+        ]),
       ).rejects.toThrow('User not found');
     });
   });

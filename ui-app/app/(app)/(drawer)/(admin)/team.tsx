@@ -5,6 +5,7 @@ import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
 import {
   ActivityIndicator,
   Button,
+  Checkbox,
   Dialog,
   HelperText,
   IconButton,
@@ -18,10 +19,14 @@ import { getWorkdays } from '@/api/generated/workdays/workdays';
 import { Screen } from '@/components/Screen';
 import { strings } from '@/constants/strings';
 import { getErrorMessage } from '@/lib/errors';
-import { useAuthStore, usePalette } from '@/stores';
+import { useCapabilities } from '@/lib/permissions';
+import { usePalette } from '@/stores';
 import { colors, spacing } from '@/theme';
 
-function roleLabelFor(role: FindUserResponseDto['role']): string {
+type AssignableRole = 'recorder' | 'supervisor';
+const ASSIGNABLE_ROLES: AssignableRole[] = ['recorder', 'supervisor'];
+
+function roleLabelFor(role: FindUserResponseDto['roles'][number]): string {
   if (role === 'admin') {
     return strings.admin.roleAdmin;
   }
@@ -30,18 +35,25 @@ function roleLabelFor(role: FindUserResponseDto['role']): string {
     : strings.admin.roleRecorder;
 }
 
+function rolesLabelFor(roles: FindUserResponseDto['roles']): string {
+  return roles.map(roleLabelFor).join(', ');
+}
+
 // Admin y supervisor ven esta pantalla (server-app: GET /users acepta
 // 'admin'/'supervisor' vía RolesGuard — la pantalla ya está oculta del
-// drawer para un recorder, ver (drawer)/_layout.tsx, esto es la segunda
-// capa, real, del lado del server). Cambiar rol (recorder <-> supervisor,
-// el ascenso que pidió el usuario 2026-09-04) es admin-only — un supervisor
-// que entra acá ve exactamente lo mismo pero de solo lectura, sin el botón
-// de cambiar rol, coherente con que su rol es "solo mirar".
+// drawer para un recorder puro, ver (drawer)/_layout.tsx, esto es la
+// segunda capa, real, del lado del server). Editar roles (sistema multirol,
+// 2026-09-04, ver ui-arquitectura.md §5) es admin-only — un supervisor que
+// entra acá ve exactamente lo mismo pero de solo lectura, sin el botón de
+// editar roles, coherente con que su rol es "solo mirar". Un admin puede
+// editar la fila de cualquiera, incluida la suya propia o la de otro admin
+// — nunca se puede quitar/otorgar el rol admin en sí (ver
+// UpdateUserRolesRequestDto del lado del server), solo agregar/quitar
+// recorder/supervisor encima (caso "admin que también anota").
 export default function TeamScreen() {
   const router = useRouter();
   const palette = usePalette();
-  const viewerRole = useAuthStore((state) => state.claims.role);
-  const isAdmin = viewerRole === 'admin';
+  const canManageTeamRoles = useCapabilities().canManageTeamRoles;
   const [users, setUsers] = useState<FindUserResponseDto[]>([]);
   // _id de la jornada abierta de cada recorder, si tiene una ahora mismo —
   // resuelto vía GET /workdays?status=OPEN (mismo endpoint que usa Home,
@@ -56,11 +68,13 @@ export default function TeamScreen() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  // Confirmar antes de cambiar rol — no es reversible de un toque sin
-  // querer como activar/desactivar catálogo, cambia permisos reales.
-  const [roleChangeTarget, setRoleChangeTarget] =
+  // Reemplazo completo del array de roles (el admin manda el set final
+  // deseado) — checkboxes en vez del toggle binario recorder<->supervisor
+  // de antes, ahora que una cuenta puede tener ambos a la vez.
+  const [rolesEditTarget, setRolesEditTarget] =
     useState<FindUserResponseDto | null>(null);
-  const [changingRole, setChangingRole] = useState(false);
+  const [editRoles, setEditRoles] = useState<Set<AssignableRole>>(new Set());
+  const [savingRoles, setSavingRoles] = useState(false);
 
   async function load() {
     setLoading(true);
@@ -90,26 +104,50 @@ export default function TeamScreen() {
     load();
   }, []);
 
-  const nextRoleForTarget =
-    roleChangeTarget?.role === 'supervisor' ? 'recorder' : 'supervisor';
+  function openRolesEditor(user: FindUserResponseDto) {
+    setRolesEditTarget(user);
+    setEditRoles(
+      new Set(
+        user.roles.filter(
+          (role): role is AssignableRole => role !== 'admin',
+        ),
+      ),
+    );
+  }
 
-  async function handleConfirmRoleChange() {
-    if (!roleChangeTarget) {
+  function toggleEditRole(role: AssignableRole) {
+    setEditRoles((prev) => {
+      const next = new Set(prev);
+      if (next.has(role)) {
+        next.delete(role);
+      } else {
+        next.add(role);
+      }
+      return next;
+    });
+  }
+
+  async function handleConfirmRoles() {
+    if (!rolesEditTarget) {
       return;
     }
-    setChangingRole(true);
+    const isAdminTarget = rolesEditTarget.roles.includes('admin');
+    if (!isAdminTarget && editRoles.size === 0) {
+      return;
+    }
+    setSavingRoles(true);
     setError(null);
     try {
-      const { usersControllerUpdateRole } = getUsers();
-      await usersControllerUpdateRole(roleChangeTarget._id, {
-        role: nextRoleForTarget,
+      const { usersControllerUpdateRoles } = getUsers();
+      await usersControllerUpdateRoles(rolesEditTarget._id, {
+        roles: Array.from(editRoles),
       });
-      setRoleChangeTarget(null);
+      setRolesEditTarget(null);
       await load();
     } catch (err) {
       setError(getErrorMessage(err));
     } finally {
-      setChangingRole(false);
+      setSavingRoles(false);
     }
   }
 
@@ -130,7 +168,7 @@ export default function TeamScreen() {
           ListEmptyComponent={<Text>{strings.admin.emptyList}</Text>}
           renderItem={({ item }) => {
             const activeWorkdayId = activeWorkdayByRecorder.get(item._id);
-            const showRoleToggle = isAdmin && item.role !== 'admin';
+            const showRolesButton = canManageTeamRoles;
 
             const mainContent = (
               <View style={styles.rowMain}>
@@ -151,7 +189,7 @@ export default function TeamScreen() {
                   ) : null}
                 </View>
                 <Text style={styles.rowSubtitle} numberOfLines={1}>
-                  {item.email} · {roleLabelFor(item.role)}
+                  {item.email} · {rolesLabelFor(item.roles)}
                   {!item.active ? ` · ${strings.common.inactive}` : ''}
                 </Text>
               </View>
@@ -188,20 +226,12 @@ export default function TeamScreen() {
             return (
               <View style={styles.row}>
                 {tappableMain}
-                {showRoleToggle ? (
+                {showRolesButton ? (
                   <IconButton
-                    icon={
-                      item.role === 'supervisor'
-                        ? 'account-arrow-left-outline'
-                        : 'account-star-outline'
-                    }
+                    icon="account-cog-outline"
                     size={20}
-                    accessibilityLabel={
-                      item.role === 'supervisor'
-                        ? strings.admin.makeRecorder
-                        : strings.admin.makeSupervisor
-                    }
-                    onPress={() => setRoleChangeTarget(item)}
+                    accessibilityLabel={strings.admin.manageRoles}
+                    onPress={() => openRolesEditor(item)}
                   />
                 ) : null}
               </View>
@@ -212,29 +242,45 @@ export default function TeamScreen() {
 
       <Portal>
         <Dialog
-          visible={roleChangeTarget !== null}
-          onDismiss={() => setRoleChangeTarget(null)}
+          visible={rolesEditTarget !== null}
+          onDismiss={() => setRolesEditTarget(null)}
         >
-          <Dialog.Title>{strings.admin.changeRoleTitle}</Dialog.Title>
+          <Dialog.Title>
+            {rolesEditTarget ? strings.admin.manageRolesTitle(rolesEditTarget.name) : ''}
+          </Dialog.Title>
           <Dialog.Content>
-            <Text>
-              {roleChangeTarget
-                ? strings.admin.changeRoleConfirm(
-                    roleChangeTarget.name,
-                    roleLabelFor(nextRoleForTarget),
-                  )
-                : ''}
-            </Text>
+            {rolesEditTarget?.roles.includes('admin') ? (
+              <HelperText type="info">
+                {strings.admin.manageRolesAdminNote}
+              </HelperText>
+            ) : null}
+            {ASSIGNABLE_ROLES.map((role) => (
+              <Checkbox.Item
+                key={role}
+                label={roleLabelFor(role)}
+                status={editRoles.has(role) ? 'checked' : 'unchecked'}
+                onPress={() => toggleEditRole(role)}
+              />
+            ))}
+            {editRoles.size === 0 && !rolesEditTarget?.roles.includes('admin') ? (
+              <HelperText type="error">
+                {strings.admin.manageRolesEmpty}
+              </HelperText>
+            ) : null}
           </Dialog.Content>
           <Dialog.Actions>
-            <Button onPress={() => setRoleChangeTarget(null)}>
+            <Button onPress={() => setRolesEditTarget(null)}>
               {strings.common.cancel}
             </Button>
             <Button
-              onPress={handleConfirmRoleChange}
-              loading={changingRole}
+              onPress={handleConfirmRoles}
+              loading={savingRoles}
+              disabled={
+                editRoles.size === 0 &&
+                !rolesEditTarget?.roles.includes('admin')
+              }
             >
-              {strings.common.confirm}
+              {strings.common.save}
             </Button>
           </Dialog.Actions>
         </Dialog>

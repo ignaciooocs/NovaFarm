@@ -18,7 +18,7 @@ import { apiClient } from '../../axios-instance';
 
   export const getAuth = () => {
 /**
- * Requires a valid Firebase ID token (the account must already exist in Firebase Authentication; ui-app signs up/in against Firebase directly). After a successful call, the farmId/role custom claims are set on the Firebase user — the client must force a token refresh (getIdToken(true)) before calling any endpoint protected by FarmScopeGuard, since the ID token already held in memory predates those claims.
+ * Requires a valid Firebase ID token (the account must already exist in Firebase Authentication; ui-app signs up/in against Firebase directly). After a successful call, the farmId/roles custom claims are set on the Firebase user — the client must force a token refresh (getIdToken(true)) before calling any endpoint protected by FarmScopeGuard, since the ID token already held in memory predates those claims.
  * @summary Complete onboarding as an admin, creating a new farm
  */
 const authControllerRegisterAdmin = (
@@ -32,7 +32,7 @@ const authControllerRegisterAdmin = (
       );
     }
   /**
- * Requires a valid Firebase ID token (the account must already exist in Firebase Authentication; ui-app signs up/in against Firebase directly). After a successful call, the farmId/role custom claims are set on the Firebase user — the client must force a token refresh (getIdToken(true)) before calling any endpoint protected by FarmScopeGuard, since the ID token already held in memory predates those claims.
+ * Requires a valid Firebase ID token (the account must already exist in Firebase Authentication; ui-app signs up/in against Firebase directly). After a successful call, the farmId/roles custom claims are set on the Firebase user — the client must force a token refresh (getIdToken(true)) before calling any endpoint protected by FarmScopeGuard, since the ID token already held in memory predates those claims.
  * @summary Complete onboarding as a recorder, joining an existing farm
  */
 const authControllerRegisterRecorder = (

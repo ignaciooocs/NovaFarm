@@ -9,7 +9,7 @@ import type {
   FindUserResponseDto,
   UpdateUserRequestDto,
   UpdateUserResponseDto,
-  UpdateUserRoleRequestDto,
+  UpdateUserRolesRequestDto,
   UsersControllerFindAllParams
 } from '../novaFarmAPI.schemas';
 
@@ -55,21 +55,21 @@ const usersControllerUpdateMe = (
       );
     }
   /**
- * @summary Change a team member's role between recorder and supervisor (admin only, never admin)
+ * @summary Reassign a team member's recorder/supervisor roles (admin only). Never grants/revokes admin itself — if the target is already an admin, that role is preserved and this only adds/removes recorder/supervisor on top of it.
  */
-const usersControllerUpdateRole = (
+const usersControllerUpdateRoles = (
     id: string,
-    updateUserRoleRequestDto: UpdateUserRoleRequestDto,
+    updateUserRolesRequestDto: UpdateUserRolesRequestDto,
  ) => {
       return apiClient<UpdateUserResponseDto>(
-      {url: `/api/v1/users/${id}/role`, method: 'PATCH',
+      {url: `/api/v1/users/${id}/roles`, method: 'PATCH',
       headers: {'Content-Type': 'application/json', },
-      data: updateUserRoleRequestDto
+      data: updateUserRolesRequestDto
     },
       );
     }
-  return {usersControllerFindAll,usersControllerFindMe,usersControllerUpdateMe,usersControllerUpdateRole}};
+  return {usersControllerFindAll,usersControllerFindMe,usersControllerUpdateMe,usersControllerUpdateRoles}};
 export type UsersControllerFindAllResult = NonNullable<Awaited<ReturnType<ReturnType<typeof getUsers>['usersControllerFindAll']>>>
 export type UsersControllerFindMeResult = NonNullable<Awaited<ReturnType<ReturnType<typeof getUsers>['usersControllerFindMe']>>>
 export type UsersControllerUpdateMeResult = NonNullable<Awaited<ReturnType<ReturnType<typeof getUsers>['usersControllerUpdateMe']>>>
-export type UsersControllerUpdateRoleResult = NonNullable<Awaited<ReturnType<ReturnType<typeof getUsers>['usersControllerUpdateRole']>>>
+export type UsersControllerUpdateRolesResult = NonNullable<Awaited<ReturnType<ReturnType<typeof getUsers>['usersControllerUpdateRoles']>>>

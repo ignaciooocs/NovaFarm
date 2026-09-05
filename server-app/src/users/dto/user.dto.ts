@@ -33,11 +33,13 @@ export class UserDto {
   email!: string;
 
   @ApiProperty({
-    description: 'Role of the user within their farm',
+    description:
+      'Roles assigned to the user within their farm — a user can hold more than one at once',
     enum: ['recorder', 'admin', 'supervisor'],
-    example: 'admin',
+    isArray: true,
+    example: ['admin'],
   })
-  role!: 'recorder' | 'admin' | 'supervisor';
+  roles!: Array<'recorder' | 'admin' | 'supervisor'>;
 
   @ApiProperty({
     description: 'Whether the user is active',

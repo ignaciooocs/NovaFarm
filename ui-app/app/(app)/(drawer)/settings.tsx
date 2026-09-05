@@ -14,13 +14,14 @@ import { getFarms } from '@/api/generated/farms/farms';
 import { Screen } from '@/components/Screen';
 import { strings } from '@/constants/strings';
 import { getErrorMessage } from '@/lib/errors';
-import { useAuthStore, usePalette, useThemeStore } from '@/stores';
+import { useCapabilities } from '@/lib/permissions';
+import { usePalette, useThemeStore } from '@/stores';
 import { colors, palettes, spacing, type PaletteName } from '@/theme';
 
 const PALETTE_NAMES = Object.keys(palettes) as PaletteName[];
 
 export default function SettingsScreen() {
-  const isAdmin = useAuthStore((state) => state.claims.role) === 'admin';
+  const canManageFarmSettings = useCapabilities().canManageFarmSettings;
   const activePalette = useThemeStore((state) => state.palette);
   const setPalette = useThemeStore((state) => state.setPalette);
   const palette = usePalette();
@@ -54,8 +55,9 @@ export default function SettingsScreen() {
   }, []);
 
   // Optimista: cambia el switch al tiro, revierte si el server rechaza.
-  // Solo admin ve este control (ver el render de abajo) — server-app igual
-  // lo vuelve a exigir vía RolesGuard en PATCH /farms/me.
+  // Solo quien puede administrar la farm ve este control (ver el render de
+  // abajo) — server-app igual lo vuelve a exigir vía RolesGuard en
+  // PATCH /farms/me.
   async function handleToggle(value: boolean) {
     const previous = recordersCanManageCatalog;
     setRecordersCanManageCatalog(value);
@@ -134,7 +136,7 @@ export default function SettingsScreen() {
         />
       </View>
 
-      {isAdmin ? (
+      {canManageFarmSettings ? (
         <>
           <Divider style={styles.divider} />
           <View style={styles.switchRow}>

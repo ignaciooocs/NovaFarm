@@ -1,0 +1,38 @@
+---
+paths:
+  - "ui-app/**"
+---
+
+# ui-app (React Native + Expo) — conventions and current state
+
+## Expo has changed recently
+
+Read the exact versioned docs at https://docs.expo.dev/versions/v57.0.0/ before writing any Expo-specific code — check the `expo` dependency in `ui-app/package.json` if that version ever moves. (Same warning lives in `ui-app/AGENTS.md`, which non-Claude tools read.)
+
+## Status
+
+The **full core loop works end-to-end and is verified on a physical device via Expo Go**: auth (Firebase email/password) → onboarding (create/join farm) → catalogs → open a workday → build the day's roster (`add-harvester`) → record deliveries in the Anotador (RF-02: -1/+1/+2/+5, or an exact-weight dialog for direct-weighing units with `kgFactor=1`) → sync pending local data to the server → close the workday (hard-blocked while anything's unsynced, since the server freezes the total from what it already has). Runs on Expo SDK 57. See [docs/diagrams/ui-arquitectura.md](../../docs/diagrams/ui-arquitectura.md) for the architecture and its known-gaps section.
+
+Navigation: `(app)/(drawer)/(tabs)` holds Home/History as bottom tabs; a Drawer wraps that plus Profile, Settings, the catalogs, and Team — all fully built, no placeholders left in `(app)/`. `fruits`/`harvesters`/`measurementUnits` are cached locally (`lib/catalogSync.ts`) and support full editing + activate/deactivate; registering a harvester works fully offline too (2026-09-05) — `quickRegister` writes locally with `synced: false` and `lib/harvesterSync.ts` uploads it via `POST /harvesters/sync` at the start of the manual sync, rewriting the local id for the server one across `harvester_workday`/`harvest_entries`; deliberately never on reconnect, see [ui-arquitectura.md](../../docs/diagrams/ui-arquitectura.md). Whether a *recorder* sees the catalog screens at all is one per-farm toggle (`farms.recordersCanManageCatalog`, default `true`, edited from Settings) — not per-user permissions; `/team` (the farm's user list) is unaffected by that toggle and stays admin-only on the server. `POST /workdays` and `PATCH /workdays/:id/close` are both idempotent via `clientEntryId`/frozen-state-on-retry, respectively. See ui-arquitectura.md's "Estado actual y próximos pasos" for exactly what's verified on-device vs. not yet.
+
+## Commands
+
+```
+pnpm start   # expo start — scan QR with Expo Go, or press a/i/w
+pnpm android
+pnpm ios
+pnpm web
+pnpm db:generate   # drizzle-kit generate — regenerate SQLite migrations after editing db/schema.ts
+pnpm generate:api   # orval — regenerate the typed API client (needs server-app running, see below)
+```
+
+`ui-app/.npmrc` sets `node-linker=hoisted` — required for Metro's module resolution to work correctly with pnpm's non-flat `node_modules` layout; don't remove it without testing the Metro bundler still resolves everything.
+
+`pnpm generate:api` regenerates the typed API client from `server-app`'s live OpenAPI spec via `orval` (`orval.config.js`) — **requires `server-app` running locally** (reads `http://localhost:3000/api-docs-json`, overridable via `NOVAFARM_API_SPEC_URL`). Generates axios-based client functions into `ui-app/api/generated/` (one file per controller tag, e.g. `farms.ts`), routed through the shared instance in `ui-app/api/axios-instance.ts` (`AXIOS_INSTANCE` — configure `baseURL`/auth interceptors there, not per call site). Generated output is committed to git, not gitignored — regenerating requires a running server, so a fresh clone would otherwise have no usable client until someone stands up `server-app` + Mongo first. Re-run it after any DTO/controller change in `server-app`.
+
+## Field UX and copy
+
+- **Sub-100ms tap-to-record latency**: the "Anotar" (record) interaction must never block on network I/O — it only touches local SQLite (`expo-sqlite` via Drizzle).
+- **Offline-first is non-negotiable**: all writes during a workday happen locally first; server sync is a distinct, explicit, user-triggered action ("Sincronizar Jornada"), never automatic.
+- Large touch targets usable one-handed and in direct sunlight, high-contrast display.
+- Copy is **Spanish** — the terminology field workers actually use ("Anotar", "Tarro", "Vuelta"), not generic technical terms (RNF-02). Code identifiers stay English; see the naming convention in CLAUDE.md. In the field UI the two recording modes are "conteo de envases" / "pesaje directo"; at the code level they're just `unitCount` × `kgFactor` vs. a unit with `kgFactor = 1`.

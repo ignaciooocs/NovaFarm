@@ -21,7 +21,11 @@ Thumbs.db
 .vscode/*
 !.vscode/extensions.json
 .idea/
-.claude/
+
+# Claude Code — .claude/ is shared with the team (settings, rules, skills);
+# only personal overrides stay local. https://code.claude.com/docs/en/claude-directory
+**/.claude/settings.local.json
+CLAUDE.local.md
 
 # --- server-app (NestJS) ---
 server-app/dist/

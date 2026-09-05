@@ -1,10 +1,12 @@
 import { useEffect, useState } from 'react';
-import { Pressable, StyleSheet, View } from 'react-native';
+import { Pressable, Share, StyleSheet, View } from 'react-native';
 import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
+import * as Clipboard from 'expo-clipboard';
 import {
   ActivityIndicator,
   Divider,
   HelperText,
+  IconButton,
   Switch,
   Text,
 } from 'react-native-paper';
@@ -12,7 +14,7 @@ import { getFarms } from '@/api/generated/farms/farms';
 import { Screen } from '@/components/Screen';
 import { strings } from '@/constants/strings';
 import { getErrorMessage } from '@/lib/errors';
-import { useAuthStore, useThemeStore } from '@/stores';
+import { useAuthStore, usePalette, useThemeStore } from '@/stores';
 import { colors, palettes, spacing, type PaletteName } from '@/theme';
 
 const PALETTE_NAMES = Object.keys(palettes) as PaletteName[];
@@ -21,6 +23,7 @@ export default function SettingsScreen() {
   const isAdmin = useAuthStore((state) => state.claims.role) === 'admin';
   const activePalette = useThemeStore((state) => state.palette);
   const setPalette = useThemeStore((state) => state.setPalette);
+  const palette = usePalette();
 
   const [farmName, setFarmName] = useState('');
   const [invitationCode, setInvitationCode] = useState('');
@@ -29,6 +32,7 @@ export default function SettingsScreen() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [copied, setCopied] = useState(false);
 
   useEffect(() => {
     async function load() {
@@ -68,6 +72,23 @@ export default function SettingsScreen() {
     }
   }
 
+  async function handleCopyCode() {
+    await Clipboard.setStringAsync(invitationCode);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  }
+
+  async function handleShareCode() {
+    try {
+      await Share.share({
+        message: strings.onboarding.shareMessage(invitationCode),
+      });
+    } catch {
+      // Usuario canceló el share sheet — no es un error real, mismo
+      // criterio que invite-code.tsx.
+    }
+  }
+
   if (loading) {
     return (
       <Screen edges={['bottom', 'left', 'right']}>
@@ -86,9 +107,32 @@ export default function SettingsScreen() {
         {strings.settings.farmInfo}
       </Text>
       <Text style={styles.row}>{farmName}</Text>
-      <Text style={styles.row}>
-        {strings.onboarding.invitationCodeLabel}: {invitationCode}
-      </Text>
+
+      <View
+        style={[styles.codeCard, { backgroundColor: palette.primarySoft }]}
+      >
+        <View style={styles.codeTextWrap}>
+          <Text style={styles.codeLabel}>
+            {strings.onboarding.invitationCodeLabel}
+          </Text>
+          <Text
+            variant="titleLarge"
+            style={[styles.codeValue, { color: palette.primary }]}
+          >
+            {invitationCode}
+          </Text>
+        </View>
+        <IconButton
+          icon={copied ? 'check' : 'content-copy'}
+          onPress={handleCopyCode}
+          accessibilityLabel={strings.common.copy}
+        />
+        <IconButton
+          icon="share-variant"
+          onPress={handleShareCode}
+          accessibilityLabel={strings.onboarding.shareButton}
+        />
+      </View>
 
       {isAdmin ? (
         <>
@@ -157,6 +201,16 @@ const styles = StyleSheet.create({
   title: { marginBottom: spacing.lg },
   sectionTitle: { marginBottom: spacing.sm },
   row: { marginBottom: spacing.xs },
+  codeCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderRadius: 16,
+    paddingLeft: spacing.md,
+    paddingVertical: spacing.xs,
+  },
+  codeTextWrap: { flex: 1 },
+  codeLabel: { color: colors.textSecondary, fontSize: 12 },
+  codeValue: { fontWeight: '800', letterSpacing: 2 },
   divider: { marginVertical: spacing.lg },
   switchRow: {
     flexDirection: 'row',

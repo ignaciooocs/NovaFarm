@@ -106,6 +106,11 @@ async function loadActiveWorkdayPreview(
       pendingCount += 1;
     }
   });
+  // La jornada misma, si se abrió sin conexión y todavía no subió — mismo
+  // criterio que la pantalla de Sincronizar y la de Cerrar Jornada.
+  if (workdayRow && !workdayRow.synced) {
+    pendingCount += 1;
+  }
 
   const roster = rosterRows
     .map((row) => ({

@@ -8,23 +8,32 @@ import {
   Text,
   TouchableRipple,
 } from 'react-native-paper';
-import type {
-  FindFruitResponseDto,
-  FindMeasurementUnitResponseDto,
-} from '@/api/generated/novaFarmAPI.schemas';
-import { getFruits } from '@/api/generated/fruits/fruits';
-import { getMeasurementUnits } from '@/api/generated/measurement-units/measurement-units';
-import { getWorkdays } from '@/api/generated/workdays/workdays';
+import { and, eq } from 'drizzle-orm';
 import { OptionSelector } from '@/components/OptionSelector';
 import { Screen } from '@/components/Screen';
+import { DEFAULT_FRUIT_ICON } from '@/constants/fruitIcon';
 import { strings } from '@/constants/strings';
 import { db } from '@/db/client';
-import { workdays } from '@/db/schema';
+import {
+  fruits as fruitsTable,
+  measurementUnits as measurementUnitsTable,
+  workdays,
+} from '@/db/schema';
+import { syncCatalogs } from '@/lib/catalogSync';
 import { generateLocalId } from '@/lib/id';
 import { getErrorMessage } from '@/lib/errors';
 import { getActiveWorkdayWithRecovery } from '@/lib/recoverActiveWorkday';
-import { useActiveWorkdayStore, useAuthStore, usePalette } from '@/stores';
+import { pushPendingWorkdays } from '@/lib/workdaySync';
+import {
+  useActiveWorkdayStore,
+  useAuthStore,
+  useConnectivityStore,
+  usePalette,
+} from '@/stores';
 import { colors, spacing } from '@/theme';
+
+type LocalFruit = typeof fruitsTable.$inferSelect;
+type LocalUnit = typeof measurementUnitsTable.$inferSelect;
 
 export default function OpenWorkdayScreen() {
   const router = useRouter();
@@ -48,9 +57,10 @@ export default function OpenWorkdayScreen() {
   // hay una, se redirige a esa en vez de dejar abrir una segunda.
   const [checkingActive, setCheckingActive] = useState(true);
 
-  const [fruits, setFruits] = useState<FindFruitResponseDto[]>([]);
-  const [units, setUnits] = useState<FindMeasurementUnitResponseDto[]>([]);
+  const [fruits, setFruits] = useState<LocalFruit[]>([]);
+  const [units, setUnits] = useState<LocalUnit[]>([]);
   const [loadingCatalogs, setLoadingCatalogs] = useState(true);
+  const isConnected = useConnectivityStore((state) => state.isConnected);
 
   const [fruitId, setFruitId] = useState<string | null>(null);
   const [unitId, setUnitId] = useState<string | null>(null);
@@ -83,17 +93,38 @@ export default function OpenWorkdayScreen() {
       return;
     }
 
+    // Lee la caché local, no la API: abrir jornada tiene que funcionar sin
+    // señal (era el otro bloqueo online de esta pantalla, además del POST).
+    // syncCatalogs() se dispara igual, sin await y sin bloquear — si hay
+    // conexión refresca la caché para la próxima vez, y viene dedupeado por
+    // su propio guard, así que no cuesta nada llamarlo de más.
     async function loadCatalogs() {
       setLoadingCatalogs(true);
       try {
-        const { fruitsControllerFindAll } = getFruits();
-        const { measurementUnitsControllerFindAll } = getMeasurementUnits();
+        syncCatalogs();
+        const farmId = useAuthStore.getState().claims.farmId ?? '';
         const [fruitsResult, unitsResult] = await Promise.all([
-          fruitsControllerFindAll(),
-          measurementUnitsControllerFindAll(),
+          db
+            .select()
+            .from(fruitsTable)
+            .where(
+              and(
+                eq(fruitsTable.active, true),
+                eq(fruitsTable.farmId, farmId),
+              ),
+            ),
+          db
+            .select()
+            .from(measurementUnitsTable)
+            .where(
+              and(
+                eq(measurementUnitsTable.active, true),
+                eq(measurementUnitsTable.farmId, farmId),
+              ),
+            ),
         ]);
-        setFruits(fruitsResult.filter((fruit) => fruit.active));
-        setUnits(unitsResult.filter((unit) => unit.active));
+        setFruits(fruitsResult);
+        setUnits(unitsResult);
       } catch (err) {
         setError(getErrorMessage(err));
       } finally {
@@ -123,36 +154,27 @@ export default function OpenWorkdayScreen() {
     setError(null);
     setSaving(true);
     try {
-      const { workdaysControllerCreate } = getWorkdays();
-      const result = await workdaysControllerCreate({
-        clientEntryId,
-        date: new Date().toISOString(),
-        fruitId,
-        defaultMeasurementUnitId: unitId,
-      });
-
-      // La jornada se abre online (server-app ahora hace upsert por
-      // clientEntryId, así que un reintento con el mismo clientEntryId
-      // siempre vuelve al mismo resultado) — una vez que el server confirma,
-      // se espeja localmente para que el resto de la app (Anotador, sync)
-      // siempre lea de SQLite, sin importar si el dato vino online u offline.
-      // El id local es el mismo clientEntryId que se mandó — si esta
-      // pantalla se remonta y este insert corre dos veces para la misma
-      // jornada, la segunda es un no-op sobre la misma fila en vez de una
-      // fila duplicada.
+      // Local primero y sin red, igual que el resto de la captura (RNF-01):
+      // llegar al campo sin señal no puede impedir empezar el día. La fila
+      // nace `synced: false` / `serverId: null` y la sube
+      // pushPendingWorkdays() — desde el sync manual, o desde el
+      // fire-and-forget de acá abajo. El id local es el mismo clientEntryId
+      // que se manda después, así que si esta pantalla se remonta el insert
+      // es un no-op sobre la misma fila en vez de una jornada duplicada.
+      const now = new Date().toISOString();
       await db
         .insert(workdays)
         .values({
           id: clientEntryId,
-          serverId: result._id,
-          farmId: result.farmId,
-          date: result.date,
-          fruitId: result.fruitId,
-          defaultMeasurementUnitId: result.defaultMeasurementUnitId,
-          status: result.status,
-          finalTotalKg: result.finalTotalKg ?? null,
-          synced: true,
-          createdAt: result.createdAt,
+          serverId: null,
+          farmId: useAuthStore.getState().claims.farmId ?? '',
+          date: now,
+          fruitId,
+          defaultMeasurementUnitId: unitId,
+          status: 'OPEN',
+          finalTotalKg: null,
+          synced: false,
+          createdAt: now,
           createdByUid: uid,
         })
         .onConflictDoNothing();
@@ -162,6 +184,15 @@ export default function OpenWorkdayScreen() {
         pathname: '/workday/[id]/anotador',
         params: { id: clientEntryId },
       });
+
+      // Fire-and-forget: con señal la jornada queda en el server al toque,
+      // así sus compañeros la ven en "Equipo activo ahora" (Home) sin
+      // esperar a que sincronice. Sin señal falla en silencio y queda
+      // pendiente — no se muestra error porque abrir jornada ya no depende
+      // de esto. Acá no hay riesgo de reescribir ids como en cosechadores:
+      // solo escribe serverId/synced sobre esta misma fila, y nada del
+      // camino de captura lee esos dos campos.
+      pushPendingWorkdays();
     } catch (err) {
       setError(getErrorMessage(err));
     } finally {
@@ -179,32 +210,47 @@ export default function OpenWorkdayScreen() {
 
   if (fruits.length === 0 || units.length === 0) {
     const missingFruits = fruits.length === 0;
+    // Sin conexión, un catálogo vacío casi nunca significa "no hay frutas
+    // creadas" — significa que la caché local todavía no se sincronizó
+    // (syncCatalogs corre desde Home y al reconectar). Mandar a crear una
+    // fruta ahí sería mal consejo, y además crear catálogo sí necesita red.
+    const offlineCache = !isConnected;
     return (
       <Screen edges={['bottom', 'left', 'right']}>
         <Stack.Screen
           options={{ headerShown: true, title: strings.workday.openTitle }}
         />
         <View style={styles.emptyState}>
-          <Text style={styles.emptyEmoji}>{missingFruits ? '🍇' : '📦'}</Text>
-          <Text variant="titleMedium" style={styles.emptyTitle}>
-            {missingFruits
-              ? strings.admin.fruitsTitle
-              : strings.admin.measurementUnitsTitle}
+          <Text style={styles.emptyEmoji}>
+            {offlineCache ? '📡' : missingFruits ? '🍇' : '📦'}
           </Text>
-          <Text style={styles.emptyHelper}>{strings.admin.emptyList}</Text>
-          <Button
-            mode="contained"
-            onPress={() =>
-              router.push(missingFruits ? '/fruits' : '/measurement-units')
-            }
-            buttonColor={palette.primary}
-            contentStyle={styles.buttonContent}
-            style={styles.button}
-          >
-            {missingFruits
-              ? strings.admin.newFruit
-              : strings.admin.newMeasurementUnit}
-          </Button>
+          <Text variant="titleMedium" style={styles.emptyTitle}>
+            {offlineCache
+              ? strings.workday.catalogUnavailableTitle
+              : missingFruits
+                ? strings.admin.fruitsTitle
+                : strings.admin.measurementUnitsTitle}
+          </Text>
+          <Text style={styles.emptyHelper}>
+            {offlineCache
+              ? strings.workday.catalogUnavailableHelp
+              : strings.admin.emptyList}
+          </Text>
+          {offlineCache ? null : (
+            <Button
+              mode="contained"
+              onPress={() =>
+                router.push(missingFruits ? '/fruits' : '/measurement-units')
+              }
+              buttonColor={palette.primary}
+              contentStyle={styles.buttonContent}
+              style={styles.button}
+            >
+              {missingFruits
+                ? strings.admin.newFruit
+                : strings.admin.newMeasurementUnit}
+            </Button>
+          )}
         </View>
       </Screen>
     );
@@ -232,15 +278,17 @@ export default function OpenWorkdayScreen() {
           contentContainerStyle={styles.fruitRow}
         >
           {fruits.map((fruit) => {
-            const selected = fruit._id === fruitId;
+            const selected = fruit.id === fruitId;
             return (
               <TouchableRipple
-                key={fruit._id}
-                onPress={() => setFruitId(fruit._id)}
+                key={fruit.id}
+                onPress={() => setFruitId(fruit.id)}
                 style={[styles.fruitTile, selected && styles.fruitTileSelected]}
               >
                 <View style={styles.fruitTileBody}>
-                  <Text style={styles.fruitEmoji}>{fruit.icon}</Text>
+                  <Text style={styles.fruitEmoji}>
+                    {fruit.icon ?? DEFAULT_FRUIT_ICON}
+                  </Text>
                   <Text
                     style={[
                       styles.fruitName,
@@ -264,7 +312,7 @@ export default function OpenWorkdayScreen() {
           onChange={setUnitId}
           style={styles.unitSelector}
           options={units.map((unit) => ({
-            value: unit._id,
+            value: unit.id,
             short: unit.name,
             description: strings.admin.unitEquivalence(
               unit.name,

@@ -10,19 +10,31 @@ import { Screen } from '@/components/Screen';
 import { strings } from '@/constants/strings';
 import { db } from '@/db/client';
 import { getActiveWorkday } from '@/db/queries';
-import { harvesters, harvestEntries, harvesterWorkday } from '@/db/schema';
+import {
+  harvesters,
+  harvestEntries,
+  harvesterWorkday,
+  workdays,
+} from '@/db/schema';
 import { getErrorMessage } from '@/lib/errors';
 import { pushPendingHarvesters } from '@/lib/harvesterSync';
+import { pushPendingWorkdays } from '@/lib/workdaySync';
 import { useAuthStore, useConnectivityStore, usePalette } from '@/stores';
 import { colors, spacing } from '@/theme';
 
 interface PendingCounts {
+  workday: number;
   harvesters: number;
   roster: number;
   entries: number;
 }
 
-const EMPTY_PENDING: PendingCounts = { harvesters: 0, roster: 0, entries: 0 };
+const EMPTY_PENDING: PendingCounts = {
+  workday: 0,
+  harvesters: 0,
+  roster: 0,
+  entries: 0,
+};
 
 // Sube en batch lo que quedó guardado local: cosechadores nuevos primero
 // (pushPendingHarvesters, farm-wide — ver lib/harvesterSync.ts), después
@@ -48,7 +60,8 @@ export default function SyncScreen() {
   const [error, setError] = useState<string | null>(null);
   const [rejectedReasons, setRejectedReasons] = useState<string[]>([]);
 
-  const totalPending = pending.harvesters + pending.roster + pending.entries;
+  const totalPending =
+    pending.workday + pending.harvesters + pending.roster + pending.entries;
 
   const load = useCallback(async () => {
     if (!uid) {
@@ -62,6 +75,7 @@ export default function SyncScreen() {
           ? { id: activeWorkday.id, serverId: activeWorkday.serverId }
           : null,
       );
+      const pendingWorkday = activeWorkday && !activeWorkday.synced ? 1 : 0;
 
       // Cosechadores registrados offline pendientes de subir — farm-wide,
       // no por jornada (ver lib/harvesterSync.ts).
@@ -106,6 +120,7 @@ export default function SyncScreen() {
           pendingHarvesterRows.map((harvester) => harvester.id),
         );
         setPending({
+          workday: pendingWorkday,
           harvesters: pendingHarvesterRows.length,
           roster: rosterRows.filter(
             (row) => !pendingHarvesterIds.has(row.harvesterId),
@@ -129,7 +144,7 @@ export default function SyncScreen() {
   );
 
   async function handleSync() {
-    if (!workday?.serverId) {
+    if (!workday) {
       return;
     }
 
@@ -140,12 +155,34 @@ export default function SyncScreen() {
     try {
       const reasons: string[] = [];
 
-      // Cosechadores nuevos primero — el roster/las entregas de abajo
-      // necesitan que ya tengan su id real antes de subir (ver
-      // lib/harvesterSync.ts).
+      // Orden obligatorio, de afuera hacia adentro: la jornada primero
+      // (roster y entregas mandan su `workdayId` y el server lo valida con
+      // @IsMongoId(), así que necesitan el _id real), después los
+      // cosechadores nuevos (misma razón para `harvesterId`), y recién ahí
+      // el roster y las entregas. Jornada y cosechadores son independientes
+      // entre sí: si una falla, la otra igual sube.
+      const { rejectedReasons: workdayRejections } =
+        await pushPendingWorkdays();
+      reasons.push(...workdayRejections);
+
       const { rejectedReasons: harvesterRejections } =
         await pushPendingHarvesters();
       reasons.push(...harvesterRejections);
+
+      // Releído de la base: pushPendingWorkdays() acaba de escribirle el
+      // serverId. Si sigue sin él (la jornada no pudo subir), roster y
+      // entregas no tienen a qué colgarse — quedan pendientes para el
+      // próximo intento, con el motivo ya listado arriba.
+      const [current] = await db
+        .select({ serverId: workdays.serverId })
+        .from(workdays)
+        .where(eq(workdays.id, workday.id));
+      const workdayServerId = current?.serverId;
+      if (!workdayServerId) {
+        setRejectedReasons(reasons);
+        await load();
+        return;
+      }
 
       const [rosterRows, entryRows, stillPendingHarvesters] =
         await Promise.all([
@@ -188,7 +225,7 @@ export default function SyncScreen() {
       if (syncableRosterRows.length > 0) {
         const { harvesterWorkdayControllerSync } = getHarvesterWorkday();
         const results = await harvesterWorkdayControllerSync({
-          workdayId: workday.serverId,
+          workdayId: workdayServerId,
           entries: syncableRosterRows.map((row) => ({
             clientEntryId: row.id,
             harvesterId: row.harvesterId,
@@ -211,7 +248,7 @@ export default function SyncScreen() {
       if (syncableEntryRows.length > 0) {
         const { harvestEntriesControllerSync } = getHarvestEntries();
         const results = await harvestEntriesControllerSync({
-          workdayId: workday.serverId,
+          workdayId: workdayServerId,
           entries: syncableEntryRows.map((row) => ({
             clientEntryId: row.id,
             harvesterId: row.harvesterId,
@@ -300,6 +337,13 @@ export default function SyncScreen() {
               <Text style={styles.sectionLabel}>
                 {strings.sync.pendingSectionTitle}
               </Text>
+              {pending.workday > 0 ? (
+                <PendingRow
+                  icon="calendar-outline"
+                  label={strings.sync.pendingWorkday}
+                  color={palette.primary}
+                />
+              ) : null}
               {pending.harvesters > 0 ? (
                 <PendingRow
                   icon="account-plus-outline"

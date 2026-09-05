@@ -126,6 +126,76 @@ describe('WorkdaysService', () => {
       expect(result.status).toEqual('OPEN');
     });
 
+    it('keeps the device timestamp when the workday was opened offline and uploaded later', async () => {
+      mockNoExistingClientEntry();
+      fruitsService.findActiveById.mockResolvedValue({
+        _id: fruitId,
+        active: true,
+      });
+      measurementUnitsService.findActiveById.mockResolvedValue({
+        _id: measurementUnitId,
+        active: true,
+      });
+      workdayModel.create.mockResolvedValue({
+        _id: new Types.ObjectId(),
+        farmId: new Types.ObjectId(farmId),
+        date: new Date(dto.date),
+        fruitId: new Types.ObjectId(fruitId),
+        defaultMeasurementUnitId: new Types.ObjectId(measurementUnitId),
+        status: 'OPEN',
+        createdAt: new Date('2026-09-02T08:00:00.000Z'),
+        recorderId: null,
+        clientEntryId: dto.clientEntryId,
+      });
+
+      await workdaysService.create(
+        farmId,
+        { uid: 'u', farmId, roles: ['admin'] },
+        { ...dto, createdAt: '2026-09-02T08:00:00.000Z' },
+      );
+
+      expect(workdayModel.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          createdAt: new Date('2026-09-02T08:00:00.000Z'),
+        }),
+      );
+    });
+
+    it('stamps its own clock when the client does not send createdAt', async () => {
+      mockNoExistingClientEntry();
+      fruitsService.findActiveById.mockResolvedValue({
+        _id: fruitId,
+        active: true,
+      });
+      measurementUnitsService.findActiveById.mockResolvedValue({
+        _id: measurementUnitId,
+        active: true,
+      });
+      workdayModel.create.mockResolvedValue({
+        _id: new Types.ObjectId(),
+        farmId: new Types.ObjectId(farmId),
+        date: new Date(dto.date),
+        fruitId: new Types.ObjectId(fruitId),
+        defaultMeasurementUnitId: new Types.ObjectId(measurementUnitId),
+        status: 'OPEN',
+        createdAt: new Date(),
+        recorderId: null,
+        clientEntryId: dto.clientEntryId,
+      });
+
+      const before = Date.now();
+      await workdaysService.create(
+        farmId,
+        { uid: 'u', farmId, roles: ['admin'] },
+        dto,
+      );
+
+      const passed = workdayModel.create.mock.calls[0][0] as {
+        createdAt: Date;
+      };
+      expect(passed.createdAt.getTime()).toBeGreaterThanOrEqual(before);
+    });
+
     it('leaves recorderId null when opened by an admin (guest mode)', async () => {
       mockNoExistingClientEntry();
       fruitsService.findActiveById.mockResolvedValue({

@@ -1,5 +1,11 @@
-import { ApiProperty } from '@nestjs/swagger';
-import { IsDateString, IsMongoId, IsNotEmpty, IsString } from 'class-validator';
+import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
+import {
+  IsDateString,
+  IsMongoId,
+  IsNotEmpty,
+  IsOptional,
+  IsString,
+} from 'class-validator';
 
 /**
  * Request shape for POST /api/v1/workdays — opens a new workday.
@@ -40,4 +46,13 @@ export class CreateWorkdayRequestDto {
   })
   @IsMongoId()
   defaultMeasurementUnitId!: string;
+
+  @ApiPropertyOptional({
+    description:
+      'When the workday was actually opened on the device (ISO 8601). Only needed when it was opened offline and uploaded later — omitted, the server stamps its own clock, which would date a Monday workday on the Wednesday it finally synced.',
+    example: '2026-09-02T08:00:00.000Z',
+  })
+  @IsOptional()
+  @IsDateString()
+  createdAt?: string;
 }

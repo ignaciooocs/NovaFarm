@@ -101,6 +101,9 @@ export const strings = {
     fruit: 'Fruta',
     measurementUnit: 'Envase / Unidad de medida',
     open: 'Abrir',
+    catalogUnavailableTitle: 'Falta descargar el catálogo',
+    catalogUnavailableHelp:
+      'Este dispositivo todavía no descargó las frutas y unidades de tu farm. Conéctate una vez y vuelve a intentar — después vas a poder abrir jornadas sin señal.',
     closeTitle: 'Cerrar Jornada',
     closeConfirm: 'Al cerrar, los totales del día quedan congelados y ya no se pueden agregar más entregas.',
     close: 'Cerrar Jornada',
@@ -148,6 +151,7 @@ export const strings = {
     synced: 'Todo sincronizado',
     syncedHelp: 'No queda nada pendiente por subir.',
     pendingSectionTitle: 'Pendiente de sincronizar',
+    pendingWorkday: 'La jornada (abierta sin conexión)',
     pendingHarvesters: (n: number) =>
       n === 1 ? '1 cosechador nuevo' : `${n} cosechadores nuevos`,
     pendingRoster: (n: number) =>

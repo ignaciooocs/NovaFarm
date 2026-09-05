@@ -76,7 +76,13 @@ export default function CloseWorkdayScreen() {
 
         setFruitName(fruitRow[0]?.name ?? '');
         setFruitIcon(fruitRow[0]?.icon ?? DEFAULT_FRUIT_ICON);
-        setPendingCount(pendingRoster.length + pendingEntries.length);
+        // La jornada misma cuenta como pendiente si se abrió sin conexión y
+        // todavía no subió: sin esto, handleClose() se topa con su propio
+        // `return` por falta de serverId y el botón no hace nada sin
+        // explicar por qué.
+        setPendingCount(
+          (row.synced ? 0 : 1) + pendingRoster.length + pendingEntries.length,
+        );
         setLocalTotalKg(
           allEntries.reduce((sum, entry) => sum + entry.totalKg, 0),
         );

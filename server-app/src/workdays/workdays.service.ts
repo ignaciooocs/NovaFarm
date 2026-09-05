@@ -84,7 +84,10 @@ export class WorkdaysService {
           dto.defaultMeasurementUnitId,
         ),
         status: 'OPEN',
-        createdAt: new Date(),
+        // Si la jornada se abrió sin conexión y se sube después, el cliente
+        // manda cuándo se abrió de verdad — sin eso quedaría fechada el día
+        // que se sincronizó, no el que se trabajó.
+        createdAt: dto.createdAt ? new Date(dto.createdAt) : new Date(),
         recorderId,
         clientEntryId: dto.clientEntryId,
       });

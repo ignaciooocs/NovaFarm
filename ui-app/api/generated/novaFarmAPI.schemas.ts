@@ -504,6 +504,8 @@ export interface CreateWorkdayRequestDto {
   fruitId: string;
   /** Default measurement unit for entries recorded this workday (must exist and be active in the caller farm catalog) */
   defaultMeasurementUnitId: string;
+  /** When the workday was actually opened on the device (ISO 8601). Only needed when it was opened offline and uploaded later — omitted, the server stamps its own clock, which would date a Monday workday on the Wednesday it finally synced. */
+  createdAt?: string;
 }
 
 /**

@@ -1,5 +1,11 @@
-import { Module } from '@nestjs/common';
+import {
+  MiddlewareConsumer,
+  Module,
+  NestModule,
+  RequestMethod,
+} from '@nestjs/common';
 import { APP_GUARD } from '@nestjs/core';
+import { RequestLoggerMiddleware } from './common/middleware/request-logger.middleware';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { ConfigModule } from '@nestjs/config';
@@ -45,4 +51,17 @@ import { HealthModule } from './health/health.module';
     { provide: APP_GUARD, useClass: ThrottlerGuard },
   ],
 })
-export class AppModule {}
+export class AppModule implements NestModule {
+  configure(consumer: MiddlewareConsumer) {
+    consumer
+      .apply(RequestLoggerMiddleware)
+      // /health lo golpea el healthcheck del PaaS cada pocos segundos: si se
+      // loguea, el ruido tapa las requests reales de la app.
+      .exclude('health')
+      // '{*splat}' y no '*' ni '*splat': con Express 5 (path-to-regexp v8) el
+      // comodín desnudo ya no es una ruta válida y tira al levantar el
+      // server, y '*splat' sin llaves exige al menos un segmento — deja fuera
+      // la raíz ('/api/v1/'), que entonces no aparece en el log.
+      .forRoutes({ path: '{*splat}', method: RequestMethod.ALL });
+  }
+}

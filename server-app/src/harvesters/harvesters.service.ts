@@ -33,7 +33,7 @@ export class HarvestersService {
   ): Promise<HarvesterDto> {
     // firstName+lastName no es una clave de unicidad — dos personas
     // distintas pueden compartir el mismo nombre. Por eso, a diferencia de
-    // fruits, acá no se maneja colisión de duplicados.
+    // products, acá no se maneja colisión de duplicados.
     const created = await this.harvesterModel.create({
       farmId: new Types.ObjectId(farmId),
       firstName: dto.firstName,

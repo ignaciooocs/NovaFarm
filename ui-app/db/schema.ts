@@ -5,13 +5,17 @@ import { integer, real, sqliteTable, text } from 'drizzle-orm/sqlite-core';
 // Los catálogos son caché local de solo lectura, refrescada desde el server
 // cuando hay conexión — nunca se editan localmente.
 
-export const fruits = sqliteTable('fruits', {
-  id: text('id').primaryKey(), // = _id del server
+// Los cultivos que esta farm cosecha. `id` es el `_id` del producto en el
+// server, que es **global** — la misma "Palta" para todas las farms (ver
+// product.schema.ts en server-app). `farmId` no viene de ese producto sino
+// de la sesión: es de qué farm es esta caché, y lo único que usa es la purga
+// cruzada de syncCatalogs() (si el dispositivo se usó antes con otra cuenta).
+export const products = sqliteTable('products', {
+  id: text('id').primaryKey(),
   farmId: text('farm_id').notNull(),
   name: text('name').notNull(),
-  // Emoji elegido por el admin (ver fruits.schema.ts en server-app) —
-  // nullable porque una fila sincronizada antes de que este campo existiera
-  // no tiene por qué backfillearse a mano, se completa solo en el próximo
+  // Nullable porque una fila sincronizada antes de que este campo existiera
+  // no tiene por qué backfillearse a mano, se completa sola en el próximo
   // syncCatalogs(). Las pantallas que lo muestran caen a un emoji genérico.
   icon: text('icon'),
   active: integer('active', { mode: 'boolean' }).notNull().default(true),
@@ -35,11 +39,24 @@ export const harvesters = sqliteTable('harvesters', {
   synced: integer('synced', { mode: 'boolean' }).notNull().default(true),
 });
 
+// `mode` dice cómo se anota una entrega hecha con esta unidad, y es lo que
+// decide qué muestra el Anotador. Antes no existía y se deducía de
+// `kgFactor === 1`, lo que obligaba a inventar unidades falsas ("capacho
+// 1kg") y hacía que harvest_entries.unit_count significara kilos en vez de
+// envases para esas — una vuelta de 22,1 kg quedaba como "22,1 capachos".
+//   COUNT  — envase de peso fijo (tarro 20kg): se cuentan envases con los
+//            botones +1/+2/+5 y los kilos salen de kg_factor.
+//   WEIGHT — envase que se pesa en cada vuelta (capacho): cada anotación es
+//            1 envase y los kilos los pone la romana, sin kg_factor.
+// `kgFactor` es nullable por lo mismo: en WEIGHT no hay factor que guardar.
 export const measurementUnits = sqliteTable('measurement_units', {
   id: text('id').primaryKey(),
   farmId: text('farm_id').notNull(),
   name: text('name').notNull(),
-  kgFactor: real('kg_factor').notNull(),
+  mode: text('mode', { enum: ['COUNT', 'WEIGHT'] })
+    .notNull()
+    .default('COUNT'),
+  kgFactor: real('kg_factor'),
   active: integer('active', { mode: 'boolean' }).notNull().default(true),
 });
 
@@ -56,7 +73,7 @@ export const workdays = sqliteTable('workdays', {
   serverId: text('server_id'),
   farmId: text('farm_id').notNull(),
   date: text('date').notNull(), // fecha ISO
-  fruitId: text('fruit_id').notNull(),
+  productId: text('product_id').notNull(),
   defaultMeasurementUnitId: text('default_measurement_unit_id').notNull(),
   status: text('status', { enum: ['OPEN', 'CLOSED'] })
     .notNull()
@@ -86,6 +103,11 @@ export const harvesterWorkday = sqliteTable('harvester_workday', {
 
 // Cada "Anotar" — el equivalente digital de una raya en el cuaderno. `id`
 // hace de clientEntryId, igual que en harvesterWorkday.
+//
+// `unitCount` son SIEMPRE envases, nunca kilos, sea cual sea el modo de la
+// unidad (ver measurementUnits.mode): en COUNT es cuántos tarros trajo, en
+// WEIGHT es 1 (un capacho pesado), y negativo en ambos casos si es una
+// corrección. Los kilos viven solo en `totalKg`.
 export const harvestEntries = sqliteTable('harvest_entries', {
   id: text('id').primaryKey(),
   workdayId: text('workday_id').notNull(),

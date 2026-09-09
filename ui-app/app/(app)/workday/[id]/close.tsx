@@ -6,11 +6,12 @@ import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
 import { ActivityIndicator, Button, HelperText, Text } from 'react-native-paper';
 import { getWorkdays } from '@/api/generated/workdays/workdays';
 import { Screen } from '@/components/Screen';
-import { DEFAULT_FRUIT_ICON } from '@/constants/fruitIcon';
+import { DEFAULT_PRODUCT_ICON } from '@/constants/productIcon';
 import { strings } from '@/constants/strings';
 import { db } from '@/db/client';
-import { fruits, harvestEntries, harvesterWorkday, workdays } from '@/db/schema';
+import { products, harvestEntries, harvesterWorkday, workdays } from '@/db/schema';
 import { getErrorMessage } from '@/lib/errors';
+import { formatKg } from '@/lib/format';
 import { usePalette } from '@/stores';
 import { colors, spacing } from '@/theme';
 
@@ -26,8 +27,8 @@ export default function CloseWorkdayScreen() {
   const { id: workdayId } = useLocalSearchParams<{ id: string }>();
 
   const [workday, setWorkday] = useState<WorkdayRow | null>(null);
-  const [fruitName, setFruitName] = useState('');
-  const [fruitIcon, setFruitIcon] = useState(DEFAULT_FRUIT_ICON);
+  const [productName, setProductName] = useState('');
+  const [productIcon, setProductIcon] = useState(DEFAULT_PRODUCT_ICON);
   const [pendingCount, setPendingCount] = useState(0);
   const [localTotalKg, setLocalTotalKg] = useState(0);
   const [loading, setLoading] = useState(true);
@@ -47,9 +48,9 @@ export default function CloseWorkdayScreen() {
           return;
         }
 
-        const [fruitRow, pendingRoster, pendingEntries, allEntries] =
+        const [productRow, pendingRoster, pendingEntries, allEntries] =
           await Promise.all([
-            db.select().from(fruits).where(eq(fruits.id, row.fruitId)),
+            db.select().from(products).where(eq(products.id, row.productId)),
             db
               .select()
               .from(harvesterWorkday)
@@ -74,8 +75,8 @@ export default function CloseWorkdayScreen() {
               .where(eq(harvestEntries.workdayId, workdayId)),
           ]);
 
-        setFruitName(fruitRow[0]?.name ?? '');
-        setFruitIcon(fruitRow[0]?.icon ?? DEFAULT_FRUIT_ICON);
+        setProductName(productRow[0]?.name ?? '');
+        setProductIcon(productRow[0]?.icon ?? DEFAULT_PRODUCT_ICON);
         // La jornada misma cuenta como pendiente si se abrió sin conexión y
         // todavía no subió: sin esto, handleClose() se topa con su propio
         // `return` por falta de serverId y el botón no hace nada sin
@@ -134,8 +135,8 @@ export default function CloseWorkdayScreen() {
         <Text>{strings.errors.generic}</Text>
       ) : (
         <>
-          <Text variant="titleLarge" style={styles.fruitName}>
-            {fruitIcon} {fruitName}
+          <Text variant="titleLarge" style={styles.productName}>
+            {productIcon} {productName}
           </Text>
           <Text style={styles.dateText}>
             {new Date(workday.date).toLocaleDateString('es-CL', {
@@ -150,7 +151,7 @@ export default function CloseWorkdayScreen() {
           >
             <Text style={styles.totalLabel}>{strings.workday.totalKg}</Text>
             <Text style={[styles.totalValue, { color: palette.primary }]}>
-              {localTotalKg.toFixed(2)}
+              {formatKg(localTotalKg)}
               <Text style={styles.totalUnit}> {strings.anotador.kg}</Text>
             </Text>
           </View>
@@ -198,7 +199,7 @@ export default function CloseWorkdayScreen() {
 
 const styles = StyleSheet.create({
   loading: { marginTop: spacing.xl },
-  fruitName: { fontWeight: '700' },
+  productName: { fontWeight: '700' },
   dateText: {
     color: colors.textSecondary,
     marginBottom: spacing.lg,

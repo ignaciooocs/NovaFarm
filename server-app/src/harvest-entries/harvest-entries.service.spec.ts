@@ -202,6 +202,7 @@ describe('HarvestEntriesService', () => {
       harvesterWorkdayService.existsInRoster.mockResolvedValue(true);
       measurementUnitsService.findActiveById.mockResolvedValue({
         _id: measurementUnitId,
+        mode: 'COUNT',
         kgFactor: 10,
         active: true,
       });
@@ -229,6 +230,94 @@ describe('HarvestEntriesService', () => {
           _id: createdId.toString(),
         },
       ]);
+    });
+
+    // Modo WEIGHT: un capacho pesado en la romana. La entrega es UN envase
+    // (unitCount 1) y los kilos los pone el cliente, no un factor del
+    // catálogo — es el caso que antes obligaba a inventar "capacho 1kg" y
+    // guardaba 22,1 en unitCount, o sea "22,1 capachos".
+    describe('WEIGHT units', () => {
+      function mockWeightUnitFlow() {
+        workdaysService.findById.mockResolvedValue({ status: 'OPEN' });
+        harvestEntryModel.findOne.mockReturnValue({
+          exec: jest.fn().mockResolvedValue(null),
+        });
+        harvestersService.findActiveById.mockResolvedValue({
+          _id: harvesterId,
+          active: true,
+        });
+        harvesterWorkdayService.existsInRoster.mockResolvedValue(true);
+        measurementUnitsService.findActiveById.mockResolvedValue({
+          _id: measurementUnitId,
+          mode: 'WEIGHT',
+          kgFactor: null,
+          active: true,
+        });
+        harvestEntryModel.create.mockResolvedValue({
+          _id: new Types.ObjectId(),
+        });
+      }
+
+      it('takes totalKg from the weight on the scale, as one container', async () => {
+        mockWeightUnitFlow();
+
+        await harvestEntriesService.sync(farmId, workdayId, [
+          {
+            clientEntryId: 'local-1',
+            harvesterId,
+            measurementUnitId,
+            unitCount: 1,
+            weightKg: 22.1,
+            recordedAt: '2026-09-02T09:15:00.000Z',
+          },
+        ]);
+
+        expect(harvestEntryModel.create).toHaveBeenCalledWith(
+          expect.objectContaining({
+            unitCount: Types.Decimal128.fromString('1'),
+            totalKg: Types.Decimal128.fromString('22.1'),
+          }),
+        );
+      });
+
+      it('takes the sign from unitCount, not from the weight, so a discount subtracts kilos', async () => {
+        mockWeightUnitFlow();
+
+        await harvestEntriesService.sync(farmId, workdayId, [
+          {
+            clientEntryId: 'local-1',
+            harvesterId,
+            measurementUnitId,
+            unitCount: -1,
+            weightKg: 22.1,
+            recordedAt: '2026-09-02T09:15:00.000Z',
+          },
+        ]);
+
+        expect(harvestEntryModel.create).toHaveBeenCalledWith(
+          expect.objectContaining({
+            unitCount: Types.Decimal128.fromString('-1'),
+            totalKg: Types.Decimal128.fromString('-22.1'),
+          }),
+        );
+      });
+
+      it('rejects the entry when weightKg is missing, instead of storing made-up kilos', async () => {
+        mockWeightUnitFlow();
+
+        const result = await harvestEntriesService.sync(farmId, workdayId, [
+          {
+            clientEntryId: 'local-1',
+            harvesterId,
+            measurementUnitId,
+            unitCount: 1,
+            recordedAt: '2026-09-02T09:15:00.000Z',
+          },
+        ]);
+
+        expect(harvestEntryModel.create).not.toHaveBeenCalled();
+        expect(result[0].status).toBe('rejected');
+      });
     });
 
     it('returns already-synced when retried with the same clientEntryId', async () => {

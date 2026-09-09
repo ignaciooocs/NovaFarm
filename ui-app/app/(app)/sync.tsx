@@ -17,6 +17,7 @@ import {
   workdays,
 } from '@/db/schema';
 import { getErrorMessage } from '@/lib/errors';
+import { roundToOneDecimal } from '@/lib/format';
 import { pushPendingHarvesters } from '@/lib/harvesterSync';
 import { pushPendingWorkdays } from '@/lib/workdaySync';
 import { useAuthStore, useConnectivityStore, usePalette } from '@/stores';
@@ -254,6 +255,15 @@ export default function SyncScreen() {
             harvesterId: row.harvesterId,
             measurementUnitId: row.measurementUnitId,
             unitCount: row.unitCount,
+            // Los kilos de un envase pesado: el server los necesita porque
+            // en modo WEIGHT no hay factor con qué calcularlos. Va siempre
+            // la magnitud (el signo lo lleva unitCount) y va también en modo
+            // COUNT, donde el server lo ignora y calcula desde el kgFactor
+            // del catálogo — así esto no depende de mirar la unidad acá.
+            // Redondeado además de la escritura, porque una fila vieja
+            // (anotada antes de que existiera el redondeo) puede traer
+            // 37.049999999999997 y el server rechaza más de un decimal.
+            weightKg: roundToOneDecimal(Math.abs(row.totalKg)),
             recordedAt: row.recordedAt,
           })),
         });

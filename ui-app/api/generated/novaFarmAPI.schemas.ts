@@ -49,7 +49,7 @@ export interface FarmDto {
   active: boolean;
   /** Creation timestamp */
   createdAt: string;
-  /** Whether recorders (not just admins) can view/manage the farm catalog (fruits/harvesters/measurement-units). A single per-farm switch, not per-user permissions. Does not affect the team roster, which stays admin-only regardless. */
+  /** Whether recorders (not just admins) can view/manage the farm catalog (products/harvesters/measurement-units). A single per-farm switch, not per-user permissions. Does not affect the team roster, which stays admin-only regardless. */
   recordersCanManageCatalog: boolean;
 }
 
@@ -213,7 +213,7 @@ export interface CreateFarmResponseDto {
   active: boolean;
   /** Creation timestamp */
   createdAt: string;
-  /** Whether recorders (not just admins) can view/manage the farm catalog (fruits/harvesters/measurement-units). A single per-farm switch, not per-user permissions. Does not affect the team roster, which stays admin-only regardless. */
+  /** Whether recorders (not just admins) can view/manage the farm catalog (products/harvesters/measurement-units). A single per-farm switch, not per-user permissions. Does not affect the team roster, which stays admin-only regardless. */
   recordersCanManageCatalog: boolean;
 }
 
@@ -241,7 +241,7 @@ export interface FindFarmResponseDto {
   active: boolean;
   /** Creation timestamp */
   createdAt: string;
-  /** Whether recorders (not just admins) can view/manage the farm catalog (fruits/harvesters/measurement-units). A single per-farm switch, not per-user permissions. Does not affect the team roster, which stays admin-only regardless. */
+  /** Whether recorders (not just admins) can view/manage the farm catalog (products/harvesters/measurement-units). A single per-farm switch, not per-user permissions. Does not affect the team roster, which stays admin-only regardless. */
   recordersCanManageCatalog: boolean;
 }
 
@@ -274,7 +274,7 @@ export interface UpdateFarmResponseDto {
   active: boolean;
   /** Creation timestamp */
   createdAt: string;
-  /** Whether recorders (not just admins) can view/manage the farm catalog (fruits/harvesters/measurement-units). A single per-farm switch, not per-user permissions. Does not affect the team roster, which stays admin-only regardless. */
+  /** Whether recorders (not just admins) can view/manage the farm catalog (products/harvesters/measurement-units). A single per-farm switch, not per-user permissions. Does not affect the team roster, which stays admin-only regardless. */
   recordersCanManageCatalog: boolean;
 }
 
@@ -385,67 +385,138 @@ export interface UpdateHarvesterResponseDto {
   active: boolean;
 }
 
-export interface CreateFruitRequestDto {
-  /** Display name of the fruit, unique within the farm */
-  name: string;
-  /** Emoji representing the fruit. Omit to fall back to a generic fruit emoji. */
-  icon?: string;
-}
-
-export interface CreateFruitResponseDto {
-  /** Unique identifier of the fruit */
-  _id: string;
-  /** Farm this fruit belongs to (catalogs are scoped per farm) */
-  farmId: string;
-  /** Display name of the fruit, unique within the farm */
-  name: string;
-  /** Emoji representing the fruit, chosen freely by the admin. Falls back to a generic fruit emoji when none was set. */
-  icon: string;
-  /** Whether the fruit is active */
-  active: boolean;
-}
-
-export interface FindFruitResponseDto {
-  /** Unique identifier of the fruit */
-  _id: string;
-  /** Farm this fruit belongs to (catalogs are scoped per farm) */
-  farmId: string;
-  /** Display name of the fruit, unique within the farm */
-  name: string;
-  /** Emoji representing the fruit, chosen freely by the admin. Falls back to a generic fruit emoji when none was set. */
-  icon: string;
-  /** Whether the fruit is active */
-  active: boolean;
-}
-
-export interface UpdateFruitRequestDto {
-  /** New display name for the fruit, unique within the farm */
+export interface CreateProductRequestDto {
+  /** Id of an existing catalog product to add to this farm. When present, name and icon are ignored. */
+  productId?: string;
+  /** Display name for a new community product. Required when productId is absent. */
   name?: string;
-  /** New emoji representing the fruit */
+  /** Emoji for a new community product. Omit to fall back to a generic one. */
   icon?: string;
-  /** Whether the fruit is active */
+}
+
+/**
+ * APP for products the app ships (visible to every farm), COMMUNITY for one a farm created because the catalog did not cover it (visible only to that farm until promoted).
+ */
+export type CreateProductResponseDtoSource = typeof CreateProductResponseDtoSource[keyof typeof CreateProductResponseDtoSource];
+
+
+export const CreateProductResponseDtoSource = {
+  APP: 'APP',
+  COMMUNITY: 'COMMUNITY',
+} as const;
+
+export interface CreateProductResponseDto {
+  /** Unique identifier of the product, shared across every farm */
+  _id: string;
+  /** Display name */
+  name: string;
+  /** Emoji representing the product */
+  icon: string;
+  /** APP for products the app ships (visible to every farm), COMMUNITY for one a farm created because the catalog did not cover it (visible only to that farm until promoted). */
+  source: CreateProductResponseDtoSource;
+  /** Whether this product is offered in onboarding's optional starter step, which shows everything at once in a grid and cannot fit the whole catalog. */
+  featured: boolean;
+  /** Whether this farm still has the product active in its own catalog. Absent when the product is not in the farm catalog yet. */
+  active?: boolean;
+  /** Whether the name and icon can still be changed. Only ever true for a COMMUNITY product this farm created that no workday uses yet — an APP product belongs to the app, and renaming a used one would rewrite what past workdays say was harvested. */
+  editable?: boolean;
+}
+
+/**
+ * APP for products the app ships (visible to every farm), COMMUNITY for one a farm created because the catalog did not cover it (visible only to that farm until promoted).
+ */
+export type FindProductResponseDtoSource = typeof FindProductResponseDtoSource[keyof typeof FindProductResponseDtoSource];
+
+
+export const FindProductResponseDtoSource = {
+  APP: 'APP',
+  COMMUNITY: 'COMMUNITY',
+} as const;
+
+export interface FindProductResponseDto {
+  /** Unique identifier of the product, shared across every farm */
+  _id: string;
+  /** Display name */
+  name: string;
+  /** Emoji representing the product */
+  icon: string;
+  /** APP for products the app ships (visible to every farm), COMMUNITY for one a farm created because the catalog did not cover it (visible only to that farm until promoted). */
+  source: FindProductResponseDtoSource;
+  /** Whether this product is offered in onboarding's optional starter step, which shows everything at once in a grid and cannot fit the whole catalog. */
+  featured: boolean;
+  /** Whether this farm still has the product active in its own catalog. Absent when the product is not in the farm catalog yet. */
+  active?: boolean;
+  /** Whether the name and icon can still be changed. Only ever true for a COMMUNITY product this farm created that no workday uses yet — an APP product belongs to the app, and renaming a used one would rewrite what past workdays say was harvested. */
+  editable?: boolean;
+}
+
+export interface UpdateProductRequestDto {
+  /** New display name */
+  name?: string;
+  /** New emoji */
+  icon?: string;
+  /** Whether this farm keeps the product active in its catalog */
   active?: boolean;
 }
 
-export interface UpdateFruitResponseDto {
-  /** Unique identifier of the fruit */
+/**
+ * APP for products the app ships (visible to every farm), COMMUNITY for one a farm created because the catalog did not cover it (visible only to that farm until promoted).
+ */
+export type UpdateProductResponseDtoSource = typeof UpdateProductResponseDtoSource[keyof typeof UpdateProductResponseDtoSource];
+
+
+export const UpdateProductResponseDtoSource = {
+  APP: 'APP',
+  COMMUNITY: 'COMMUNITY',
+} as const;
+
+export interface UpdateProductResponseDto {
+  /** Unique identifier of the product, shared across every farm */
   _id: string;
-  /** Farm this fruit belongs to (catalogs are scoped per farm) */
-  farmId: string;
-  /** Display name of the fruit, unique within the farm */
+  /** Display name */
   name: string;
-  /** Emoji representing the fruit, chosen freely by the admin. Falls back to a generic fruit emoji when none was set. */
+  /** Emoji representing the product */
   icon: string;
-  /** Whether the fruit is active */
-  active: boolean;
+  /** APP for products the app ships (visible to every farm), COMMUNITY for one a farm created because the catalog did not cover it (visible only to that farm until promoted). */
+  source: UpdateProductResponseDtoSource;
+  /** Whether this product is offered in onboarding's optional starter step, which shows everything at once in a grid and cannot fit the whole catalog. */
+  featured: boolean;
+  /** Whether this farm still has the product active in its own catalog. Absent when the product is not in the farm catalog yet. */
+  active?: boolean;
+  /** Whether the name and icon can still be changed. Only ever true for a COMMUNITY product this farm created that no workday uses yet — an APP product belongs to the app, and renaming a used one would rewrite what past workdays say was harvested. */
+  editable?: boolean;
 }
+
+/**
+ * COUNT for a fixed-weight container (kgFactor required), WEIGHT for one weighed on every round (kgFactor must be omitted)
+ */
+export type CreateMeasurementUnitRequestDtoMode = typeof CreateMeasurementUnitRequestDtoMode[keyof typeof CreateMeasurementUnitRequestDtoMode];
+
+
+export const CreateMeasurementUnitRequestDtoMode = {
+  COUNT: 'COUNT',
+  WEIGHT: 'WEIGHT',
+} as const;
 
 export interface CreateMeasurementUnitRequestDto {
   /** Display name of the unit, unique within the farm */
   name: string;
-  /** Conversion factor to kilos (e.g. a 10kg crate is 10). Use 1 for direct-weighing mode. */
-  kgFactor: number;
+  /** COUNT for a fixed-weight container (kgFactor required), WEIGHT for one weighed on every round (kgFactor must be omitted) */
+  mode: CreateMeasurementUnitRequestDtoMode;
+  /** Conversion factor to kilos (e.g. a 10kg crate is 10). Required in COUNT mode, ignored in WEIGHT mode. Capped at one decimal so every derived totalKg has at most one too. */
+  kgFactor?: number;
 }
+
+/**
+ * How deliveries with this unit are captured. COUNT: fixed-weight container, the recorder counts containers and kilos come from kgFactor. WEIGHT: the container is weighed every round, each entry is one container and the kilos come from the scale.
+ */
+export type CreateMeasurementUnitResponseDtoMode = typeof CreateMeasurementUnitResponseDtoMode[keyof typeof CreateMeasurementUnitResponseDtoMode];
+
+
+export const CreateMeasurementUnitResponseDtoMode = {
+  COUNT: 'COUNT',
+  WEIGHT: 'WEIGHT',
+} as const;
 
 export interface CreateMeasurementUnitResponseDto {
   /** Unique identifier of the measurement unit */
@@ -454,11 +525,27 @@ export interface CreateMeasurementUnitResponseDto {
   farmId: string;
   /** Display name of the unit, unique within the farm */
   name: string;
-  /** Conversion factor to kilos (e.g. a 10kg crate is 10). A factor of 1 represents direct-weighing mode. */
-  kgFactor: number;
+  /** How deliveries with this unit are captured. COUNT: fixed-weight container, the recorder counts containers and kilos come from kgFactor. WEIGHT: the container is weighed every round, each entry is one container and the kilos come from the scale. */
+  mode: CreateMeasurementUnitResponseDtoMode;
+  /**
+     * Conversion factor to kilos (e.g. a 10kg crate is 10). Set only in COUNT mode; null for WEIGHT units.
+     * @nullable
+     */
+  kgFactor?: number | null;
   /** Whether the measurement unit is active */
   active: boolean;
 }
+
+/**
+ * How deliveries with this unit are captured. COUNT: fixed-weight container, the recorder counts containers and kilos come from kgFactor. WEIGHT: the container is weighed every round, each entry is one container and the kilos come from the scale.
+ */
+export type FindMeasurementUnitResponseDtoMode = typeof FindMeasurementUnitResponseDtoMode[keyof typeof FindMeasurementUnitResponseDtoMode];
+
+
+export const FindMeasurementUnitResponseDtoMode = {
+  COUNT: 'COUNT',
+  WEIGHT: 'WEIGHT',
+} as const;
 
 export interface FindMeasurementUnitResponseDto {
   /** Unique identifier of the measurement unit */
@@ -467,20 +554,49 @@ export interface FindMeasurementUnitResponseDto {
   farmId: string;
   /** Display name of the unit, unique within the farm */
   name: string;
-  /** Conversion factor to kilos (e.g. a 10kg crate is 10). A factor of 1 represents direct-weighing mode. */
-  kgFactor: number;
+  /** How deliveries with this unit are captured. COUNT: fixed-weight container, the recorder counts containers and kilos come from kgFactor. WEIGHT: the container is weighed every round, each entry is one container and the kilos come from the scale. */
+  mode: FindMeasurementUnitResponseDtoMode;
+  /**
+     * Conversion factor to kilos (e.g. a 10kg crate is 10). Set only in COUNT mode; null for WEIGHT units.
+     * @nullable
+     */
+  kgFactor?: number | null;
   /** Whether the measurement unit is active */
   active: boolean;
 }
 
+/**
+ * Switch how deliveries are captured. Switching to WEIGHT clears kgFactor; switching to COUNT requires one (either in this same request or already stored).
+ */
+export type UpdateMeasurementUnitRequestDtoMode = typeof UpdateMeasurementUnitRequestDtoMode[keyof typeof UpdateMeasurementUnitRequestDtoMode];
+
+
+export const UpdateMeasurementUnitRequestDtoMode = {
+  COUNT: 'COUNT',
+  WEIGHT: 'WEIGHT',
+} as const;
+
 export interface UpdateMeasurementUnitRequestDto {
   /** New display name for the unit, unique within the farm */
   name?: string;
-  /** Conversion factor to kilos (e.g. a 10kg crate is 10). Use 1 for direct-weighing mode. */
+  /** Switch how deliveries are captured. Switching to WEIGHT clears kgFactor; switching to COUNT requires one (either in this same request or already stored). */
+  mode?: UpdateMeasurementUnitRequestDtoMode;
+  /** Conversion factor to kilos (e.g. a 10kg crate is 10). Only meaningful for COUNT units. Capped at one decimal so every derived totalKg has at most one too. */
   kgFactor?: number;
   /** Whether the measurement unit is active */
   active?: boolean;
 }
+
+/**
+ * How deliveries with this unit are captured. COUNT: fixed-weight container, the recorder counts containers and kilos come from kgFactor. WEIGHT: the container is weighed every round, each entry is one container and the kilos come from the scale.
+ */
+export type UpdateMeasurementUnitResponseDtoMode = typeof UpdateMeasurementUnitResponseDtoMode[keyof typeof UpdateMeasurementUnitResponseDtoMode];
+
+
+export const UpdateMeasurementUnitResponseDtoMode = {
+  COUNT: 'COUNT',
+  WEIGHT: 'WEIGHT',
+} as const;
 
 export interface UpdateMeasurementUnitResponseDto {
   /** Unique identifier of the measurement unit */
@@ -489,8 +605,13 @@ export interface UpdateMeasurementUnitResponseDto {
   farmId: string;
   /** Display name of the unit, unique within the farm */
   name: string;
-  /** Conversion factor to kilos (e.g. a 10kg crate is 10). A factor of 1 represents direct-weighing mode. */
-  kgFactor: number;
+  /** How deliveries with this unit are captured. COUNT: fixed-weight container, the recorder counts containers and kilos come from kgFactor. WEIGHT: the container is weighed every round, each entry is one container and the kilos come from the scale. */
+  mode: UpdateMeasurementUnitResponseDtoMode;
+  /**
+     * Conversion factor to kilos (e.g. a 10kg crate is 10). Set only in COUNT mode; null for WEIGHT units.
+     * @nullable
+     */
+  kgFactor?: number | null;
   /** Whether the measurement unit is active */
   active: boolean;
 }
@@ -500,8 +621,8 @@ export interface CreateWorkdayRequestDto {
   clientEntryId: string;
   /** Date this workday covers (ISO 8601) */
   date: string;
-  /** Fruit being harvested this workday (must exist and be active in the caller farm catalog) */
-  fruitId: string;
+  /** Product being harvested this workday (must exist and be active in the caller farm catalog) */
+  productId: string;
   /** Default measurement unit for entries recorded this workday (must exist and be active in the caller farm catalog) */
   defaultMeasurementUnitId: string;
   /** When the workday was actually opened on the device (ISO 8601). Only needed when it was opened offline and uploaded later — omitted, the server stamps its own clock, which would date a Monday workday on the Wednesday it finally synced. */
@@ -526,8 +647,8 @@ export interface CreateWorkdayResponseDto {
   farmId: string;
   /** Date this workday covers (ISO 8601) */
   date: string;
-  /** Fruit being harvested this workday */
-  fruitId: string;
+  /** Product being harvested this workday */
+  productId: string;
   /** Default measurement unit for entries recorded this workday */
   defaultMeasurementUnitId: string;
   /** Lifecycle status of the workday */
@@ -565,8 +686,8 @@ export interface FindWorkdayResponseDto {
   farmId: string;
   /** Date this workday covers (ISO 8601) */
   date: string;
-  /** Fruit being harvested this workday */
-  fruitId: string;
+  /** Product being harvested this workday */
+  productId: string;
   /** Default measurement unit for entries recorded this workday */
   defaultMeasurementUnitId: string;
   /** Lifecycle status of the workday */
@@ -604,8 +725,8 @@ export interface CloseWorkdayResponseDto {
   farmId: string;
   /** Date this workday covers (ISO 8601) */
   date: string;
-  /** Fruit being harvested this workday */
-  fruitId: string;
+  /** Product being harvested this workday */
+  productId: string;
   /** Default measurement unit for entries recorded this workday */
   defaultMeasurementUnitId: string;
   /** Lifecycle status of the workday */
@@ -690,8 +811,10 @@ export interface SyncHarvestEntryEntryDto {
   harvesterId: string;
   /** Measurement unit used for this entry (must exist and be active in the caller farm catalog) */
   measurementUnitId: string;
-  /** Number of units delivered (or the raw kilo weight, in direct-weighing mode). Negative values are corrections (RF-02.3, e.g. the -1 button undoing a mis-tap) — never zero. */
+  /** How many containers this delivery is — always a whole number of containers, never kilos. In WEIGHT mode a delivery is one weighed container, so this is 1. Negative values are corrections (RF-02.3, e.g. the -1 button undoing a mis-tap) — never zero. */
   unitCount: number;
+  /** Weight read off the scale for this delivery, in kilos, at most one decimal. Required for WEIGHT units; ignored for COUNT ones, which get their kilos from the unit kgFactor instead. Always positive: the sign of the entry comes from unitCount. */
+  weightKg?: number;
   /** When the delivery actually happened on-device (ISO 8601), not when it is synced */
   recordedAt: string;
 }
@@ -737,9 +860,9 @@ export interface FindHarvestEntryResponseDto {
   harvesterId: string;
   /** Measurement unit used for this specific entry */
   measurementUnitId: string;
-  /** Number of units delivered (or the raw kilo weight, in direct-weighing mode) */
+  /** How many containers this delivery was — always a whole number of containers, never kilos (1 for a single weighed container, negative for a correction) */
   unitCount: number;
-  /** Total kilos, computed server-side as unitCount x measurementUnit.kgFactor */
+  /** Total kilos, always resolved server-side: unitCount x measurementUnit.kgFactor for a COUNT unit, or the weight read off the scale for a WEIGHT one */
   totalKg: number;
   /** Client-generated id (the originating SQLite row id) used to make offline-sync retries idempotent */
   clientEntryId: string;
@@ -763,11 +886,11 @@ export type HarvestersControllerFindAllParams = {
 active?: boolean;
 };
 
-export type FruitsControllerFindAllParams = {
+export type ProductsControllerFindAllParams = {
 /**
- * Filter by active status
+ * Filter by whether the farm keeps the product active
  */
-active?: boolean;
+active?: string;
 };
 
 export type MeasurementUnitsControllerFindAllParams = {

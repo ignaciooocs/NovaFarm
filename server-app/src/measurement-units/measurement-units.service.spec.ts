@@ -1,4 +1,4 @@
-import { ConflictException } from '@nestjs/common';
+import { BadRequestException, ConflictException } from '@nestjs/common';
 import { getModelToken } from '@nestjs/mongoose';
 import { Test, TestingModule } from '@nestjs/testing';
 import { Types } from 'mongoose';
@@ -40,18 +40,21 @@ describe('MeasurementUnitsService', () => {
         _id: createdId,
         farmId: new Types.ObjectId(farmId),
         name: 'Crate 10kg',
+        mode: 'COUNT',
         kgFactor: Types.Decimal128.fromString('10'),
         active: true,
       });
 
       const result = await measurementUnitsService.create(farmId, {
         name: 'Crate 10kg',
+        mode: 'COUNT',
         kgFactor: 10,
       });
 
       expect(measurementUnitModel.create).toHaveBeenCalledWith({
         farmId: new Types.ObjectId(farmId),
         name: 'Crate 10kg',
+        mode: 'COUNT',
         kgFactor: Types.Decimal128.fromString('10'),
         active: true,
       });
@@ -59,9 +62,49 @@ describe('MeasurementUnitsService', () => {
         _id: createdId.toString(),
         farmId,
         name: 'Crate 10kg',
+        mode: 'COUNT',
         kgFactor: 10,
         active: true,
       });
+    });
+
+    it('stores no kgFactor for a WEIGHT unit — its kilos come off the scale on every entry', async () => {
+      const createdId = new Types.ObjectId();
+      measurementUnitModel.create.mockResolvedValue({
+        _id: createdId,
+        farmId: new Types.ObjectId(farmId),
+        name: 'Capacho',
+        mode: 'WEIGHT',
+        kgFactor: null,
+        active: true,
+      });
+
+      const result = await measurementUnitsService.create(farmId, {
+        name: 'Capacho',
+        mode: 'WEIGHT',
+        // Aunque el cliente mande un factor, en WEIGHT no significa nada.
+        kgFactor: 1,
+      });
+
+      expect(measurementUnitModel.create).toHaveBeenCalledWith({
+        farmId: new Types.ObjectId(farmId),
+        name: 'Capacho',
+        mode: 'WEIGHT',
+        kgFactor: null,
+        active: true,
+      });
+      expect(result.kgFactor).toBeNull();
+      expect(result.mode).toBe('WEIGHT');
+    });
+
+    it('throws BadRequestException for a COUNT unit with no kgFactor', async () => {
+      await expect(
+        measurementUnitsService.create(farmId, {
+          name: 'Crate',
+          mode: 'COUNT',
+        }),
+      ).rejects.toBeInstanceOf(BadRequestException);
+      expect(measurementUnitModel.create).not.toHaveBeenCalled();
     });
 
     it('throws ConflictException when the name is already taken for the farm', async () => {
@@ -73,6 +116,7 @@ describe('MeasurementUnitsService', () => {
       await expect(
         measurementUnitsService.create(farmId, {
           name: 'Crate 10kg',
+          mode: 'COUNT',
           kgFactor: 10,
         }),
       ).rejects.toBeInstanceOf(ConflictException);
@@ -86,6 +130,7 @@ describe('MeasurementUnitsService', () => {
           _id: new Types.ObjectId(),
           farmId: new Types.ObjectId(farmId),
           name: 'Crate 10kg',
+          mode: 'COUNT',
           kgFactor: Types.Decimal128.fromString('10'),
           active: true,
         },
@@ -103,6 +148,7 @@ describe('MeasurementUnitsService', () => {
           _id: docs[0]._id.toString(),
           farmId,
           name: 'Crate 10kg',
+          mode: 'COUNT',
           kgFactor: 10,
           active: true,
         },
@@ -129,6 +175,7 @@ describe('MeasurementUnitsService', () => {
         _id: unitId,
         farmId: new Types.ObjectId(farmId),
         name: 'Crate 10kg',
+        mode: 'COUNT',
         kgFactor: Types.Decimal128.fromString('10'),
         active: true,
       };
@@ -149,6 +196,7 @@ describe('MeasurementUnitsService', () => {
         _id: unitId.toString(),
         farmId,
         name: 'Crate 10kg',
+        mode: 'COUNT',
         kgFactor: 10,
         active: true,
       });
@@ -181,10 +229,23 @@ describe('MeasurementUnitsService', () => {
     const unitId = new Types.ObjectId();
 
     it('edits name and kgFactor scoped to the caller farm, converting kgFactor to Decimal128', async () => {
+      // Tocar kgFactor hace que update() lea primero la unidad (findAnyById)
+      // para saber en qué modo está antes de decidir qué guardar.
+      measurementUnitModel.findOne.mockReturnValue({
+        exec: jest.fn().mockResolvedValue({
+          _id: unitId,
+          farmId: new Types.ObjectId(farmId),
+          name: 'Crate 10kg',
+          mode: 'COUNT',
+          kgFactor: Types.Decimal128.fromString('10'),
+          active: true,
+        }),
+      });
       const exec = jest.fn().mockResolvedValue({
         _id: unitId,
         farmId: new Types.ObjectId(farmId),
         name: 'Crate 12kg',
+        mode: 'COUNT',
         kgFactor: Types.Decimal128.fromString('12'),
         active: true,
       });
@@ -201,6 +262,7 @@ describe('MeasurementUnitsService', () => {
         {
           $set: {
             name: 'Crate 12kg',
+            mode: 'COUNT',
             kgFactor: Types.Decimal128.fromString('12'),
           },
         },
@@ -215,6 +277,7 @@ describe('MeasurementUnitsService', () => {
           _id: unitId,
           farmId: new Types.ObjectId(farmId),
           name: 'Crate 10kg',
+          mode: 'COUNT',
           kgFactor: Types.Decimal128.fromString('10'),
           active: false,
         }),
@@ -237,6 +300,7 @@ describe('MeasurementUnitsService', () => {
           _id: unitId,
           farmId: new Types.ObjectId(farmId),
           name: 'Crate 10kg',
+          mode: 'COUNT',
           kgFactor: Types.Decimal128.fromString('10'),
           active: true,
         }),
@@ -287,6 +351,104 @@ describe('MeasurementUnitsService', () => {
 
       expect(measurementUnitModel.findOneAndUpdate).not.toHaveBeenCalled();
       expect(result).toBeNull();
+    });
+
+    it('clears kgFactor when switching a unit to WEIGHT', async () => {
+      measurementUnitModel.findOne.mockReturnValue({
+        exec: jest.fn().mockResolvedValue({
+          _id: unitId,
+          farmId: new Types.ObjectId(farmId),
+          name: 'Capacho',
+          mode: 'COUNT',
+          kgFactor: Types.Decimal128.fromString('10'),
+          active: true,
+        }),
+      });
+      measurementUnitModel.findOneAndUpdate.mockReturnValue({
+        exec: jest.fn().mockResolvedValue({
+          _id: unitId,
+          farmId: new Types.ObjectId(farmId),
+          name: 'Capacho',
+          mode: 'WEIGHT',
+          kgFactor: null,
+          active: true,
+        }),
+      });
+
+      const result = await measurementUnitsService.update(
+        farmId,
+        unitId.toString(),
+        { mode: 'WEIGHT' },
+      );
+
+      expect(measurementUnitModel.findOneAndUpdate).toHaveBeenCalledWith(
+        { _id: unitId.toString(), farmId: new Types.ObjectId(farmId) },
+        { $set: { mode: 'WEIGHT', kgFactor: null } },
+        { new: true },
+      );
+      expect(result?.kgFactor).toBeNull();
+    });
+
+    it('throws BadRequestException when switching to COUNT with no kgFactor anywhere', async () => {
+      measurementUnitModel.findOne.mockReturnValue({
+        exec: jest.fn().mockResolvedValue({
+          _id: unitId,
+          farmId: new Types.ObjectId(farmId),
+          name: 'Capacho',
+          mode: 'WEIGHT',
+          kgFactor: null,
+          active: true,
+        }),
+      });
+
+      await expect(
+        measurementUnitsService.update(farmId, unitId.toString(), {
+          mode: 'COUNT',
+        }),
+      ).rejects.toBeInstanceOf(BadRequestException);
+      expect(measurementUnitModel.findOneAndUpdate).not.toHaveBeenCalled();
+    });
+  });
+
+  // Unidades guardadas antes de que `mode` existiera: no traen el campo, y
+  // toDto() lo deduce del sentinel que usaba la app en ese entonces. Sin
+  // esto, un "capacho 1kg" ya creado se leería como COUNT y el Anotador le
+  // mostraría los botones +1/+2/+5 en vez de pedir el peso.
+  describe('units stored before `mode` existed', () => {
+    function mockLegacyUnit(kgFactor: string) {
+      measurementUnitModel.findOne.mockReturnValue({
+        exec: jest.fn().mockResolvedValue({
+          _id: new Types.ObjectId(),
+          farmId: new Types.ObjectId(farmId),
+          name: 'Legacy',
+          kgFactor: Types.Decimal128.fromString(kgFactor),
+          active: true,
+        }),
+      });
+    }
+
+    it('reads a kgFactor of 1 as WEIGHT, with no factor left over', async () => {
+      mockLegacyUnit('1');
+
+      const result = await measurementUnitsService.findActiveById(
+        farmId,
+        new Types.ObjectId().toString(),
+      );
+
+      expect(result?.mode).toBe('WEIGHT');
+      expect(result?.kgFactor).toBeNull();
+    });
+
+    it('reads any other kgFactor as COUNT, keeping the factor', async () => {
+      mockLegacyUnit('10');
+
+      const result = await measurementUnitsService.findActiveById(
+        farmId,
+        new Types.ObjectId().toString(),
+      );
+
+      expect(result?.mode).toBe('COUNT');
+      expect(result?.kgFactor).toBe(10);
     });
   });
 });

@@ -19,6 +19,7 @@ import {
   Text,
   TextInput,
 } from 'react-native-paper';
+import { KeyboardAwareDialog } from '@/components/KeyboardAwareDialog';
 import { Screen } from '@/components/Screen';
 import { strings } from '@/constants/strings';
 import { db } from '@/db/client';
@@ -30,6 +31,12 @@ import {
   workdays,
 } from '@/db/schema';
 import { getErrorMessage } from '@/lib/errors';
+import {
+  formatKg,
+  parseDecimalInput,
+  roundToOneDecimal,
+  sanitizeDecimalInput,
+} from '@/lib/format';
 import { generateLocalId } from '@/lib/id';
 import { usePalette } from '@/stores';
 import { spacing, TOUCH_TARGET_MIN } from '@/theme';
@@ -56,9 +63,9 @@ interface RoundEntry {
 
 // Roster + registro real (RF-02): tocar +1/+2/+5/-1 escribe local al tiro
 // (RNF-01, sin esperar la base ni la red — el estado se actualiza primero,
-// la escritura a SQLite corre atrás). Si la unidad por defecto de la
-// jornada tiene kgFactor = 1 (modo pesaje directo, RF-03.2), en vez de los
-// botones se pide el peso exacto por diálogo. El botón (!) por cosechador
+// la escritura a SQLite corre atrás). Si la unidad por defecto de la jornada
+// es de modo WEIGHT (RF-03.2, un capacho que se pesa en cada vuelta), en vez
+// de los botones se pide el peso por diálogo. El botón (!) por cosechador
 // abre el detalle de cada vuelta anotada (entriesByHarvester ya trae todo
 // lo necesario desde load(), sin pedir de nuevo a la base al tocarlo).
 export default function AnotadorScreen() {
@@ -80,7 +87,8 @@ export default function AnotadorScreen() {
   const [defaultUnit, setDefaultUnit] = useState<{
     id: string;
     name: string;
-    kgFactor: number;
+    mode: 'COUNT' | 'WEIGHT';
+    kgFactor: number | null;
   } | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -133,7 +141,14 @@ export default function AnotadorScreen() {
         (candidate) => candidate.id === workdayRow.defaultMeasurementUnitId,
       );
       setDefaultUnit(
-        unit ? { id: unit.id, name: unit.name, kgFactor: unit.kgFactor } : null,
+        unit
+          ? {
+              id: unit.id,
+              name: unit.name,
+              mode: unit.mode,
+              kgFactor: unit.kgFactor,
+            }
+          : null,
       );
 
       const byId: Record<string, LocalHarvester> = {};
@@ -193,11 +208,25 @@ export default function AnotadorScreen() {
     }, [load]),
   );
 
-  function recordDelivery(harvesterId: string, unitCount: number) {
+  // `unitCount` son envases y solo envases (±1, +2, +5), nunca kilos: en
+  // modo WEIGHT siempre es ±1 y los kilos van aparte en `weightKg`, que es
+  // lo que marcó la romana para ese envase. Antes de que la unidad
+  // declarara su modo, una anotación de pesaje metía los kilos acá y la
+  // pantalla terminaba diciendo "22,1 envases".
+  function recordDelivery(
+    harvesterId: string,
+    unitCount: number,
+    weightKg?: number,
+  ) {
     if (!defaultUnit) {
       return;
     }
-    const totalKgDelta = unitCount * defaultUnit.kgFactor;
+    const kgPerContainer =
+      defaultUnit.mode === 'WEIGHT' ? weightKg : defaultUnit.kgFactor;
+    if (kgPerContainer === undefined || kgPerContainer === null) {
+      return;
+    }
+    const totalKgDelta = roundToOneDecimal(unitCount * kgPerContainer);
     const entryId = generateLocalId();
     const recordedAt = new Date().toISOString();
 
@@ -269,15 +298,16 @@ export default function AnotadorScreen() {
   }
 
   function submitWeight() {
-    const magnitude = Number(weightInput.replace(',', '.'));
+    const magnitude = parseDecimalInput(weightInput);
     if (!weightDialogHarvesterId || !magnitude || magnitude <= 0) {
       return;
     }
-    // Server ya acepta unitCount negativo (RF-02.3, mismo mecanismo que el
-    // -1 de modo contenedores) — acá solo se decide el signo según el
-    // toggle, la magnitud tipeada siempre es positiva.
-    const value = weightMode === 'discount' ? -magnitude : magnitude;
-    recordDelivery(weightDialogHarvesterId, value);
+    // La entrega es UN envase (el capacho que se acaba de pesar); el toggle
+    // solo decide el signo, que es el mismo mecanismo del -1 de modo
+    // contenedores (RF-02.3). El peso tipeado siempre es una magnitud
+    // positiva — el decimal-pad no trae tecla de menos.
+    const containers = weightMode === 'discount' ? -1 : 1;
+    recordDelivery(weightDialogHarvesterId, containers, magnitude);
     setWeightDialogHarvesterId(null);
   }
 
@@ -285,7 +315,7 @@ export default function AnotadorScreen() {
     (sum, entry) => sum + entry.totalKg,
     0,
   );
-  const isDirectWeighing = defaultUnit?.kgFactor === 1;
+  const isDirectWeighing = defaultUnit?.mode === 'WEIGHT';
   const infoHarvester = infoHarvesterId
     ? harvestersById[infoHarvesterId]
     : null;
@@ -316,7 +346,7 @@ export default function AnotadorScreen() {
         <Text style={styles.summaryLabel}>{strings.anotador.grandTotal}</Text>
         <View style={styles.summaryRow}>
           <Text style={styles.summaryValue}>
-            {grandTotalKg.toFixed(2)}
+            {formatKg(grandTotalKg)}
             <Text style={styles.summaryUnit}> {strings.anotador.kg}</Text>
           </Text>
           <Text style={styles.summaryMeta}>
@@ -373,8 +403,8 @@ export default function AnotadorScreen() {
                 <View style={styles.rowHeaderText}>
                   <Text variant="titleMedium">{name}</Text>
                   <Text variant="bodyMedium" style={styles.rowSubtitle}>
-                    {totals.unitCount} {strings.anotador.units} ·{' '}
-                    {totals.totalKg.toFixed(2)} {strings.anotador.kg}
+                    {strings.anotador.containers(totals.unitCount)} ·{' '}
+                    {formatKg(totals.totalKg)} {strings.anotador.kg}
                   </Text>
                 </View>
                 <IconButton
@@ -442,7 +472,10 @@ export default function AnotadorScreen() {
       />
 
       <Portal>
-        <Dialog
+        {/* KeyboardAwareDialog: tiene el campo de peso adentro y en iOS el
+            teclado tapaba media tarjeta. El de vueltas de más abajo no lo
+            necesita, ahí nunca sube el teclado. */}
+        <KeyboardAwareDialog
           visible={weightDialogHarvesterId !== null}
           onDismiss={() => setWeightDialogHarvesterId(null)}
         >
@@ -475,10 +508,16 @@ export default function AnotadorScreen() {
             <TextInput
               label={strings.anotador.weightLabel}
               value={weightInput}
-              onChangeText={setWeightInput}
+              // Enmascara mientras se tipea en vez de redondear al guardar:
+              // así el 3 de "20,23" simplemente no aparece, y nadie se lleva
+              // la sorpresa de haber anotado algo distinto a lo que escribió.
+              // Acepta coma o punto porque el decimal-pad de Android muestra
+              // uno u otro según el idioma del teléfono.
+              onChangeText={(text) => setWeightInput(sanitizeDecimalInput(text))}
               keyboardType="decimal-pad"
               autoFocus
             />
+            <HelperText type="info">{strings.anotador.weightHelp}</HelperText>
           </Dialog.Content>
           <Dialog.Actions>
             <Button onPress={() => setWeightDialogHarvesterId(null)}>
@@ -486,7 +525,7 @@ export default function AnotadorScreen() {
             </Button>
             <Button onPress={submitWeight}>{strings.common.save}</Button>
           </Dialog.Actions>
-        </Dialog>
+        </KeyboardAwareDialog>
 
         <Dialog
           visible={infoHarvesterId !== null}
@@ -510,8 +549,8 @@ export default function AnotadorScreen() {
                       {strings.anotador.round(round.roundNumber)}
                     </Text>
                     <Text>
-                      {round.unitCount} {strings.anotador.units} ·{' '}
-                      {round.totalKg.toFixed(2)} {strings.anotador.kg}
+                      {strings.anotador.containers(round.unitCount)} ·{' '}
+                      {formatKg(round.totalKg)} {strings.anotador.kg}
                     </Text>
                     <Text variant="bodySmall" style={styles.roundTime}>
                       {new Date(round.recordedAt).toLocaleTimeString('es-CL', {

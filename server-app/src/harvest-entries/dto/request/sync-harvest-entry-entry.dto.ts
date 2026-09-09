@@ -1,11 +1,14 @@
-import { ApiProperty } from '@nestjs/swagger';
+import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import {
   IsDateString,
+  IsInt,
   IsMongoId,
   IsNotEmpty,
   IsNumber,
+  IsPositive,
   IsString,
   NotEquals,
+  ValidateIf,
 } from 'class-validator';
 
 /**
@@ -39,12 +42,28 @@ export class SyncHarvestEntryEntryDto {
 
   @ApiProperty({
     description:
-      'Number of units delivered (or the raw kilo weight, in direct-weighing mode). Negative values are corrections (RF-02.3, e.g. the -1 button undoing a mis-tap) — never zero.',
+      'How many containers this delivery is — always a whole number of containers, never kilos. In WEIGHT mode a delivery is one weighed container, so this is 1. Negative values are corrections (RF-02.3, e.g. the -1 button undoing a mis-tap) — never zero.',
     example: 3,
   })
-  @IsNumber()
+  // Entero desde que el modo de la unidad es explícito: `unitCount` son
+  // envases y nada más. Antes una anotación en pesaje directo lo usaba para
+  // meter los kilos (22.1), y por eso tenía que aceptar decimales.
+  @IsInt()
   @NotEquals(0)
   unitCount!: number;
+
+  @ApiPropertyOptional({
+    description:
+      'Weight read off the scale for this delivery, in kilos, at most one decimal. Required for WEIGHT units; ignored for COUNT ones, which get their kilos from the unit kgFactor instead. Always positive: the sign of the entry comes from unitCount.',
+    example: 22.1,
+  })
+  // Solo se valida cuando viene: si la unidad es WEIGHT y falta, el service
+  // rechaza esa entrada del batch con su razón (no un 400 que voltee todo
+  // el batch, ver sync()).
+  @ValidateIf((dto: SyncHarvestEntryEntryDto) => dto.weightKg !== undefined)
+  @IsNumber({ maxDecimalPlaces: 1 })
+  @IsPositive()
+  weightKg?: number;
 
   @ApiProperty({
     description:

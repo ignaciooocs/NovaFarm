@@ -11,11 +11,11 @@ import {
 } from 'react-native-paper';
 import { getWorkdays } from '@/api/generated/workdays/workdays';
 import { Screen } from '@/components/Screen';
-import { DEFAULT_FRUIT_ICON } from '@/constants/fruitIcon';
+import { DEFAULT_PRODUCT_ICON } from '@/constants/productIcon';
 import { strings } from '@/constants/strings';
 import { db } from '@/db/client';
 import {
-  fruits,
+  products,
   harvesters as harvestersTable,
   harvestEntries,
   harvesterWorkday,
@@ -23,6 +23,7 @@ import {
 } from '@/db/schema';
 import { syncCatalogs } from '@/lib/catalogSync';
 import { syncFarmSettings } from '@/lib/farmSettings';
+import { formatKg } from '@/lib/format';
 import { useCapabilities } from '@/lib/permissions';
 import { getActiveWorkdayWithRecovery } from '@/lib/recoverActiveWorkday';
 import { useActiveWorkdayStore, useAuthStore, usePalette } from '@/stores';
@@ -37,8 +38,8 @@ interface RosterPreviewRow {
 
 interface ActiveWorkdayPreview {
   id: string;
-  fruitName: string;
-  fruitIcon: string;
+  productName: string;
+  productIcon: string;
   date: string;
   grandTotalKg: number;
   pendingCount: number;
@@ -48,8 +49,8 @@ interface ActiveWorkdayPreview {
 interface ActiveTeammateRow {
   workdayServerId: string;
   recorderName: string;
-  fruitName: string;
-  fruitIcon: string;
+  productName: string;
+  productIcon: string;
 }
 
 const ROSTER_PREVIEW_LIMIT = 5;
@@ -62,10 +63,10 @@ const TEAMMATES_PREVIEW_LIMIT = 5;
 async function loadActiveWorkdayPreview(
   workdayId: string,
 ): Promise<ActiveWorkdayPreview> {
-  const [workdayRows, fruitRows, harvestersRows, rosterRows, entryRows] =
+  const [workdayRows, productRows, harvestersRows, rosterRows, entryRows] =
     await Promise.all([
       db.select().from(workdays).where(eq(workdays.id, workdayId)),
-      db.select().from(fruits),
+      db.select().from(products),
       db.select().from(harvestersTable),
       db
         .select()
@@ -78,11 +79,11 @@ async function loadActiveWorkdayPreview(
     ]);
   const workdayRow = workdayRows[0];
 
-  const fruitsById: Record<string, { name: string; icon: string }> = {};
-  fruitRows.forEach((fruit) => {
-    fruitsById[fruit.id] = {
-      name: fruit.name,
-      icon: fruit.icon ?? DEFAULT_FRUIT_ICON,
+  const productsById: Record<string, { name: string; icon: string }> = {};
+  productRows.forEach((product) => {
+    productsById[product.id] = {
+      name: product.name,
+      icon: product.icon ?? DEFAULT_PRODUCT_ICON,
     };
   });
   const harvesterNamesById: Record<string, string> = {};
@@ -121,12 +122,12 @@ async function loadActiveWorkdayPreview(
     }))
     .sort((a, b) => a.workdayNumber - b.workdayNumber);
 
-  const fruit = workdayRow ? fruitsById[workdayRow.fruitId] : undefined;
+  const product = workdayRow ? productsById[workdayRow.productId] : undefined;
 
   return {
     id: workdayId,
-    fruitName: fruit?.name ?? '',
-    fruitIcon: fruit?.icon ?? DEFAULT_FRUIT_ICON,
+    productName: product?.name ?? '',
+    productIcon: product?.icon ?? DEFAULT_PRODUCT_ICON,
     date: workdayRow?.date ?? '',
     grandTotalKg,
     pendingCount,
@@ -152,23 +153,23 @@ async function loadActiveTeammates(
     // Espera el mismo syncCatalogs() que Home ya dispara al entrar en foco
     // (dedupeado por su propio guard `inFlight`, así que esto no dispara un
     // segundo fetch) — sin esto, esta función podía leer la caché local de
-    // fruits *antes* de que el sync la terminara de escribir, mostrando el
+    // products *antes* de que el sync la terminara de escribir, mostrando el
     // fallback genérico (🍎 + el _id crudo como "nombre") para una fruta de
     // un compañero que este dispositivo todavía no había sincronizado (bug
     // real, encontrado en dispositivo: se veía bien recién la segunda vez
     // que se visitaba Home, una vez que el sync ya había terminado).
     await syncCatalogs();
     const { workdaysControllerFindAll } = getWorkdays();
-    const [openWorkdays, fruitRows] = await Promise.all([
+    const [openWorkdays, productRows] = await Promise.all([
       workdaysControllerFindAll({ status: 'OPEN' }),
-      db.select().from(fruits),
+      db.select().from(products),
     ]);
 
-    const fruitsById: Record<string, { name: string; icon: string }> = {};
-    fruitRows.forEach((fruit) => {
-      fruitsById[fruit.id] = {
-        name: fruit.name,
-        icon: fruit.icon ?? DEFAULT_FRUIT_ICON,
+    const productsById: Record<string, { name: string; icon: string }> = {};
+    productRows.forEach((product) => {
+      productsById[product.id] = {
+        name: product.name,
+        icon: product.icon ?? DEFAULT_PRODUCT_ICON,
       };
     });
 
@@ -180,12 +181,12 @@ async function loadActiveTeammates(
           workday.recorderName,
       )
       .map((workday) => {
-        const fruit = fruitsById[workday.fruitId];
+        const product = productsById[workday.productId];
         return {
           workdayServerId: workday._id,
           recorderName: workday.recorderName!,
-          fruitName: fruit?.name ?? workday.fruitId,
-          fruitIcon: fruit?.icon ?? DEFAULT_FRUIT_ICON,
+          productName: product?.name ?? workday.productId,
+          productIcon: product?.icon ?? DEFAULT_PRODUCT_ICON,
         };
       });
   } catch {
@@ -279,8 +280,8 @@ export default function HomeScreen() {
             {preview ? (
               <View>
                 <Text style={styles.eyebrow}>{strings.home.activeWorkday}</Text>
-                <Text variant="titleLarge" style={styles.fruitName}>
-                  {preview.fruitIcon} {preview.fruitName}
+                <Text variant="titleLarge" style={styles.productName}>
+                  {preview.productIcon} {preview.productName}
                 </Text>
                 <Text style={styles.dateText}>
                   {new Date(preview.date).toLocaleDateString('es-CL', {
@@ -292,7 +293,7 @@ export default function HomeScreen() {
 
                 <Text style={styles.totalLabel}>{strings.workday.totalKg}</Text>
                 <Text style={styles.totalValue}>
-                  {preview.grandTotalKg.toFixed(2)}
+                  {formatKg(preview.grandTotalKg)}
                   <Text style={styles.totalUnit}> {strings.anotador.kg}</Text>
                 </Text>
 
@@ -323,7 +324,7 @@ export default function HomeScreen() {
                       <Text style={styles.rosterNumber}>{row.workdayNumber}</Text>
                       <Text style={styles.rosterName}>{row.name}</Text>
                       <Text style={styles.rosterTotal}>
-                        {row.totalKg.toFixed(2)} {strings.anotador.kg}
+                        {formatKg(row.totalKg)} {strings.anotador.kg}
                       </Text>
                     </View>
                   ))
@@ -371,8 +372,8 @@ export default function HomeScreen() {
                     }
                   >
                     <View style={styles.teammateRow}>
-                      <Text style={styles.teammateFruit}>
-                        {row.fruitIcon} {row.fruitName}
+                      <Text style={styles.teammateProduct}>
+                        {row.productIcon} {row.productName}
                       </Text>
                       <Text style={styles.teammateName} numberOfLines={1}>
                         {row.recorderName}
@@ -440,7 +441,7 @@ function createStyles(colors: ReturnType<typeof usePalette>) {
     textTransform: 'uppercase',
     marginBottom: spacing.xs,
   },
-  fruitName: { fontWeight: '700' },
+  productName: { fontWeight: '700' },
   dateText: {
     color: colors.textSecondary,
     marginBottom: spacing.lg,
@@ -497,7 +498,7 @@ function createStyles(colors: ReturnType<typeof usePalette>) {
     borderBottomColor: colors.border,
     gap: spacing.sm,
   },
-  teammateFruit: { fontWeight: '600' },
+  teammateProduct: { fontWeight: '600' },
   teammateName: { flex: 1, color: colors.textSecondary, textAlign: 'right' },
   });
 }

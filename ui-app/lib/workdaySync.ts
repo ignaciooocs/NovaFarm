@@ -44,7 +44,7 @@ export async function pushPendingWorkdays(): Promise<{
       const created = await workdaysControllerCreate({
         clientEntryId: workday.id,
         date: workday.date,
-        fruitId: workday.fruitId,
+        productId: workday.productId,
         defaultMeasurementUnitId: workday.defaultMeasurementUnitId,
         createdAt: workday.createdAt,
       });

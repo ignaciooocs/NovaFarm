@@ -3,7 +3,7 @@ import { InjectModel } from '@nestjs/mongoose';
 import { Model, Types } from 'mongoose';
 import { AuthenticatedUser } from '../auth/guards/farm-scope.guard';
 import { HarvestEntry } from '../harvest-entries/schemas/harvest-entry.schema';
-import { FruitsService } from '../fruits/fruits.service';
+import { ProductsService } from '../products/products.service';
 import { MeasurementUnitsService } from '../measurement-units/measurement-units.service';
 import { UsersService } from '../users/users.service';
 import { Workday, WorkdayDocument } from './schemas/workday.schema';
@@ -27,7 +27,7 @@ export class WorkdaysService {
     @InjectModel(Workday.name) private readonly workdayModel: Model<Workday>,
     @InjectModel(HarvestEntry.name)
     private readonly harvestEntryModel: Model<HarvestEntry>,
-    private readonly fruitsService: FruitsService,
+    private readonly productsService: ProductsService,
     private readonly measurementUnitsService: MeasurementUnitsService,
     private readonly usersService: UsersService,
   ) {}
@@ -58,9 +58,14 @@ export class WorkdaysService {
       );
     }
 
-    const fruit = await this.fruitsService.findActiveById(farmId, dto.fruitId);
-    if (!fruit) {
-      throw new NotFoundException('Fruit not found in the caller farm catalog');
+    const product = await this.productsService.findActiveById(
+      farmId,
+      dto.productId,
+    );
+    if (!product) {
+      throw new NotFoundException(
+        'Product not found in the caller farm catalog',
+      );
     }
 
     const measurementUnit = await this.measurementUnitsService.findActiveById(
@@ -79,7 +84,7 @@ export class WorkdaysService {
       const created = await this.workdayModel.create({
         farmId: new Types.ObjectId(farmId),
         date: new Date(dto.date),
-        fruitId: new Types.ObjectId(dto.fruitId),
+        productId: new Types.ObjectId(dto.productId),
         defaultMeasurementUnitId: new Types.ObjectId(
           dto.defaultMeasurementUnitId,
         ),
@@ -304,7 +309,7 @@ export class WorkdaysService {
       _id: doc._id.toString(),
       farmId: doc.farmId.toString(),
       date: doc.date.toISOString(),
-      fruitId: doc.fruitId.toString(),
+      productId: doc.productId.toString(),
       defaultMeasurementUnitId: doc.defaultMeasurementUnitId.toString(),
       status: doc.status,
       createdAt: doc.createdAt.toISOString(),

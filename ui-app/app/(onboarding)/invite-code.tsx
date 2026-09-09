@@ -10,7 +10,7 @@ import { colors, spacing } from '@/theme';
 
 // Sin header propio (ver role.tsx) — la farm ya quedó creada al llegar acá,
 // así que "volver" no tiene un significado real (no hay nada que deshacer).
-// El siguiente paso (starter-fruits.tsx) también es opcional/omitible, así
+// El siguiente paso (starter-products.tsx) también es opcional/omitible, así
 // que este flujo sigue completo aunque el usuario nunca comparta el código
 // ahora — igual queda disponible después en Ajustes.
 export default function InviteCodeScreen() {
@@ -66,7 +66,7 @@ export default function InviteCodeScreen() {
 
       <Button
         mode="contained"
-        onPress={() => router.replace('/starter-fruits')}
+        onPress={() => router.replace('/starter-products')}
         buttonColor={palette.primary}
         contentStyle={styles.buttonContent}
         style={styles.button}

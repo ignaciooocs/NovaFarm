@@ -24,10 +24,10 @@ export class WorkdayDto {
   date!: string;
 
   @ApiProperty({
-    description: 'Fruit being harvested this workday',
+    description: 'Product being harvested this workday',
     example: '64f1a2b3c4d5e6f7a8b9c0d2',
   })
-  fruitId!: string;
+  productId!: string;
 
   @ApiProperty({
     description: 'Default measurement unit for entries recorded this workday',

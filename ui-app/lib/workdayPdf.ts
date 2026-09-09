@@ -1,5 +1,6 @@
 import * as Print from 'expo-print';
 import { strings } from '@/constants/strings';
+import { formatKg } from '@/lib/format';
 
 export interface WorkdayPdfRosterRow {
   workdayNumber: number;
@@ -9,8 +10,8 @@ export interface WorkdayPdfRosterRow {
 }
 
 export interface WorkdayPdfData {
-  fruitName: string;
-  fruitIcon: string;
+  productName: string;
+  productIcon: string;
   date: string;
   status: 'OPEN' | 'CLOSED';
   recorderName?: string;
@@ -52,7 +53,7 @@ function buildHtml(data: WorkdayPdfData): string {
           <td>${row.workdayNumber}</td>
           <td>${escapeHtml(row.name)}</td>
           <td class="num">${row.unitCount}</td>
-          <td class="num">${row.totalKg.toFixed(2)}</td>
+          <td class="num">${formatKg(row.totalKg)}</td>
         </tr>`,
     )
     .join('');
@@ -80,11 +81,11 @@ function buildHtml(data: WorkdayPdfData): string {
       </head>
       <body>
         <div class="brand">${strings.auth.brand.toUpperCase()}</div>
-        <h1>${data.fruitIcon} ${escapeHtml(data.fruitName)}</h1>
+        <h1>${data.productIcon} ${escapeHtml(data.productName)}</h1>
         <div class="subtitle">${metaLine}</div>
         <div class="totalBox">
           <div class="totalLabel">${totalLabel}</div>
-          <div class="totalValue">${data.totalKg.toFixed(2)} ${strings.anotador.kg}</div>
+          <div class="totalValue">${formatKg(data.totalKg)} ${strings.anotador.kg}</div>
         </div>
         <table>
           <thead>

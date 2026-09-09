@@ -11,15 +11,16 @@ import {
 import type { FindWorkdayResponseDto } from '@/api/generated/novaFarmAPI.schemas';
 import { getWorkdays } from '@/api/generated/workdays/workdays';
 import { Screen } from '@/components/Screen';
-import { DEFAULT_FRUIT_ICON } from '@/constants/fruitIcon';
+import { DEFAULT_PRODUCT_ICON } from '@/constants/productIcon';
 import { strings } from '@/constants/strings';
 import { db } from '@/db/client';
-import { fruits } from '@/db/schema';
+import { products } from '@/db/schema';
 import { getErrorMessage } from '@/lib/errors';
+import { formatKg } from '@/lib/format';
 import { usePalette } from '@/stores';
 import { spacing } from '@/theme';
 
-interface FruitInfo {
+interface ProductInfo {
   name: string;
   icon: string;
 }
@@ -28,14 +29,14 @@ interface FruitInfo {
 // catálogos de admin (no RF-01: una jornada ya cerrada no es captura en
 // terreno) — se pide en vivo cada vez. Los nombres de fruta sí se resuelven
 // contra la caché local (lib/catalogSync.ts) en vez de otro pedido en vivo,
-// ya que fruits guarda el catálogo completo (activas e inactivas), y una
+// ya que products guarda el catálogo completo (activas e inactivas), y una
 // jornada vieja puede apuntar a una fruta que ya se desactivó.
 export default function HistoryScreen() {
   const router = useRouter();
   const palette = usePalette();
   const styles = useMemo(() => createStyles(palette), [palette]);
   const [workdays, setWorkdays] = useState<FindWorkdayResponseDto[]>([]);
-  const [fruitsById, setFruitsById] = useState<Record<string, FruitInfo>>({});
+  const [productsById, setProductsById] = useState<Record<string, ProductInfo>>({});
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -48,22 +49,22 @@ export default function HistoryScreen() {
         setError(null);
         try {
           const { workdaysControllerFindAll } = getWorkdays();
-          const [closedWorkdays, fruitRows] = await Promise.all([
+          const [closedWorkdays, productRows] = await Promise.all([
             workdaysControllerFindAll({ status: 'CLOSED' }),
-            db.select().from(fruits),
+            db.select().from(products),
           ]);
           if (cancelled) {
             return;
           }
 
-          const byId: Record<string, FruitInfo> = {};
-          fruitRows.forEach((fruit) => {
-            byId[fruit.id] = {
-              name: fruit.name,
-              icon: fruit.icon ?? DEFAULT_FRUIT_ICON,
+          const byId: Record<string, ProductInfo> = {};
+          productRows.forEach((product) => {
+            byId[product.id] = {
+              name: product.name,
+              icon: product.icon ?? DEFAULT_PRODUCT_ICON,
             };
           });
-          setFruitsById(byId);
+          setProductsById(byId);
 
           setWorkdays(
             [...closedWorkdays].sort(
@@ -101,7 +102,7 @@ export default function HistoryScreen() {
             <Text style={styles.empty}>{strings.admin.emptyList}</Text>
           }
           renderItem={({ item }) => {
-            const fruit = fruitsById[item.fruitId];
+            const product = productsById[item.productId];
             return (
               <TouchableRipple
                 onPress={() =>
@@ -119,10 +120,10 @@ export default function HistoryScreen() {
                         style={styles.rowTitle}
                         numberOfLines={1}
                       >
-                        {fruit ? `${fruit.icon} ${fruit.name}` : item.fruitId}
+                        {product ? `${product.icon} ${product.name}` : item.productId}
                       </Text>
                       <Text style={styles.rowTotal}>
-                        {(item.finalTotalKg ?? 0).toFixed(2)}{' '}
+                        {formatKg(item.finalTotalKg ?? 0)}{' '}
                         {strings.anotador.kg}
                       </Text>
                     </View>

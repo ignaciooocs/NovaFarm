@@ -21,7 +21,7 @@ export class Farm {
   createdAt!: Date;
 
   // Interruptor único por farm (no permisos por persona): si un recorder
-  // puede ver y gestionar el catálogo (fruits/harvesters/measurement-units)
+  // puede ver y gestionar el catálogo (products/harvesters/measurement-units)
   // además de un admin. Default true — "por defecto tienen acceso, el admin
   // lo puede apagar" fue la decisión explícita al diseñar esto (2026-09-03).
   // No afecta a "Mi equipo" — eso sigue siendo admin-only siempre, vía

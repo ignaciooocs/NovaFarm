@@ -27,7 +27,7 @@ interface FirebaseCustomClaims {
 /**
  * Verifies the caller presents a valid Firebase ID token AND that its
  * farmId/roles custom claims are present, attaching them to request.user.
- * This is the guard entity controllers (fruits, harvesters, ...) should use
+ * This is the guard entity controllers (products, harvesters, ...) should use
  * once they exist — a missing guard is then visible at the route level
  * instead of a bug buried in a service method (see CLAUDE.md).
  */

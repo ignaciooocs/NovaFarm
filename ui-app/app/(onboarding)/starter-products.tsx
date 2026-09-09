@@ -1,46 +1,72 @@
-import { useMemo, useState } from 'react';
-import { StyleSheet, View } from 'react-native';
+import { useEffect, useMemo, useState } from 'react';
+import { ScrollView, StyleSheet, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
-import { Button, HelperText, Text, TouchableRipple } from 'react-native-paper';
-import { getFruits } from '@/api/generated/fruits/fruits';
+import {
+  ActivityIndicator,
+  Button,
+  HelperText,
+  Text,
+  TouchableRipple,
+} from 'react-native-paper';
+import type { FindProductResponseDto } from '@/api/generated/novaFarmAPI.schemas';
+import { getProducts } from '@/api/generated/products/products';
 import { Screen } from '@/components/Screen';
 import { strings } from '@/constants/strings';
-import { SUGGESTED_FRUITS } from '@/constants/suggestedFruits';
 import { getErrorMessage } from '@/lib/errors';
 import { usePalette } from '@/stores';
 import { colors, spacing } from '@/theme';
 
-// Lista de sugerencias compartida con fruits.tsx (ver
-// constants/suggestedFruits.ts) — acá no es un catálogo real todavía, se
-// crean recién al confirmar (POST /fruits, una llamada por fruta elegida;
-// no hay variante bulk en server-app y con máximo 6 ítems no vale la pena
-// agregar una solo para esto, mismo criterio que la paginación de
-// harvesters pospuesta).
+// Se ofrecen solo los marcados `featured` en el catálogo de la app (ver
+// product-catalog.ts en server-app): esta pantalla muestra todo junto en una
+// grilla sin scroll, y el catálogo completo —unos cuarenta— no entra. Los que
+// falten se agregan después desde Cultivos, que sí los muestra todos.
+// Se suman recién al confirmar (POST /products con `productId`, una llamada
+// por cultivo elegido; no hay variante bulk en server-app y con este puñado no
+// vale la pena agregar una solo para esto, mismo criterio que la paginación
+// de harvesters pospuesta).
 
 // Último paso, opcional, del onboarding del admin — nunca lo ve un recorder
 // que se une a un equipo existente (join-farm.tsx sigue yendo directo a
 // /home, ese catálogo ya lo armó el admin del equipo al que se une). Mismo
-// lenguaje visual que fruits.tsx (grilla 2 columnas, tile cuadrado, emoji al
+// lenguaje visual que products.tsx (grilla 2 columnas, tile cuadrado, emoji al
 // centro) pero de selección múltiple en vez de editar/activar — acá nada
 // está creado todavía, tocar un tile solo lo marca para crear al confirmar.
 // Sin header propio, igual que invite-code.tsx: no hay "volver" con sentido
 // en un paso posterior a que la farm ya se creó.
-export default function StarterFruitsScreen() {
+export default function StarterProductsScreen() {
   const router = useRouter();
   const palette = usePalette();
   const styles = useMemo(() => createStyles(palette), [palette]);
+  // Los ids elegidos: el producto es global, así que su _id es la identidad
+  // compartida entre todas las farms.
   const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [featured, setFeatured] = useState<FindProductResponseDto[]>([]);
+  const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  function toggle(name: string) {
+  useEffect(() => {
+    (async () => {
+      try {
+        const { productsControllerFindAvailable } = getProducts();
+        const catalog = await productsControllerFindAvailable();
+        setFeatured(catalog.filter((product) => product.featured));
+      } catch (err) {
+        setError(getErrorMessage(err));
+      } finally {
+        setLoading(false);
+      }
+    })();
+  }, []);
+
+  function toggle(key: string) {
     setSelected((prev) => {
       const next = new Set(prev);
-      if (next.has(name)) {
-        next.delete(name);
+      if (next.has(key)) {
+        next.delete(key);
       } else {
-        next.add(name);
+        next.add(key);
       }
       return next;
     });
@@ -50,13 +76,10 @@ export default function StarterFruitsScreen() {
     setError(null);
     setSaving(true);
     try {
-      const { fruitsControllerCreate } = getFruits();
-      const toCreate = SUGGESTED_FRUITS.filter((fruit) =>
-        selected.has(fruit.name),
-      );
+      const { productsControllerCreate } = getProducts();
       await Promise.all(
-        toCreate.map((fruit) =>
-          fruitsControllerCreate({ name: fruit.name, icon: fruit.icon }),
+        [...selected].map((productId) =>
+          productsControllerCreate({ productId }),
         ),
       );
       router.replace('/home');
@@ -70,24 +93,32 @@ export default function StarterFruitsScreen() {
   return (
     <Screen>
       <Text variant="headlineMedium" style={styles.title}>
-        {strings.onboarding.starterFruitsTitle}
+        {strings.onboarding.starterProductsTitle}
       </Text>
       <Text style={styles.subtitle}>
-        {strings.onboarding.starterFruitsSubtitle}
+        {strings.onboarding.starterProductsSubtitle}
       </Text>
 
-      <View style={styles.grid}>
-        {SUGGESTED_FRUITS.map((fruit) => {
-          const isSelected = selected.has(fruit.name);
+      {loading ? <ActivityIndicator /> : null}
+
+      <ScrollView
+        style={styles.productsScroll}
+        contentContainerStyle={styles.grid}
+        showsVerticalScrollIndicator={false}
+      >
+        {featured.map((product) => {
+          const isSelected = selected.has(product._id);
+
           return (
             <TouchableRipple
-              key={fruit.name}
-              onPress={() => toggle(fruit.name)}
+              key={product._id}
+              onPress={() => toggle(product._id)}
               style={[styles.tile, isSelected && styles.tileSelected]}
             >
               <View style={styles.tileBody}>
-                <Text style={styles.tileEmoji}>{fruit.icon}</Text>
-                <Text style={styles.tileName}>{fruit.name}</Text>
+                <Text style={styles.tileEmoji}>{product.icon}</Text>
+                <Text style={styles.tileName}>{product.name}</Text>
+
                 {isSelected ? (
                   <MaterialCommunityIcons
                     name="check-circle"
@@ -100,7 +131,7 @@ export default function StarterFruitsScreen() {
             </TouchableRipple>
           );
         })}
-      </View>
+      </ScrollView>
 
       {error ? <HelperText type="error">{error}</HelperText> : null}
 
@@ -113,7 +144,7 @@ export default function StarterFruitsScreen() {
         contentStyle={styles.buttonContent}
         style={styles.button}
       >
-        {strings.onboarding.starterFruitsAddButton}
+        {strings.onboarding.starterProductsAddButton}
       </Button>
       <Button
         mode="text"
@@ -160,5 +191,8 @@ function createStyles(palette: ReturnType<typeof usePalette>) {
     tileCheck: { position: 'absolute', top: spacing.xs, right: spacing.xs },
     buttonContent: { paddingVertical: spacing.xs },
     button: { borderRadius: 12, marginTop: spacing.sm },
+    productsScroll: {
+  flex: 1,
+},
   });
 }

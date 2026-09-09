@@ -33,11 +33,11 @@ export class CreateWorkdayRequestDto {
 
   @ApiProperty({
     description:
-      'Fruit being harvested this workday (must exist and be active in the caller farm catalog)',
+      'Product being harvested this workday (must exist and be active in the caller farm catalog)',
     example: '64f1a2b3c4d5e6f7a8b9c0d2',
   })
   @IsMongoId()
-  fruitId!: string;
+  productId!: string;
 
   @ApiProperty({
     description:

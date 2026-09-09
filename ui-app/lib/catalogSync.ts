@@ -1,14 +1,14 @@
 import { ne } from 'drizzle-orm';
-import { getFruits } from '@/api/generated/fruits/fruits';
+import { getProducts } from '@/api/generated/products/products';
 import { getHarvesters } from '@/api/generated/harvesters/harvesters';
 import { getMeasurementUnits } from '@/api/generated/measurement-units/measurement-units';
 import { db } from '@/db/client';
-import { fruits, harvesters, measurementUnits } from '@/db/schema';
+import { harvesters, measurementUnits, products } from '@/db/schema';
 import { useAuthStore, useConnectivityStore } from '@/stores';
 
 let inFlight: Promise<void> | null = null;
 
-// Refresca la caché local de solo lectura de fruits/harvesters/measurementUnits
+// Refresca la caché local de solo lectura de products/harvesters/measurementUnits
 // (ver el gap documentado en docs/diagrams/ui-arquitectura.md) haciendo upsert
 // por `id` (= _id del server) sobre las tablas locales. Pensada para
 // dispararse en un punto natural ya-online (Home, ver app/(app)/home.tsx) o al
@@ -38,12 +38,12 @@ async function performSync(): Promise<void> {
   }
 
   try {
-    const { fruitsControllerFindAll } = getFruits();
+    const { productsControllerFindAll } = getProducts();
     const { harvestersControllerFindAll } = getHarvesters();
     const { measurementUnitsControllerFindAll } = getMeasurementUnits();
 
-    const [fruitsResult, harvestersResult, unitsResult] = await Promise.all([
-      fruitsControllerFindAll(),
+    const [productsResult, harvestersResult, unitsResult] = await Promise.all([
+      productsControllerFindAll(),
       harvestersControllerFindAll(),
       measurementUnitsControllerFindAll(),
     ]);
@@ -57,16 +57,21 @@ async function performSync(): Promise<void> {
     // cada vez que se disparaba el sync. Agrupado en una transacción,
     // corre en la práctica al instante.
     db.transaction((tx) => {
-      fruitsResult.forEach((fruit) => {
+      productsResult.forEach((product) => {
         const row = {
-          farmId: fruit.farmId,
-          name: fruit.name,
-          icon: fruit.icon,
-          active: fruit.active,
+          // El producto es global y no trae farmId; el de acá es el de la
+          // sesión, y sirve solo para la purga cruzada de más abajo.
+          farmId,
+          name: product.name,
+          icon: product.icon,
+          // Es el `active` de la selección de esta farm, no el del producto
+          // global (ver products.service.ts). `?? true` porque el DTO lo tipa
+          // como opcional: falta solo en los que la farm todavía no tiene.
+          active: product.active ?? true,
         };
-        tx.insert(fruits)
-          .values({ id: fruit._id, ...row })
-          .onConflictDoUpdate({ target: fruits.id, set: row })
+        tx.insert(products)
+          .values({ id: product._id, ...row })
+          .onConflictDoUpdate({ target: products.id, set: row })
           .run();
       });
 
@@ -88,7 +93,10 @@ async function performSync(): Promise<void> {
         const row = {
           farmId: unit.farmId,
           name: unit.name,
-          kgFactor: unit.kgFactor,
+          mode: unit.mode,
+          // null en modo WEIGHT: los kilos salen de la romana, no de un
+          // factor. `?? null` porque el server lo tipa como opcional.
+          kgFactor: unit.kgFactor ?? null,
           active: unit.active,
         };
         tx.insert(measurementUnits)
@@ -104,7 +112,7 @@ async function performSync(): Promise<void> {
       // (ej. add-harvester.tsx) las mostraban como si fueran de la farm
       // actual. El aislamiento multi-tenant no es negociable (ver
       // CLAUDE.md) — se aplica también a la caché local, no solo al server.
-      tx.delete(fruits).where(ne(fruits.farmId, farmId)).run();
+      tx.delete(products).where(ne(products.farmId, farmId)).run();
       tx.delete(harvesters).where(ne(harvesters.farmId, farmId)).run();
       tx.delete(measurementUnits)
         .where(ne(measurementUnits.farmId, farmId))

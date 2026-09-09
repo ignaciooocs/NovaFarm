@@ -1,7 +1,7 @@
 import { Module } from '@nestjs/common';
 import { MongooseModule } from '@nestjs/mongoose';
 import { AuthModule } from '../auth/auth.module';
-import { FruitsModule } from '../fruits/fruits.module';
+import { ProductsModule } from '../products/products.module';
 import {
   HarvestEntry,
   HarvestEntrySchema,
@@ -23,7 +23,7 @@ import { WorkdaysService } from './workdays.service';
       { name: HarvestEntry.name, schema: HarvestEntrySchema },
     ]),
     AuthModule,
-    FruitsModule,
+    ProductsModule,
     MeasurementUnitsModule,
     UsersModule,
   ],

@@ -48,7 +48,7 @@ export default function CreateFarmScreen() {
           params: { code: result.farm.invitationCode },
         });
       } else {
-        router.replace('/starter-fruits');
+        router.replace('/starter-products');
       }
     } catch (err) {
       setError(getErrorMessage(err));

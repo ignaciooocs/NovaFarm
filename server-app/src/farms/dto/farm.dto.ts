@@ -46,7 +46,7 @@ export class FarmDto {
 
   @ApiProperty({
     description:
-      'Whether recorders (not just admins) can view/manage the farm catalog (fruits/harvesters/measurement-units). A single per-farm switch, not per-user permissions. Does not affect the team roster, which stays admin-only regardless.',
+      'Whether recorders (not just admins) can view/manage the farm catalog (products/harvesters/measurement-units). A single per-farm switch, not per-user permissions. Does not affect the team roster, which stays admin-only regardless.',
     example: true,
   })
   recordersCanManageCatalog!: boolean;

@@ -1,12 +1,14 @@
 import { ApiPropertyOptional } from '@nestjs/swagger';
 import {
   IsBoolean,
+  IsIn,
   IsNotEmpty,
   IsNumber,
   IsOptional,
   IsPositive,
   IsString,
 } from 'class-validator';
+import type { MeasurementUnitMode } from '../../schemas/measurement-unit.schema';
 
 /**
  * Request shape for PATCH /api/v1/measurement-units/:id — partial update.
@@ -25,11 +27,21 @@ export class UpdateMeasurementUnitRequestDto {
 
   @ApiPropertyOptional({
     description:
-      'Conversion factor to kilos (e.g. a 10kg crate is 10). Use 1 for direct-weighing mode.',
+      'Switch how deliveries are captured. Switching to WEIGHT clears kgFactor; switching to COUNT requires one (either in this same request or already stored).',
+    enum: ['COUNT', 'WEIGHT'],
+    example: 'COUNT',
+  })
+  @IsOptional()
+  @IsIn(['COUNT', 'WEIGHT'])
+  mode?: MeasurementUnitMode;
+
+  @ApiPropertyOptional({
+    description:
+      'Conversion factor to kilos (e.g. a 10kg crate is 10). Only meaningful for COUNT units. Capped at one decimal so every derived totalKg has at most one too.',
     example: 10,
   })
   @IsOptional()
-  @IsNumber()
+  @IsNumber({ maxDecimalPlaces: 1 })
   @IsPositive()
   kgFactor?: number;
 

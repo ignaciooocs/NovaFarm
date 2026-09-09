@@ -178,24 +178,14 @@ export default function DrawerLayout() {
         }}
       />
       <Drawer.Screen
-        name="profile"
+        name="(admin)/products"
         options={{
-          title: strings.profile.title,
-          drawerLabel: strings.profile.title,
-          drawerIcon: ({ color, size }) => (
-            <MaterialCommunityIcons name="account" color={color} size={size} />
-          ),
-        }}
-      />
-      <Drawer.Screen
-        name="(admin)/fruits"
-        options={{
-          title: strings.admin.fruitsTitle,
-          drawerLabel: strings.admin.fruitsTitle,
+          title: strings.admin.productsTitle,
+          drawerLabel: strings.admin.productsTitle,
           drawerItemStyle: canManageCatalog ? undefined : { display: 'none' },
           drawerIcon: ({ color, size }) => (
             <MaterialCommunityIcons
-              name="fruit-cherries"
+              name="sprout-outline"
               color={color}
               size={size}
             />
@@ -261,6 +251,16 @@ export default function DrawerLayout() {
               color={color}
               size={size}
             />
+          ),
+        }}
+      />
+      <Drawer.Screen
+        name="profile"
+        options={{
+          title: strings.profile.title,
+          drawerLabel: strings.profile.title,
+          drawerIcon: ({ color, size }) => (
+            <MaterialCommunityIcons name="account" color={color} size={size} />
           ),
         }}
       />

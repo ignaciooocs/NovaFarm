@@ -2,7 +2,7 @@ import { NotFoundException } from '@nestjs/common';
 import { getModelToken } from '@nestjs/mongoose';
 import { Test, TestingModule } from '@nestjs/testing';
 import { Types } from 'mongoose';
-import { FruitsService } from '../fruits/fruits.service';
+import { ProductsService } from '../products/products.service';
 import { HarvestEntry } from '../harvest-entries/schemas/harvest-entry.schema';
 import { MeasurementUnitsService } from '../measurement-units/measurement-units.service';
 import { UsersService } from '../users/users.service';
@@ -23,7 +23,7 @@ describe('WorkdaysService', () => {
     aggregate: jest.fn(),
   };
 
-  const fruitsService = {
+  const productsService = {
     findActiveById: jest.fn(),
   };
 
@@ -37,7 +37,7 @@ describe('WorkdaysService', () => {
   };
 
   const farmId = '507f1f77bcf86cd799439011';
-  const fruitId = '507f1f77bcf86cd799439012';
+  const productId = '507f1f77bcf86cd799439012';
   const measurementUnitId = '507f1f77bcf86cd799439013';
 
   beforeEach(async () => {
@@ -51,7 +51,7 @@ describe('WorkdaysService', () => {
           provide: getModelToken(HarvestEntry.name),
           useValue: harvestEntryModel,
         },
-        { provide: FruitsService, useValue: fruitsService },
+        { provide: ProductsService, useValue: productsService },
         {
           provide: MeasurementUnitsService,
           useValue: measurementUnitsService,
@@ -67,7 +67,7 @@ describe('WorkdaysService', () => {
     const dto = {
       clientEntryId: 'local-8f3a2b1c',
       date: '2026-09-02',
-      fruitId,
+      productId,
       defaultMeasurementUnitId: measurementUnitId,
     };
 
@@ -79,8 +79,8 @@ describe('WorkdaysService', () => {
 
     it('opens a workday and resolves recorderId from the authenticated recorder', async () => {
       mockNoExistingClientEntry();
-      fruitsService.findActiveById.mockResolvedValue({
-        _id: fruitId,
+      productsService.findActiveById.mockResolvedValue({
+        _id: productId,
         active: true,
       });
       measurementUnitsService.findActiveById.mockResolvedValue({
@@ -97,7 +97,7 @@ describe('WorkdaysService', () => {
         _id: new Types.ObjectId(),
         farmId: new Types.ObjectId(farmId),
         date: new Date(dto.date),
-        fruitId: new Types.ObjectId(fruitId),
+        productId: new Types.ObjectId(productId),
         defaultMeasurementUnitId: new Types.ObjectId(measurementUnitId),
         status: 'OPEN',
         createdAt: new Date('2026-09-02T08:00:00.000Z'),
@@ -128,8 +128,8 @@ describe('WorkdaysService', () => {
 
     it('keeps the device timestamp when the workday was opened offline and uploaded later', async () => {
       mockNoExistingClientEntry();
-      fruitsService.findActiveById.mockResolvedValue({
-        _id: fruitId,
+      productsService.findActiveById.mockResolvedValue({
+        _id: productId,
         active: true,
       });
       measurementUnitsService.findActiveById.mockResolvedValue({
@@ -140,7 +140,7 @@ describe('WorkdaysService', () => {
         _id: new Types.ObjectId(),
         farmId: new Types.ObjectId(farmId),
         date: new Date(dto.date),
-        fruitId: new Types.ObjectId(fruitId),
+        productId: new Types.ObjectId(productId),
         defaultMeasurementUnitId: new Types.ObjectId(measurementUnitId),
         status: 'OPEN',
         createdAt: new Date('2026-09-02T08:00:00.000Z'),
@@ -163,8 +163,8 @@ describe('WorkdaysService', () => {
 
     it('stamps its own clock when the client does not send createdAt', async () => {
       mockNoExistingClientEntry();
-      fruitsService.findActiveById.mockResolvedValue({
-        _id: fruitId,
+      productsService.findActiveById.mockResolvedValue({
+        _id: productId,
         active: true,
       });
       measurementUnitsService.findActiveById.mockResolvedValue({
@@ -175,7 +175,7 @@ describe('WorkdaysService', () => {
         _id: new Types.ObjectId(),
         farmId: new Types.ObjectId(farmId),
         date: new Date(dto.date),
-        fruitId: new Types.ObjectId(fruitId),
+        productId: new Types.ObjectId(productId),
         defaultMeasurementUnitId: new Types.ObjectId(measurementUnitId),
         status: 'OPEN',
         createdAt: new Date(),
@@ -198,8 +198,8 @@ describe('WorkdaysService', () => {
 
     it('leaves recorderId null when opened by an admin (guest mode)', async () => {
       mockNoExistingClientEntry();
-      fruitsService.findActiveById.mockResolvedValue({
-        _id: fruitId,
+      productsService.findActiveById.mockResolvedValue({
+        _id: productId,
         active: true,
       });
       measurementUnitsService.findActiveById.mockResolvedValue({
@@ -211,7 +211,7 @@ describe('WorkdaysService', () => {
         _id: new Types.ObjectId(),
         farmId: new Types.ObjectId(farmId),
         date: new Date(dto.date),
-        fruitId: new Types.ObjectId(fruitId),
+        productId: new Types.ObjectId(productId),
         defaultMeasurementUnitId: new Types.ObjectId(measurementUnitId),
         status: 'OPEN',
         createdAt: new Date(),
@@ -232,9 +232,9 @@ describe('WorkdaysService', () => {
       expect(result.recorderId).toBeNull();
     });
 
-    it('throws NotFoundException when the fruit does not exist in the caller farm', async () => {
+    it('throws NotFoundException when the product does not exist in the caller farm', async () => {
       mockNoExistingClientEntry();
-      fruitsService.findActiveById.mockResolvedValue(null);
+      productsService.findActiveById.mockResolvedValue(null);
 
       await expect(
         workdaysService.create(
@@ -249,8 +249,8 @@ describe('WorkdaysService', () => {
 
     it('throws NotFoundException when the measurement unit does not exist in the caller farm', async () => {
       mockNoExistingClientEntry();
-      fruitsService.findActiveById.mockResolvedValue({
-        _id: fruitId,
+      productsService.findActiveById.mockResolvedValue({
+        _id: productId,
         active: true,
       });
       measurementUnitsService.findActiveById.mockResolvedValue(null);
@@ -270,7 +270,7 @@ describe('WorkdaysService', () => {
         _id: new Types.ObjectId(),
         farmId: new Types.ObjectId(farmId),
         date: new Date(dto.date),
-        fruitId: new Types.ObjectId(fruitId),
+        productId: new Types.ObjectId(productId),
         defaultMeasurementUnitId: new Types.ObjectId(measurementUnitId),
         status: 'OPEN',
         createdAt: new Date('2026-09-02T08:00:00.000Z'),
@@ -291,7 +291,7 @@ describe('WorkdaysService', () => {
         farmId: new Types.ObjectId(farmId),
         clientEntryId: dto.clientEntryId,
       });
-      expect(fruitsService.findActiveById).not.toHaveBeenCalled();
+      expect(productsService.findActiveById).not.toHaveBeenCalled();
       expect(workdayModel.create).not.toHaveBeenCalled();
       expect(result._id).toEqual(existing._id.toString());
     });
@@ -301,7 +301,7 @@ describe('WorkdaysService', () => {
         _id: new Types.ObjectId(),
         farmId: new Types.ObjectId(farmId),
         date: new Date(dto.date),
-        fruitId: new Types.ObjectId(fruitId),
+        productId: new Types.ObjectId(productId),
         defaultMeasurementUnitId: new Types.ObjectId(measurementUnitId),
         status: 'OPEN',
         createdAt: new Date('2026-09-02T08:00:00.000Z'),
@@ -313,8 +313,8 @@ describe('WorkdaysService', () => {
       workdayModel.findOne
         .mockReturnValueOnce({ exec: jest.fn().mockResolvedValue(null) })
         .mockReturnValueOnce({ exec: jest.fn().mockResolvedValue(raced) });
-      fruitsService.findActiveById.mockResolvedValue({
-        _id: fruitId,
+      productsService.findActiveById.mockResolvedValue({
+        _id: productId,
         active: true,
       });
       measurementUnitsService.findActiveById.mockResolvedValue({
@@ -338,8 +338,8 @@ describe('WorkdaysService', () => {
 
     it('propagates an unrelated error from create without swallowing it', async () => {
       mockNoExistingClientEntry();
-      fruitsService.findActiveById.mockResolvedValue({
-        _id: fruitId,
+      productsService.findActiveById.mockResolvedValue({
+        _id: productId,
         active: true,
       });
       measurementUnitsService.findActiveById.mockResolvedValue({
@@ -389,7 +389,7 @@ describe('WorkdaysService', () => {
           _id: new Types.ObjectId(),
           farmId: new Types.ObjectId(farmId),
           date: new Date('2026-09-01'),
-          fruitId: new Types.ObjectId(fruitId),
+          productId: new Types.ObjectId(productId),
           defaultMeasurementUnitId: new Types.ObjectId(measurementUnitId),
           status: 'CLOSED',
           createdAt: new Date('2026-09-01T08:00:00.000Z'),
@@ -400,7 +400,7 @@ describe('WorkdaysService', () => {
           _id: new Types.ObjectId(),
           farmId: new Types.ObjectId(farmId),
           date: new Date('2026-09-02'),
-          fruitId: new Types.ObjectId(fruitId),
+          productId: new Types.ObjectId(productId),
           defaultMeasurementUnitId: new Types.ObjectId(measurementUnitId),
           status: 'CLOSED',
           createdAt: new Date('2026-09-02T08:00:00.000Z'),
@@ -430,7 +430,7 @@ describe('WorkdaysService', () => {
           _id: new Types.ObjectId(),
           farmId: new Types.ObjectId(farmId),
           date: new Date('2026-09-01'),
-          fruitId: new Types.ObjectId(fruitId),
+          productId: new Types.ObjectId(productId),
           defaultMeasurementUnitId: new Types.ObjectId(measurementUnitId),
           status: 'CLOSED',
           createdAt: new Date('2026-09-01T08:00:00.000Z'),
@@ -454,7 +454,7 @@ describe('WorkdaysService', () => {
         _id: new Types.ObjectId(workdayId),
         farmId: new Types.ObjectId(farmId),
         date: new Date('2026-09-02'),
-        fruitId: new Types.ObjectId(fruitId),
+        productId: new Types.ObjectId(productId),
         defaultMeasurementUnitId: new Types.ObjectId(measurementUnitId),
         status: 'OPEN',
         createdAt: new Date('2026-09-02T08:00:00.000Z'),
@@ -500,7 +500,7 @@ describe('WorkdaysService', () => {
         _id: new Types.ObjectId(workdayId),
         farmId: new Types.ObjectId(farmId),
         date: new Date('2026-09-02'),
-        fruitId: new Types.ObjectId(fruitId),
+        productId: new Types.ObjectId(productId),
         defaultMeasurementUnitId: new Types.ObjectId(measurementUnitId),
         status: 'OPEN',
         createdAt: new Date('2026-09-02T08:00:00.000Z'),
@@ -533,7 +533,7 @@ describe('WorkdaysService', () => {
         _id: new Types.ObjectId(workdayId),
         farmId: new Types.ObjectId(farmId),
         date: new Date('2026-09-02'),
-        fruitId: new Types.ObjectId(fruitId),
+        productId: new Types.ObjectId(productId),
         defaultMeasurementUnitId: new Types.ObjectId(measurementUnitId),
         status: 'OPEN',
         createdAt: new Date('2026-09-02T08:00:00.000Z'),
@@ -565,7 +565,7 @@ describe('WorkdaysService', () => {
         _id: new Types.ObjectId(workdayId),
         farmId: new Types.ObjectId(farmId),
         date: new Date('2026-09-02'),
-        fruitId: new Types.ObjectId(fruitId),
+        productId: new Types.ObjectId(productId),
         defaultMeasurementUnitId: new Types.ObjectId(measurementUnitId),
         status: 'CLOSED',
         createdAt: new Date('2026-09-02T08:00:00.000Z'),
@@ -599,7 +599,7 @@ describe('WorkdaysService', () => {
         _id: new Types.ObjectId(workdayId),
         farmId: new Types.ObjectId(farmId),
         date: new Date('2026-09-02'),
-        fruitId: new Types.ObjectId(fruitId),
+        productId: new Types.ObjectId(productId),
         defaultMeasurementUnitId: new Types.ObjectId(measurementUnitId),
         status: 'OPEN',
         createdAt: new Date('2026-09-02T08:00:00.000Z'),
@@ -646,7 +646,7 @@ describe('WorkdaysService', () => {
         _id: new Types.ObjectId(workdayId),
         farmId: new Types.ObjectId(farmId),
         date: new Date('2026-09-02'),
-        fruitId: new Types.ObjectId(fruitId),
+        productId: new Types.ObjectId(productId),
         defaultMeasurementUnitId: new Types.ObjectId(measurementUnitId),
         status: 'OPEN',
         createdAt: new Date('2026-09-02T08:00:00.000Z'),

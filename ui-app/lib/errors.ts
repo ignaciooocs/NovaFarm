@@ -50,6 +50,15 @@ function apiErrorMessage(error: {
   if (/already completed onboarding/i.test(message)) {
     return strings.errors.alreadyOnboarded;
   }
+  // Choque del índice único {farmId, name} de los catálogos (409). Se
+  // distingue por entidad para poder decirle al usuario dónde buscar la que
+  // ya existe, en vez de un "algo salió mal" que no lo deja avanzar.
+  if (/product with this name already exists/i.test(message)) {
+    return strings.errors.duplicateProductName;
+  }
+  if (/measurement unit with this name already exists/i.test(message)) {
+    return strings.errors.duplicateUnitName;
+  }
 
   return strings.errors.generic;
 }

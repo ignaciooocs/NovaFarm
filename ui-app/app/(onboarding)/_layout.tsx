@@ -14,13 +14,13 @@ import { colors } from '@/theme';
 // que el token en memoria ya lleve el farmId recién asignado — eso hace que
 // `claims.farmId` pase a tener valor casi al instante (onIdTokenChanged
 // reacciona al refresh). Sin esta excepción, el guard de abajo se disparaba
-// ANTES de que la navegación a /invite-code o /starter-fruits alcanzara a
+// ANTES de que la navegación a /invite-code o /starter-products alcanzara a
 // mostrarse — ninguna de las dos pantallas llegaba a aparecer nunca, siempre
 // se saltaba directo a /home. Estas dos son pantallas de "onboarding recién
 // terminado", no de "onboarding en progreso" — necesitan farmId ya seteado
-// (para las llamadas a /fruits en starter-fruits.tsx) pero siguen siendo
+// (para las llamadas a /products en starter-products.tsx) pero siguen siendo
 // parte del flujo, así que quedan exceptuadas del guard.
-const POST_REGISTRATION_ROUTES = ['/invite-code', '/starter-fruits'];
+const POST_REGISTRATION_ROUTES = ['/invite-code', '/starter-products'];
 
 export default function OnboardingLayout() {
   const { user, claims, isBootstrapping } = useAuthStore();

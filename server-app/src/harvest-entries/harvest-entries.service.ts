@@ -3,6 +3,7 @@ import { InjectModel } from '@nestjs/mongoose';
 import { Model, Types } from 'mongoose';
 import { HarvesterWorkdayService } from '../harvester-workday/harvester-workday.service';
 import { HarvestersService } from '../harvesters/harvesters.service';
+import { MeasurementUnitDto } from '../measurement-units/dto';
 import { MeasurementUnitsService } from '../measurement-units/measurement-units.service';
 import { WorkdaysService } from '../workdays/workdays.service';
 import {
@@ -84,8 +85,8 @@ export class HarvestEntriesService {
   // 3) valida que el cosechador ya esté en el roster de esta jornada (no se
   //    puede registrar una entrega de alguien que nunca fue agregado).
   // 4) valida que la unidad de medida exista y esté activa.
-  // 5) calcula totalKg = unitCount × kgFactor del lado del servidor (nunca
-  //    se confía en un totalKg que mande el cliente) y crea el registro.
+  // 5) resuelve los kilos del lado del servidor según el modo de la unidad
+  //    (ver resolveTotalKg) y crea el registro.
   private async syncOne(
     farmId: string,
     workdayId: string,
@@ -140,7 +141,15 @@ export class HarvestEntriesService {
       );
     }
 
-    const totalKg = entry.unitCount * measurementUnit.kgFactor;
+    const totalKg = this.resolveTotalKg(entry, measurementUnit);
+    if (totalKg === null) {
+      return this.rejected(
+        entry.clientEntryId,
+        measurementUnit.mode === 'WEIGHT'
+          ? 'weightKg is required for entries made with a WEIGHT measurement unit'
+          : 'Measurement unit has no kgFactor configured',
+      );
+    }
 
     try {
       const created = await this.harvestEntryModel.create({
@@ -181,6 +190,45 @@ export class HarvestEntriesService {
 
       throw error;
     }
+  }
+
+  // Kilos de una entrega, según cómo se captura su unidad de medida (ver
+  // measurement-unit.schema.ts). Nunca se confía en un total que mande el
+  // cliente: en COUNT sale del kgFactor del catálogo, y en WEIGHT el cliente
+  // solo aporta la magnitud que marcó la romana — el signo lo pone
+  // unitCount (-1 = descuento, RF-02.3). Devuelve null si a la entrada le
+  // falta lo que su modo necesita, para que syncOne la rechace con su razón
+  // en vez de guardar kilos inventados.
+  private resolveTotalKg(
+    entry: SyncHarvestEntryEntryDto,
+    measurementUnit: MeasurementUnitDto,
+  ): number | null {
+    if (measurementUnit.mode === 'WEIGHT') {
+      if (entry.weightKg === undefined) {
+        return null;
+      }
+
+      return this.roundToOneDecimal(
+        Math.sign(entry.unitCount) * entry.weightKg,
+      );
+    }
+
+    if (
+      measurementUnit.kgFactor === undefined ||
+      measurementUnit.kgFactor === null
+    ) {
+      return null;
+    }
+
+    return this.roundToOneDecimal(entry.unitCount * measurementUnit.kgFactor);
+  }
+
+  // Un decimal es la resolución de todo el sistema (el peso tipeado y el
+  // kgFactor ya llegan redondeados así, ver sus DTOs), pero multiplicar en
+  // float igual devuelve cosas como 0.30000000000000004 — y eso se guardaría
+  // tal cual en el Decimal128.
+  private roundToOneDecimal(value: number): number {
+    return Math.round(value * 10) / 10;
   }
 
   // Arma un resultado de tipo "rechazado" con su razón.

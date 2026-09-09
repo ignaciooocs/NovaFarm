@@ -1,6 +1,6 @@
 # Data Model — Entity Diagram
 
-> Reflects the Mongo/Mongoose model defined in `CLAUDE.md`. Entity and field names are in English (code-level convention); this does **not** apply to `ui-app`'s field-facing copy, which stays in Spanish per RNF-02 (the vocabulary field workers actually use — "Anotar", "Tarro", "Vuelta" — is what appears on screen, regardless of how the underlying model is named). Referential integrity (`fruitId`, `harvesterId`, `measurementUnitId`, etc.) is validated at the application layer (`server-app`), not by the database.
+> Reflects the Mongo/Mongoose model defined in `CLAUDE.md`. Entity and field names are in English (code-level convention); this does **not** apply to `ui-app`'s field-facing copy, which stays in Spanish per RNF-02 (the vocabulary field workers actually use — "Anotar", "Tarro", "Vuelta" — is what appears on screen, regardless of how the underlying model is named). Referential integrity (`productId`, `harvesterId`, `measurementUnitId`, etc.) is validated at the application layer (`server-app`), not by the database.
 
 ## Entity-relationship diagram
 
@@ -8,7 +8,7 @@
 erDiagram
     FARMS ||--o{ USERS : "has members"
     FARMS ||--o{ HARVESTERS : "scopes"
-    FARMS ||--o{ FRUITS : "scopes"
+    FARMS ||--o{ FARM_PRODUCTS : "scopes"
     FARMS ||--o{ MEASUREMENT_UNITS : "scopes"
     FARMS ||--o{ WORKDAYS : "scopes"
     FARMS ||--o{ HARVESTER_WORKDAY : "scopes"
@@ -18,7 +18,8 @@ erDiagram
     WORKDAYS ||--o{ HARVESTER_WORKDAY : "has roster"
     HARVESTERS ||--o{ HARVEST_ENTRIES : "delivers"
     WORKDAYS ||--o{ HARVEST_ENTRIES : "groups"
-    FRUITS ||--o{ WORKDAYS : "harvested in"
+    PRODUCTS ||--o{ WORKDAYS : "harvested in"
+    PRODUCTS ||--o{ FARM_PRODUCTS : "grown by"
     MEASUREMENT_UNITS ||--o{ WORKDAYS : "default unit"
     MEASUREMENT_UNITS ||--o{ HARVEST_ENTRIES : "converts to kg"
 
@@ -52,19 +53,30 @@ erDiagram
         boolean active
     }
 
-    FRUITS {
+    PRODUCTS {
+        ObjectId _id PK
+        string name "unique per owner: global for APP, per farm for COMMUNITY"
+        string icon
+        string source "APP | COMMUNITY"
+        ObjectId createdByFarmId FK "null for APP; owner of a COMMUNITY one"
+        string catalogKey "seed key, null for COMMUNITY"
+        boolean featured
+        boolean active
+    }
+
+    FARM_PRODUCTS {
         ObjectId _id PK
         ObjectId farmId FK
-        string name "unique together with farmId, not global"
-        string icon "free-text emoji, optional, falls back to a generic default"
-        boolean active
+        ObjectId productId FK
+        boolean active "this farm's own selection"
     }
 
     MEASUREMENT_UNITS {
         ObjectId _id PK
         ObjectId farmId FK
-        string name "e.g. 10kg Crate, Direct Kilos"
-        decimal kgFactor "conversion to kilos"
+        string name "e.g. 20kg Tarro, Capacho"
+        string mode "COUNT | WEIGHT"
+        decimal kgFactor "to kilos; null when WEIGHT"
         boolean active
     }
 
@@ -72,7 +84,7 @@ erDiagram
         ObjectId _id PK
         ObjectId farmId FK
         date date
-        ObjectId fruitId FK
+        ObjectId productId FK
         ObjectId defaultMeasurementUnitId FK
         string status "OPEN | CLOSED"
         datetime createdAt
@@ -96,7 +108,7 @@ erDiagram
         ObjectId workdayId FK
         ObjectId harvesterId FK
         ObjectId measurementUnitId FK
-        decimal unitCount
+        decimal unitCount "containers, never kilos"
         decimal totalKg
         datetime recordedAt
         boolean syncedOffline
@@ -136,14 +148,28 @@ Scoped by `farmId` on purpose: `firstName`, `lastName`, and `nationalId` are per
 
 When the system finds 2+ harvesters with the same name while searching, disambiguation is a human problem, not an algorithmic one: the recorder is shown the available context (nickname, national ID if it exists, months/workdays worked) so they can decide together with the worker, or create a new record if there's no way to confirm. When in doubt, creating one extra record is safer than merging incorrectly — a false negative gets fixed later with an admin merge (not built yet), while a false positive corrupts two different people's history. That's why no code should assume `harvesterId` is immutable forever in historical records.
 
-### `fruits`
-The **catalog of crops/products** a farm can harvest (Lemon, Orange, Avocado, etc.), owned by each `farmId` — two different farms can each have their own "Lemon" with no conflict (the unique index on `name` is compound `{ farmId, name }`, not global). It's pure business configuration: each farm manages it at runtime and it must never require code changes to add a new fruit (RF-03.3). Every workday is opened tied to a single fruit, since in the field a harvest day is typically dedicated to one product.
+### `products` + `farmProducts`
+Two collections, split on purpose. **`products`** is the crop itself and is **shared across every farm**: there is one "Palta" row for the whole app, not a copy per farm. **`farmProducts`** is which crops a given farm grows — the tenant-scoped half, and the direct replacement for the old per-farm `fruits` collection, which conflated the two. Every workday is opened tied to a single product, since in the field a harvest day is typically dedicated to one crop.
+
+Sharing is the point: it makes `GROUP BY productId` across every farm's workdays mean something. With a row per farm you would have to group by text, and any difference in spelling would split the metric in two. It also means a field added to a crop later (typical crate weight, season months, a real photo) is added once instead of to a million copies. `products` is the only collection in the model with no `farmId`, and that doesn't weaken tenant isolation because it isn't tenant data — every collection that *is* still carries its own.
+
+A farm fills its catalog from two sources, and `source` says which:
+
+- **`APP`** — shipped by the app, seeded on boot from `server-app/src/products/product-catalog.ts` (a code constant; the seed upserts by `catalogKey`, so it's idempotent, and adding an entry publishes it to every farm on the next deploy). Visible to everyone.
+- **`COMMUNITY`** — created by a farm because the catalog didn't cover it, and **visible only to that farm** (`createdByFarmId`) until it's promoted. That isolation isn't tenant paranoia: without it the first typo anyone makes ("palta", "Palta Hass", "PALTA") lands in everyone's picker and splits the very metric this collection exists to enable. This branch is also what keeps RF-03.3 true — adding a crop must never require a code change — so the app catalog is a shortcut, not the only door.
+
+**Name and icon stop being editable once the product comes from the app catalog or has been used in a workday.** Nothing about the crop is snapshotted into `workdays` (it only stores `productId`), so every past total resolves the name and icon live against `products`: renaming a used one silently rewrites what those workdays say was harvested, and repurposing one ("Palta" → "Cereza") makes a single `productId` mean two different crops in any aggregation. Deactivating stays allowed at all times — it happens on `farmProducts`, so a farm stops growing something without touching anything global or losing its history.
 
 ### `measurementUnits`
-A farm's **catalog of containers or measurement methods**, with their kilo equivalence (10kg Crate, 20kg Sack, 15kg Basket, or "Direct Kilos" for scale weighing), owned by each `farmId` for the same reason as `fruits`. `kgFactor` is the conversion that lets the system automatically calculate total kilos from the number of containers recorded. A unit with `kgFactor = 1` represents **direct-weighing mode** (RF-03.2), where the entered value is already the weight in kilos. Like `fruits`, it's configurable without touching code (RF-03.1).
+A farm's **catalog of containers**, owned by each `farmId` (a unit really is per-farm — each names its own containers), and configurable without touching code (RF-03.1). `mode` declares how a delivery made with the unit is captured (RF-03.2), and it is **explicit, never inferred from the factor**:
+
+- **`COUNT`** — every container of this kind weighs the same (a 20kg tarro, a 15kg basket). The recorder counts containers and `kgFactor` converts: `totalKg = unitCount × kgFactor`.
+- **`WEIGHT`** — each container comes with a different weight and gets weighed on every round (a capacho). One delivery is one container, and the kilos come off the scale, so `kgFactor` is null.
+
+This used to be inferred from `kgFactor === 1`, which had no way to say "one container of 22.1 kg": the weight went into `unitCount`, so a round read back as "22.1 capachos" and admins had to invent units named "capacho 1kg" to trigger the behavior at all. `mode` exists so `unitCount` can mean containers and only containers.
 
 ### `workdays`
-Represents **one day of harvest**: the unit of work a recorder opens at the start of a shift (RF-01.1), fixing the fruit and default container/unit used unless a specific entry says otherwise. Its `status` (`OPEN`/`CLOSED`) controls whether deliveries can still be recorded or whether the day has already closed and its totals are frozen (RF-01.2). It's the container that groups all of a day's `harvestEntries`.
+Represents **one day of harvest**: the unit of work a recorder opens at the start of a shift (RF-01.1), fixing the crop and default container/unit used unless a specific entry says otherwise. Its `status` (`OPEN`/`CLOSED`) controls whether deliveries can still be recorded or whether the day has already closed and its totals are frozen (RF-01.2). It's the container that groups all of a day's `harvestEntries`.
 
 ### `harvesterWorkday`
 The day's **roster**: which harvesters (from the farm's catalog) are participating in a specific workday, independent of whether they already have a delivery recorded. Solves RF-02.1 (list the day's active harvesters) because someone can appear on the recorder's screen with 0 entries as soon as they're added, with no need for a `harvestEntries` record to exist yet. Lets someone be removed from the day's list (added by mistake) without touching their catalog entry or their history from other workdays.
@@ -151,7 +177,7 @@ The day's **roster**: which harvesters (from the farm's catalog) are participati
 `workdayNumber` is the correlative (1, 2, 3...) the recorder uses to quickly identify each harvester *within that workday* — meant for lists of 20 to 40 people, where searching by name is slower than saying a short number. It's computed 100% on the device (the max of the numbers already assigned in that workday + 1) because a workday is normally run from a single device/recorder: it needs no coordination with the server or other devices, meeting the <100ms requirement with zero network dependency (unlike a persistent global number, which would need an atomic counter on the server and would leave harvesters created offline without a number until the first sync). It's unique within the workday, not global, and is never recycled within the same day even if someone is removed from the list mid-shift.
 
 ### `harvestEntries`
-Each **individual delivery entry**: the digital equivalent of a tally mark on the paper notebook. Records that a given harvester delivered a certain number of units (or kilos, in direct-weighing mode) of fruit, at what time, and with which measurement unit. `syncedOffline` indicates whether that record has already traveled from the local device (SQLite) to the server. It's the highest-volume entity in the system: every "+1" tap on the recorder screen creates (or increments) a record of this type.
+Each **individual delivery entry**: the digital equivalent of a tally mark on the paper notebook. Records that a given harvester delivered a certain number of **containers** of fruit, at what time, and with which measurement unit. `unitCount` is always a whole container count — never kilos, in either mode (in `WEIGHT` it's 1, or -1 for a correction) — and the kilos live only in `totalKg`, always resolved server-side and rounded to one decimal, the resolution of the whole system. `syncedOffline` indicates whether that record has already traveled from the local device (SQLite) to the server. It's the highest-volume entity in the system: every "+1" tap on the recorder screen creates (or increments) a record of this type.
 
 ## Onboarding: how `farmId` gets assigned
 
@@ -161,7 +187,7 @@ Role first, then affiliation:
 2. **If administrator** — two visible options, same backend action (create `farms` + `users.role='admin'`), differing in `type` and the following screen:
    - *"Create a farm for my team"* → `type: 'organization'`, asks for a name, then shows the `invitationCode` with an "invite your team" step.
    - *"Work independently"* → `type: 'independent'`, asks for a name too (avoids a generic name if someone is invited later), no invitation screen.
-3. **If recorder** — asks for the invitation code, validates it against `farms.invitationCode` (with `active: true`), creates `users` with `role: 'recorder'` and the `farmId` of the farm found. There's no "independent recorder" mode: someone working alone needs admin-level permissions over their own catalog (fruits/units/harvesters), so that case always falls under the administrator branch.
+3. **If recorder** — asks for the invitation code, validates it against `farms.invitationCode` (with `active: true`), creates `users` with `role: 'recorder'` and the `farmId` of the farm found. There's no "independent recorder" mode: someone working alone needs admin-level permissions over their own catalog (products/units/harvesters), so that case always falls under the administrator branch.
 
 Changing farms or roles after creation doesn't require any schema change (they're mutable fields on `users`), but **it's not retroactive**: workdays/records already created under the previous `farmId` keep that `farmId` forever — the same philosophy already used for never reassigning `harvesterId` except via an explicit manual merge.
 
@@ -171,7 +197,7 @@ Changing farms or roles after creation doesn't require any schema change (they'r
 |---|---|---|
 | `farms` → `users` | 1 : N | A farm has one or more users (recorders and/or admins); every user belongs to exactly one farm. |
 | `farms` → `harvesters` | 1 : N | The harvester catalog is owned by each farm. |
-| `farms` → `fruits` | 1 : N | The fruit catalog is owned by each farm. |
+| `farms` → `farmProducts` | 1 : N | Which crops a farm grows is owned by that farm; the crops themselves are shared. |
 | `farms` → `measurementUnits` | 1 : N | The measurement unit catalog is owned by each farm. |
 | `farms` → `workdays` | 1 : N | Every workday belongs to exactly one farm, whether opened by a logged-in user or in guest mode. |
 | `farms` → `harvesterWorkday` | 1 : N | Denormalized from the workday — see design note below. |
@@ -180,18 +206,18 @@ Changing farms or roles after creation doesn't require any schema change (they'r
 | `harvesters` → `harvesterWorkday` | 1 : N | A catalog harvester can appear in many different workdays' rosters over time. |
 | `workdays` → `harvesterWorkday` | 1 : N | A workday has a roster with many harvesters participating that day. |
 | `harvesters` → `harvestEntries` | 1 : N | A harvester accumulates many delivery records across their workdays. |
-| `fruits` → `workdays` | 1 : N | A fruit can be harvested across many different workdays (different days). |
+| `products` → `workdays` | 1 : N | A crop can be harvested across many workdays, in many farms. |
 | `measurementUnits` → `workdays` | 1 : N | A measurement unit can be the "default" unit for many workdays. |
 | `measurementUnits` → `harvestEntries` | 1 : N | Each entry uses a measurement unit (which can differ from the workday's default unit — supports switching containers mid-workday). |
 | `workdays` → `harvestEntries` | 1 : N | A workday groups all of that day's harvest records; deleted in cascade if the workday is deleted. |
 
 ## Design notes
 
-- **`harvestEntries.measurementUnitId` is independent of `workdays.defaultMeasurementUnitId`**: the default unit only pre-fills the entry form; each individual record can use a different unit (RF-03.2, direct-weighing vs. container-counting within the same workday).
+- **`harvestEntries.measurementUnitId` is independent of `workdays.defaultMeasurementUnitId`**: the default unit only pre-fills the entry form; each individual record can use a different unit (RF-03.2, a weighed container vs. a counted one within the same workday).
 - **No real `ON DELETE CASCADE`**: unlike the original SQL DDL, Mongo doesn't enforce this — if a `workday` is deleted, `server-app` must explicitly delete/archive its `harvestEntries` at the service layer.
 - **Closing a workday (RF-01.2)**: when `status` moves from `OPEN` to `CLOSED`, aggregate totals (total kilos, units per harvester) should be computed once and frozen into the `workdays` document itself, instead of being recomputed with `aggregate()` on every read.
 - **`syncedOffline`**: exists on the server document as a mirror of the equivalent flag in `ui-app`'s local SQLite table; on the server it always arrives as `true` (only already-uploaded records get synced), but the field is kept for traceability and future auditing/reconciliation needs.
-- **Catalogs (`fruits`, `measurementUnits`) are never hardcoded**: they're runtime-editable collections, unrelated to `server-app`'s code (RF-03.1, RF-03.3).
+- **Catalogs are never a wall**: `measurementUnits` is fully runtime-editable per farm, and although the `products` seed lives in code, any farm can still create its own crop without a code change (RF-03.1, RF-03.3).
 - **Duplicate-harvester merging (future)**: if the "create new when in doubt" flow eventually produces two catalog entries that are actually the same person, an admin tool will be needed to reassign `harvesterId` across historical `harvesterWorkday` and `harvestEntries` records. Not built yet, but the model anticipates it (see the note under `harvesters` above).
 - **Login online, use offline**: the expected flow is login → session persisted locally (token) → everything else works without network, including opening new workdays. The server only validates the token at sync `POST` time; never before.
 - **Guest mode still has a farm**: `workdays.recorderId` being null is a valid, supported state (not an error case), but it does **not** mean "no farm" — `workdays.farmId` is set regardless, taken from the device session's active farm at the moment the workday is opened, independent of whether there's a `recorderId` or not. Confusing these two would be the same kind of hole already avoided once with `recorderId`.

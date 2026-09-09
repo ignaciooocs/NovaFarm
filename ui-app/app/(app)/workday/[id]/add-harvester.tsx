@@ -12,6 +12,7 @@ import {
   TextInput,
   TouchableRipple,
 } from 'react-native-paper';
+import { KeyboardAwareDialog } from '@/components/KeyboardAwareDialog';
 import { Screen } from '@/components/Screen';
 import { strings } from '@/constants/strings';
 import { db } from '@/db/client';
@@ -265,7 +266,10 @@ export default function AddHarvesterScreen() {
       </ScrollView>
 
       <Portal>
-        <Dialog
+        {/* KeyboardAwareDialog: el campo de apellido tiene autoFocus, así que
+            el teclado sube apenas se abre y en iOS tapaba la mitad de la
+            tarjeta. Ver el componente. */}
+        <KeyboardAwareDialog
           visible={createDialogOpen}
           onDismiss={() => setCreateDialogOpen(false)}
         >
@@ -299,7 +303,7 @@ export default function AddHarvesterScreen() {
               {strings.common.save}
             </Button>
           </Dialog.Actions>
-        </Dialog>
+        </KeyboardAwareDialog>
       </Portal>
     </Screen>
   );

@@ -15,11 +15,13 @@ import {
 } from 'react-native-paper';
 import type { FindHarvesterResponseDto } from '@/api/generated/novaFarmAPI.schemas';
 import { getHarvesters } from '@/api/generated/harvesters/harvesters';
+import { KeyboardAwareDialog } from '@/components/KeyboardAwareDialog';
 import { Screen } from '@/components/Screen';
 import { strings } from '@/constants/strings';
 import { db } from '@/db/client';
 import { harvestEntries } from '@/db/schema';
 import { getErrorMessage } from '@/lib/errors';
+import { formatKg } from '@/lib/format';
 import { useActiveWorkdayStore, usePalette } from '@/stores';
 import { colors, spacing } from '@/theme';
 
@@ -203,8 +205,8 @@ export default function HarvestersScreen() {
                       style={[styles.rowSubtitle, { color: palette.primary }]}
                     >
                       {strings.admin.activeWorkdayEntries}:{' '}
-                      {todayTotal.unitCount} {strings.anotador.units} ·{' '}
-                      {todayTotal.totalKg.toFixed(2)} {strings.anotador.kg}
+                      {strings.anotador.containers(todayTotal.unitCount)} ·{' '}
+                      {formatKg(todayTotal.totalKg)} {strings.anotador.kg}
                     </Text>
                   ) : null}
                 </View>
@@ -240,7 +242,12 @@ export default function HarvestersScreen() {
       <FAB icon="plus" style={styles.fab} onPress={openCreateDialog} />
 
       <Portal>
-        <Dialog visible={dialogOpen} onDismiss={() => setDialogOpen(false)}>
+        {/* KeyboardAwareDialog: son tres campos de texto y en iOS el teclado
+            tapaba el último y los botones. Ver el componente. */}
+        <KeyboardAwareDialog
+          visible={dialogOpen}
+          onDismiss={() => setDialogOpen(false)}
+        >
           <Dialog.Title>
             {editingId ? strings.admin.editHarvester : strings.admin.newHarvester}
           </Dialog.Title>
@@ -272,7 +279,7 @@ export default function HarvestersScreen() {
               {strings.common.save}
             </Button>
           </Dialog.Actions>
-        </Dialog>
+        </KeyboardAwareDialog>
       </Portal>
     </Screen>
   );

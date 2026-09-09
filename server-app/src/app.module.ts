@@ -15,7 +15,7 @@ import { AuthModule } from './auth/auth.module';
 import { FarmsModule } from './farms/farms.module';
 import { UsersModule } from './users/users.module';
 import { HarvestersModule } from './harvesters/harvesters.module';
-import { FruitsModule } from './fruits/fruits.module';
+import { ProductsModule } from './products/products.module';
 import { MeasurementUnitsModule } from './measurement-units/measurement-units.module';
 import { WorkdaysModule } from './workdays/workdays.module';
 import { HarvesterWorkdayModule } from './harvester-workday/harvester-workday.module';
@@ -35,7 +35,7 @@ import { HealthModule } from './health/health.module';
     FarmsModule,
     UsersModule,
     HarvestersModule,
-    FruitsModule,
+    ProductsModule,
     MeasurementUnitsModule,
     WorkdaysModule,
     HarvesterWorkdayModule,

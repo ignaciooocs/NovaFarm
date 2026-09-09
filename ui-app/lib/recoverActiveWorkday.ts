@@ -41,7 +41,7 @@ async function recoverFromServer(uid: string): Promise<void> {
         serverId: mine._id,
         farmId: mine.farmId,
         date: mine.date,
-        fruitId: mine.fruitId,
+        productId: mine.productId,
         defaultMeasurementUnitId: mine.defaultMeasurementUnitId,
         status: 'OPEN',
         finalTotalKg: null,

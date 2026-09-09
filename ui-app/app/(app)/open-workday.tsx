@@ -11,11 +11,11 @@ import {
 import { and, eq } from 'drizzle-orm';
 import { OptionSelector } from '@/components/OptionSelector';
 import { Screen } from '@/components/Screen';
-import { DEFAULT_FRUIT_ICON } from '@/constants/fruitIcon';
+import { DEFAULT_PRODUCT_ICON } from '@/constants/productIcon';
 import { strings } from '@/constants/strings';
 import { db } from '@/db/client';
 import {
-  fruits as fruitsTable,
+  products as productsTable,
   measurementUnits as measurementUnitsTable,
   workdays,
 } from '@/db/schema';
@@ -32,7 +32,7 @@ import {
 } from '@/stores';
 import { colors, spacing } from '@/theme';
 
-type LocalFruit = typeof fruitsTable.$inferSelect;
+type LocalProduct = typeof productsTable.$inferSelect;
 type LocalUnit = typeof measurementUnitsTable.$inferSelect;
 
 export default function OpenWorkdayScreen() {
@@ -57,12 +57,12 @@ export default function OpenWorkdayScreen() {
   // hay una, se redirige a esa en vez de dejar abrir una segunda.
   const [checkingActive, setCheckingActive] = useState(true);
 
-  const [fruits, setFruits] = useState<LocalFruit[]>([]);
+  const [products, setProducts] = useState<LocalProduct[]>([]);
   const [units, setUnits] = useState<LocalUnit[]>([]);
   const [loadingCatalogs, setLoadingCatalogs] = useState(true);
   const isConnected = useConnectivityStore((state) => state.isConnected);
 
-  const [fruitId, setFruitId] = useState<string | null>(null);
+  const [productId, setProductId] = useState<string | null>(null);
   const [unitId, setUnitId] = useState<string | null>(null);
 
   const [saving, setSaving] = useState(false);
@@ -103,14 +103,14 @@ export default function OpenWorkdayScreen() {
       try {
         syncCatalogs();
         const farmId = useAuthStore.getState().claims.farmId ?? '';
-        const [fruitsResult, unitsResult] = await Promise.all([
+        const [productsResult, unitsResult] = await Promise.all([
           db
             .select()
-            .from(fruitsTable)
+            .from(productsTable)
             .where(
               and(
-                eq(fruitsTable.active, true),
-                eq(fruitsTable.farmId, farmId),
+                eq(productsTable.active, true),
+                eq(productsTable.farmId, farmId),
               ),
             ),
           db
@@ -123,7 +123,7 @@ export default function OpenWorkdayScreen() {
               ),
             ),
         ]);
-        setFruits(fruitsResult);
+        setProducts(productsResult);
         setUnits(unitsResult);
       } catch (err) {
         setError(getErrorMessage(err));
@@ -135,7 +135,7 @@ export default function OpenWorkdayScreen() {
     loadCatalogs();
   }, [checkingActive]);
 
-  const canSubmit = Boolean(fruitId) && Boolean(unitId) && !saving;
+  const canSubmit = Boolean(productId) && Boolean(unitId) && !saving;
 
   const todayLabel = useMemo(() => {
     const label = new Date().toLocaleDateString('es-CL', {
@@ -147,7 +147,7 @@ export default function OpenWorkdayScreen() {
   }, []);
 
   async function handleSubmit() {
-    if (!fruitId || !unitId || !uid) {
+    if (!productId || !unitId || !uid) {
       return;
     }
 
@@ -169,7 +169,7 @@ export default function OpenWorkdayScreen() {
           serverId: null,
           farmId: useAuthStore.getState().claims.farmId ?? '',
           date: now,
-          fruitId,
+          productId,
           defaultMeasurementUnitId: unitId,
           status: 'OPEN',
           finalTotalKg: null,
@@ -208,8 +208,8 @@ export default function OpenWorkdayScreen() {
     );
   }
 
-  if (fruits.length === 0 || units.length === 0) {
-    const missingFruits = fruits.length === 0;
+  if (products.length === 0 || units.length === 0) {
+    const missingProducts = products.length === 0;
     // Sin conexión, un catálogo vacío casi nunca significa "no hay frutas
     // creadas" — significa que la caché local todavía no se sincronizó
     // (syncCatalogs corre desde Home y al reconectar). Mandar a crear una
@@ -222,13 +222,13 @@ export default function OpenWorkdayScreen() {
         />
         <View style={styles.emptyState}>
           <Text style={styles.emptyEmoji}>
-            {offlineCache ? '📡' : missingFruits ? '🍇' : '📦'}
+            {offlineCache ? '📡' : missingProducts ? '🍇' : '📦'}
           </Text>
           <Text variant="titleMedium" style={styles.emptyTitle}>
             {offlineCache
               ? strings.workday.catalogUnavailableTitle
-              : missingFruits
-                ? strings.admin.fruitsTitle
+              : missingProducts
+                ? strings.admin.productsTitle
                 : strings.admin.measurementUnitsTitle}
           </Text>
           <Text style={styles.emptyHelper}>
@@ -240,14 +240,14 @@ export default function OpenWorkdayScreen() {
             <Button
               mode="contained"
               onPress={() =>
-                router.push(missingFruits ? '/fruits' : '/measurement-units')
+                router.push(missingProducts ? '/products' : '/measurement-units')
               }
               buttonColor={palette.primary}
               contentStyle={styles.buttonContent}
               style={styles.button}
             >
-              {missingFruits
-                ? strings.admin.newFruit
+              {missingProducts
+                ? strings.admin.newProduct
                 : strings.admin.newMeasurementUnit}
             </Button>
           )}
@@ -270,33 +270,33 @@ export default function OpenWorkdayScreen() {
         showsVerticalScrollIndicator={false}
       >
         <Text variant="labelLarge" style={styles.sectionLabel}>
-          {strings.workday.fruit}
+          {strings.workday.product}
         </Text>
         <ScrollView
           horizontal
           showsHorizontalScrollIndicator={false}
-          contentContainerStyle={styles.fruitRow}
+          contentContainerStyle={styles.productRow}
         >
-          {fruits.map((fruit) => {
-            const selected = fruit.id === fruitId;
+          {products.map((product) => {
+            const selected = product.id === productId;
             return (
               <TouchableRipple
-                key={fruit.id}
-                onPress={() => setFruitId(fruit.id)}
-                style={[styles.fruitTile, selected && styles.fruitTileSelected]}
+                key={product.id}
+                onPress={() => setProductId(product.id)}
+                style={[styles.productTile, selected && styles.productTileSelected]}
               >
-                <View style={styles.fruitTileBody}>
-                  <Text style={styles.fruitEmoji}>
-                    {fruit.icon ?? DEFAULT_FRUIT_ICON}
+                <View style={styles.productTileBody}>
+                  <Text style={styles.productEmoji}>
+                    {product.icon ?? DEFAULT_PRODUCT_ICON}
                   </Text>
                   <Text
                     style={[
-                      styles.fruitName,
-                      selected && styles.fruitNameSelected,
+                      styles.productName,
+                      selected && styles.productNameSelected,
                     ]}
                     numberOfLines={1}
                   >
-                    {fruit.name}
+                    {product.name}
                   </Text>
                 </View>
               </TouchableRipple>
@@ -314,10 +314,10 @@ export default function OpenWorkdayScreen() {
           options={units.map((unit) => ({
             value: unit.id,
             short: unit.name,
-            description: strings.admin.unitEquivalence(
-              unit.name,
-              unit.kgFactor,
-            ),
+            description:
+              unit.mode === 'WEIGHT' || unit.kgFactor == null
+                ? strings.admin.unitWeighed
+                : strings.admin.unitEquivalence(unit.name, unit.kgFactor),
           }))}
         />
       </ScrollView>
@@ -353,32 +353,32 @@ function createStyles(palette: ReturnType<typeof usePalette>) {
     // Fila horizontal deslizable en vez de una grilla que envuelve — con
     // varias frutas ocupaba demasiado alto de la pantalla antes de llegar
     // siquiera a la unidad de medida (pedido del usuario, 2026-09-03).
-    fruitRow: {
+    productRow: {
       gap: spacing.sm,
       paddingBottom: spacing.xs,
       marginBottom: spacing.lg,
       alignItems: 'flex-start',
     },
-    fruitTile: {
+    productTile: {
       width: 84,
       borderRadius: 16,
       borderWidth: 1,
       borderColor: colors.border,
       backgroundColor: colors.surface,
     },
-    fruitTileSelected: {
+    productTileSelected: {
       backgroundColor: palette.primarySoft,
       borderColor: palette.primary,
     },
-    fruitTileBody: {
+    productTileBody: {
       alignItems: 'center',
       justifyContent: 'center',
       paddingVertical: spacing.sm,
       paddingHorizontal: spacing.xs,
     },
-    fruitEmoji: { fontSize: 28, marginBottom: 2 },
-    fruitName: { fontWeight: 'bold', fontSize: 12, textAlign: 'center' },
-    fruitNameSelected: { color: palette.primary },
+    productEmoji: { fontSize: 28, marginBottom: 2 },
+    productName: { fontWeight: 'bold', fontSize: 12, textAlign: 'center' },
+    productNameSelected: { color: palette.primary },
     unitSelector: { marginBottom: spacing.md },
     buttonContent: { paddingVertical: spacing.xs },
     button: { marginTop: spacing.sm, borderRadius: 12 },

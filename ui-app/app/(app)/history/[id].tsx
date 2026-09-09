@@ -15,11 +15,12 @@ import { getHarvestEntries } from '@/api/generated/harvest-entries/harvest-entri
 import { getHarvesterWorkday } from '@/api/generated/harvester-workday/harvester-workday';
 import { getWorkdays } from '@/api/generated/workdays/workdays';
 import { Screen } from '@/components/Screen';
-import { DEFAULT_FRUIT_ICON } from '@/constants/fruitIcon';
+import { DEFAULT_PRODUCT_ICON } from '@/constants/productIcon';
 import { strings } from '@/constants/strings';
 import { db } from '@/db/client';
-import { fruits, harvesters as harvestersTable } from '@/db/schema';
+import { products, harvesters as harvestersTable } from '@/db/schema';
 import { getErrorMessage } from '@/lib/errors';
+import { formatKg } from '@/lib/format';
 import { generateWorkdaySummaryPdf } from '@/lib/workdayPdf';
 import { usePalette } from '@/stores';
 import { spacing } from '@/theme';
@@ -33,8 +34,8 @@ interface RosterRow {
 }
 
 interface WorkdayDetail {
-  fruitName: string;
-  fruitIcon: string;
+  productName: string;
+  productIcon: string;
   date: string;
   status: 'OPEN' | 'CLOSED';
   recorderName?: string;
@@ -83,7 +84,7 @@ export default function HistoryDetailScreen() {
           const { harvestEntriesControllerFindAll } = getHarvestEntries();
           const { harvesterWorkdayControllerFindAll } = getHarvesterWorkday();
 
-          const [allWorkdays, entryRows, rosterRows, fruitRows, harvestersRows] =
+          const [allWorkdays, entryRows, rosterRows, productRows, harvestersRows] =
             await Promise.all([
               // Sin filtro de status: esta pantalla también se usa para ver
               // la jornada ABIERTA de alguien desde Mi equipo, no solo
@@ -91,7 +92,7 @@ export default function HistoryDetailScreen() {
               workdaysControllerFindAll({}),
               harvestEntriesControllerFindAll({ workdayId: workdayServerId }),
               harvesterWorkdayControllerFindAll({ workdayId: workdayServerId }),
-              db.select().from(fruits),
+              db.select().from(products),
               db.select().from(harvestersTable),
             ]);
           if (cancelled) {
@@ -104,12 +105,12 @@ export default function HistoryDetailScreen() {
             return;
           }
 
-          const fruitsById: Record<string, { name: string; icon: string }> =
+          const productsById: Record<string, { name: string; icon: string }> =
             {};
-          fruitRows.forEach((fruit) => {
-            fruitsById[fruit.id] = {
-              name: fruit.name,
-              icon: fruit.icon ?? DEFAULT_FRUIT_ICON,
+          productRows.forEach((product) => {
+            productsById[product.id] = {
+              name: product.name,
+              icon: product.icon ?? DEFAULT_PRODUCT_ICON,
             };
           });
           const harvesterNamesById: Record<string, string> = {};
@@ -143,10 +144,10 @@ export default function HistoryDetailScreen() {
             }))
             .sort((a, b) => a.workdayNumber - b.workdayNumber);
 
-          const fruit = fruitsById[workday.fruitId];
+          const product = productsById[workday.productId];
           setDetail({
-            fruitName: fruit?.name ?? workday.fruitId,
-            fruitIcon: fruit?.icon ?? DEFAULT_FRUIT_ICON,
+            productName: product?.name ?? workday.productId,
+            productIcon: product?.icon ?? DEFAULT_PRODUCT_ICON,
             date: workday.date,
             status: workday.status,
             recorderName: workday.recorderName,
@@ -238,7 +239,7 @@ export default function HistoryDetailScreen() {
       <Stack.Screen
         options={{
           headerShown: true,
-          title: `${detail.fruitIcon} ${detail.fruitName}`,
+          title: `${detail.productIcon} ${detail.productName}`,
           headerRight: () =>
             exportingPdf ? (
               <ActivityIndicator size="small" style={styles.headerAction} />
@@ -283,7 +284,7 @@ export default function HistoryDetailScreen() {
                 : strings.workday.totalKg}
             </Text>
             <Text style={styles.totalValue}>
-              {detail.totalKg.toFixed(2)}
+              {formatKg(detail.totalKg)}
               <Text style={styles.totalUnit}> {strings.anotador.kg}</Text>
             </Text>
 
@@ -303,8 +304,8 @@ export default function HistoryDetailScreen() {
             <Text style={styles.rosterNumber}>{item.workdayNumber}</Text>
             <Text style={styles.rosterName}>{item.name}</Text>
             <Text style={styles.rosterTotal}>
-              {item.unitCount} {strings.anotador.units} ·{' '}
-              {item.totalKg.toFixed(2)} {strings.anotador.kg}
+              {strings.anotador.containers(item.unitCount)} ·{' '}
+              {formatKg(item.totalKg)} {strings.anotador.kg}
             </Text>
           </View>
         )}

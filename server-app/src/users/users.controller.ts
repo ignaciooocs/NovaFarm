@@ -29,7 +29,7 @@ import {
   UpdateUserRolesRequestDto,
 } from './dto';
 
-// Solo admin por defecto: a diferencia de los catálogos (fruits/harvesters/
+// Solo admin por defecto: a diferencia de los catálogos (products/harvesters/
 // ...), ver el equipo de la farm expone datos de otras cuentas (email, rol,
 // estado) que un recorder no debería poder listar. Primer uso real de
 // RolesGuard en el proyecto. Las rutas /me son la excepción explícita —

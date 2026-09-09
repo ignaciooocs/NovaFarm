@@ -38,14 +38,14 @@ export class HarvestEntryDto {
 
   @ApiProperty({
     description:
-      'Number of units delivered (or the raw kilo weight, in direct-weighing mode)',
+      'How many containers this delivery was — always a whole number of containers, never kilos (1 for a single weighed container, negative for a correction)',
     example: 3,
   })
   unitCount!: number;
 
   @ApiProperty({
     description:
-      'Total kilos, computed server-side as unitCount x measurementUnit.kgFactor',
+      'Total kilos, always resolved server-side: unitCount x measurementUnit.kgFactor for a COUNT unit, or the weight read off the scale for a WEIGHT one',
     example: 30,
   })
   totalKg!: number;

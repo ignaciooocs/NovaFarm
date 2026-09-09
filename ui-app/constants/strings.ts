@@ -7,6 +7,7 @@
 // app tiene un solo idioma de destino, así que un objeto de constantes es
 // suficiente y no agrega una dependencia ni una capa de indirección de más.
 
+import { formatKg } from '@/lib/format';
 import { APP_NAME } from './appName';
 
 export const strings = {
@@ -25,7 +26,7 @@ export const strings = {
     loading: 'Cargando...',
     retry: 'Reintentar',
     error: 'Ocurrió un error',
-    inactive: 'Inactiva',
+    inactive: 'Inactivo',
     skip: 'Omitir',
     copy: 'Copiar',
   },
@@ -75,10 +76,10 @@ export const strings = {
     joinFarmTitle: 'Unirme a una farm',
     joinFarmSubtitle: 'Ingresa el código que te compartió tu equipo',
     joinFarmButton: 'Unirme',
-    starterFruitsTitle: 'Arma tu catálogo',
-    starterFruitsSubtitle:
-      'Elige las frutas con las que trabajas — puedes agregar más después desde Frutas.',
-    starterFruitsAddButton: 'Agregar y continuar',
+    starterProductsTitle: 'Arma tu catálogo',
+    starterProductsSubtitle:
+      'Elige los cultivos con los que trabajas — puedes agregar más después desde Cultivos.',
+    starterProductsAddButton: 'Agregar y continuar',
   },
   home: {
     title: 'Inicio',
@@ -98,12 +99,12 @@ export const strings = {
   workday: {
     openTitle: 'Abrir Jornada',
     date: 'Fecha',
-    fruit: 'Fruta',
+    product: 'Cultivo',
     measurementUnit: 'Envase / Unidad de medida',
     open: 'Abrir',
     catalogUnavailableTitle: 'Falta descargar el catálogo',
     catalogUnavailableHelp:
-      'Este dispositivo todavía no descargó las frutas y unidades de tu farm. Conéctate una vez y vuelve a intentar — después vas a poder abrir jornadas sin señal.',
+      'Este dispositivo todavía no descargó los cultivos y unidades de tu farm. Conéctate una vez y vuelve a intentar — después vas a poder abrir jornadas sin señal.',
     closeTitle: 'Cerrar Jornada',
     closeConfirm: 'Al cerrar, los totales del día quedan congelados y ya no se pueden agregar más entregas.',
     close: 'Cerrar Jornada',
@@ -120,7 +121,7 @@ export const strings = {
     openLabel: 'Jornada en curso',
     syncedSoFar: 'Total sincronizado hasta ahora',
     pdfHarvesterColumn: 'Cosechador',
-    pdfCountColumn: 'Unidades',
+    pdfCountColumn: 'Envases',
     pdfKgColumn: 'Kg',
     pdfEmptyRoster: 'Sin cosechadores registrados.',
   },
@@ -132,9 +133,12 @@ export const strings = {
     newHarvester: 'Registrar nuevo cosechador',
     registerAsNew: (name: string) => `+ Registrar "${name}" como nuevo`,
     total: 'Total',
-    units: 'unidades',
+    // "Envases", no "unidades": desde que el modo de la unidad es explícito
+    // esto siempre cuenta envases (2 tarros, 1 capacho), nunca kilos.
+    containers: (n: number) => (n === 1 ? '1 envase' : `${n} envases`),
     kg: 'kg',
     weightLabel: 'Peso (kg)',
+    weightHelp: 'Como lo marca la romana, con un decimal (ej. 22,1)',
     recordWeight: 'Anotar peso',
     addWeight: 'Sumar',
     discountWeight: 'Descontar',
@@ -165,14 +169,14 @@ export const strings = {
     rejectedItems: 'No se pudieron subir algunos registros',
   },
   admin: {
-    fruitsTitle: 'Frutas',
+    productsTitle: 'Cultivos',
     measurementUnitsTitle: 'Unidades de medida',
     harvestersTitle: 'Cosechadores',
     teamTitle: 'Mi equipo',
-    newFruit: 'Nueva fruta',
+    newProduct: 'Nuevo cultivo',
     newMeasurementUnit: 'Nueva unidad',
     newHarvester: 'Nuevo cosechador',
-    editFruit: 'Editar fruta',
+    editProduct: 'Editar cultivo',
     editMeasurementUnit: 'Editar unidad',
     editHarvester: 'Editar cosechador',
     roleAdmin: 'Admin',
@@ -182,17 +186,43 @@ export const strings = {
     manageRolesTitle: (name: string) => `Roles de ${name}`,
     manageRolesEmpty: 'Selecciona al menos un rol.',
     manageRolesAdminNote: 'Además de administrador, ¿qué otros roles tiene?',
-    fruitIconLabel: 'Emoji',
-    fruitSuggestionsLabel: 'Sugerencias',
-    fruitsCatalogLabel: 'Tu catálogo',
-    addSuggestionTitle: 'Agregar fruta',
+    productIconLabel: 'Ícono',
+    productCustomIcon: 'Otro ícono',
+    productCustomIconLabel: 'Escribe o pega un emoji',
+    // Se ve dentro de la tarjeta de vista previa mientras el campo de nombre
+    // está vacío, para que la tarjeta no aparezca a medias.
+    productPreviewPlaceholder: 'Nombre del cultivo',
+    productCatalogLabel: 'Agregar del catálogo',
+    productCatalogHelp:
+      'Estos los trae la app. Si el tuyo no está, créalo con el botón +.',
+    productsCatalogLabel: 'Tu catálogo',
+    productLockedTitle: 'No se puede editar',
+    // Las dos razones por las que el nombre y el emoji quedan fijos. Las dos
+    // terminan igual: se puede desactivar, que es lo que alguien realmente
+    // quiere cuando deja de cosechar algo.
+    productLockedCatalog:
+      'Este cultivo lo trae la app, así que su nombre y su ícono los define ella — y son los mismos para todas las farms. Si ya no lo cosechas, puedes desactivarlo con el ojo.',
+    productLockedInUse:
+      'Ya hay jornadas anotadas con este cultivo. Si le cambiaras el nombre o el ícono, esas jornadas pasarían a decir otra cosa. Si ya no lo cosechas, puedes desactivarlo con el ojo.',
+    addSuggestionTitle: 'Agregar cultivo',
     addSuggestionConfirm: (icon: string, name: string) =>
       `¿Agregar ${icon} ${name} a tu catálogo?`,
     activeWorkdayEntries: 'En la jornada activa',
     unitEquivalence: (name: string, kgFactor: number) =>
-      `1 ${name} = ${kgFactor} kg`,
+      `1 ${name} = ${formatKg(kgFactor)} kg`,
+    unitWeighed: 'Se pesa en cada vuelta',
     unitNameLabel: 'Nombre (ej. Tarro 10kg)',
-    kgFactorLabel: 'Factor de conversión a kilos',
+    kgFactorLabel: 'Cuántos kilos trae lleno',
+    unitModeLabel: '¿Cómo se anota?',
+    unitModeCount: 'Contando envases',
+    unitModeWeight: 'Pesando cada uno',
+    // Cortas a propósito: van las dos juntas en el selector de modo, dentro
+    // de un diálogo que ya compite con el teclado. Lo que tiene que quedar
+    // claro es el contraste (todos pesan igual / cada uno pesa distinto) y
+    // cómo se lee una vuelta en cada caso.
+    unitModeCountHelp: 'Todos pesan lo mismo. Ej: "trajo 2 tarros de 20 kg".',
+    unitModeWeightHelp:
+      'Cada uno pesa distinto, lo tomas de la romana. Ej: "trajo 1 capacho con 22,1 kg".',
     firstNameLabel: 'Nombre',
     lastNameLabel: 'Apellido',
     nicknameLabel: 'Apodo (opcional)',
@@ -239,5 +269,13 @@ export const strings = {
     tooManyRequests: 'Demasiados intentos. Espera un momento e intenta de nuevo.',
     invalidInvitationCode: 'El código de invitación no es válido o ya no está activo.',
     alreadyOnboarded: 'Esta cuenta ya completó el registro.',
+    // El índice único del server es {farmId, name} y NO mira `active`, así
+    // que un cultivo desactivado sigue ocupando su nombre. Sin esa pista el
+    // error es un callejón sin salida: no la ves en el catálogo y no
+    // entiendes por qué no te deja crearla.
+    duplicateProductName:
+      'Ya tienes un cultivo con ese nombre. Búscalo en tu catálogo — puede estar desactivado.',
+    duplicateUnitName:
+      'Ya tienes una unidad de medida con ese nombre. Búscala en tu catálogo — puede estar desactivada.',
   },
 } as const;

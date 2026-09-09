@@ -11,8 +11,8 @@ export class Workday {
   @Prop({ required: true })
   date!: Date;
 
-  @Prop({ type: Types.ObjectId, ref: 'Fruit', required: true })
-  fruitId!: Types.ObjectId;
+  @Prop({ type: Types.ObjectId, ref: 'Product', required: true })
+  productId!: Types.ObjectId;
 
   @Prop({ type: Types.ObjectId, ref: 'MeasurementUnit', required: true })
   defaultMeasurementUnitId!: Types.ObjectId;

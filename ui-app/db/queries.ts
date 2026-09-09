@@ -1,7 +1,7 @@
 import { and, eq } from 'drizzle-orm';
 import { db } from './client';
 import {
-  fruits,
+  products,
   harvesters,
   harvestEntries,
   harvesterWorkday,
@@ -90,7 +90,7 @@ export async function clearLocalData(): Promise<void> {
     tx.delete(harvestEntries).run();
     tx.delete(harvesterWorkday).run();
     tx.delete(workdays).run();
-    tx.delete(fruits).run();
+    tx.delete(products).run();
     tx.delete(harvesters).run();
     tx.delete(measurementUnits).run();
   });

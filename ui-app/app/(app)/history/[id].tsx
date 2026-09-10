@@ -20,7 +20,9 @@ import { strings } from '@/constants/strings';
 import { db } from '@/db/client';
 import { products, harvesters as harvestersTable } from '@/db/schema';
 import { getErrorMessage } from '@/lib/errors';
-import { formatKg } from '@/lib/format';
+import { formatCLP, formatKg } from '@/lib/format';
+import { computePay, hasPay, sumPay, type WorkdayPay } from '@/lib/pay';
+import { summarizeWeighing, type WeighingSummary } from '@/lib/weighing';
 import { generateWorkdaySummaryPdf } from '@/lib/workdayPdf';
 import { usePalette } from '@/stores';
 import { spacing } from '@/theme';
@@ -33,7 +35,7 @@ interface RosterRow {
   totalKg: number;
 }
 
-interface WorkdayDetail {
+interface WorkdayDetail extends WorkdayPay {
   productName: string;
   productIcon: string;
   date: string;
@@ -41,6 +43,7 @@ interface WorkdayDetail {
   recorderName?: string;
   totalKg: number;
   roster: RosterRow[];
+  weighing: WeighingSummary | null;
 }
 
 // Detalle de una jornada, cerrada (drill-down desde history.tsx) o
@@ -146,6 +149,11 @@ export default function HistoryDetailScreen() {
 
           const product = productsById[workday.productId];
           setDetail({
+            // La tarifa vive en la jornada del server, no en la caché local:
+            // esta pantalla también muestra jornadas capturadas por otro
+            // dispositivo, que nunca pasaron por este SQLite.
+            payRate: workday.payRate ?? null,
+            payBasis: workday.payBasis ?? null,
             productName: product?.name ?? workday.productId,
             productIcon: product?.icon ?? DEFAULT_PRODUCT_ICON,
             date: workday.date,
@@ -155,6 +163,9 @@ export default function HistoryDetailScreen() {
               workday.finalTotalKg ??
               roster.reduce((sum, row) => sum + row.totalKg, 0),
             roster,
+            // Sobre las entregas en vivo del server, no sobre el roster:
+            // el pesaje es por vuelta, y el roster ya viene sumado.
+            weighing: summarizeWeighing(entryRows),
           });
         } catch (err) {
           if (!cancelled) {
@@ -288,9 +299,49 @@ export default function HistoryDetailScreen() {
               <Text style={styles.totalUnit}> {strings.anotador.kg}</Text>
             </Text>
 
+            {hasPay(detail) ? (
+              <>
+                <Text style={styles.totalLabel}>
+                  {strings.pay.totalToPay}
+                </Text>
+                <Text style={[styles.payValue, { color: palette.primary }]}>
+                  {formatCLP(sumPay(detail, detail.roster) ?? 0)}
+                </Text>
+              </>
+            ) : null}
+
             <Text style={styles.metaText}>
               {strings.history.workersCount(detail.roster.length)}
             </Text>
+
+            {detail.weighing ? (
+              <View style={styles.weighingBlock}>
+                <Text style={styles.sectionLabel}>
+                  {strings.weighing.controlTitle}
+                </Text>
+                <Text style={styles.weighingSummary}>
+                  {strings.weighing.roundsSummary(
+                    detail.weighing.weighedRounds,
+                    detail.weighing.totalRounds,
+                  )}
+                </Text>
+                <Text style={styles.weighingSummary}>
+                  {strings.weighing.comparison(
+                    formatKg(detail.weighing.measuredKg),
+                    formatKg(detail.weighing.expectedKg),
+                  )}{' '}
+                  (
+                  {strings.weighing.difference(
+                    formatKg(detail.weighing.differenceKg),
+                    detail.weighing.differenceKg > 0,
+                  )}
+                  )
+                </Text>
+                <Text style={styles.weighingNote}>
+                  {strings.weighing.doesNotAffect}
+                </Text>
+              </View>
+            ) : null}
 
             <View style={styles.divider} />
             <Text style={styles.sectionLabel}>{strings.history.team}</Text>
@@ -299,16 +350,26 @@ export default function HistoryDetailScreen() {
         ListEmptyComponent={
           <Text style={styles.emptyRoster}>{strings.admin.emptyList}</Text>
         }
-        renderItem={({ item }) => (
-          <View style={styles.rosterRow}>
-            <Text style={styles.rosterNumber}>{item.workdayNumber}</Text>
-            <Text style={styles.rosterName}>{item.name}</Text>
-            <Text style={styles.rosterTotal}>
-              {strings.anotador.containers(item.unitCount)} ·{' '}
-              {formatKg(item.totalKg)} {strings.anotador.kg}
-            </Text>
-          </View>
-        )}
+        renderItem={({ item }) => {
+          const pay = detail ? computePay(detail, item) : null;
+          return (
+            <View style={styles.rosterRow}>
+              <Text style={styles.rosterNumber}>{item.workdayNumber}</Text>
+              <Text style={styles.rosterName}>{item.name}</Text>
+              <View style={styles.rosterRight}>
+                <Text style={styles.rosterTotal}>
+                  {strings.anotador.containers(item.unitCount)} ·{' '}
+                  {formatKg(item.totalKg)} {strings.anotador.kg}
+                </Text>
+                {pay != null ? (
+                  <Text style={[styles.rosterPay, { color: palette.primary }]}>
+                    {formatCLP(pay)}
+                  </Text>
+                ) : null}
+              </View>
+            </View>
+          );
+        }}
       />
 
       <Modal
@@ -367,7 +428,16 @@ function createStyles(colors: ReturnType<typeof usePalette>) {
       fontWeight: '600',
       color: colors.textSecondary,
     },
+    payValue: {
+      fontWeight: '800',
+      fontSize: 28,
+      lineHeight: 34,
+      marginBottom: spacing.sm,
+    },
     metaText: { color: colors.textSecondary, marginBottom: spacing.lg },
+    weighingBlock: { marginBottom: spacing.lg },
+    weighingSummary: { fontSize: 13, color: colors.textPrimary },
+    weighingNote: { color: colors.textSecondary, fontSize: 12, marginTop: 2 },
     divider: {
       borderBottomWidth: StyleSheet.hairlineWidth,
       borderBottomColor: colors.border,
@@ -395,7 +465,9 @@ function createStyles(colors: ReturnType<typeof usePalette>) {
       fontWeight: '700',
     },
     rosterName: { flex: 1, marginLeft: spacing.sm },
+    rosterRight: { alignItems: 'flex-end' },
     rosterTotal: { color: colors.textSecondary },
+    rosterPay: { fontWeight: '700', marginTop: 2 },
     emptyRoster: { paddingVertical: spacing.md, color: colors.textSecondary },
     previewContainer: { flex: 1, backgroundColor: colors.surface },
     previewHeader: {

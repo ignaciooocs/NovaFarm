@@ -4,6 +4,7 @@ import axios, {
   isAxiosError,
 } from 'axios';
 import { auth } from '../lib/firebase';
+import { getCurrentSyncId } from '../lib/syncLog';
 
 // Guarda cuándo salió la request para poder medir cuánto tardó al volver.
 type TimedRequestConfig = InternalAxiosRequestConfig & { startedAt?: number };
@@ -28,6 +29,16 @@ AXIOS_INSTANCE.interceptors.request.use(async (config) => {
 
   if (token) {
     config.headers.set('Authorization', `Bearer ${token}`);
+  }
+
+  // Marca de qué sincronización es esta petición, si es que hay una en
+  // curso. Se pone acá y no en cada llamada porque una sincronización son
+  // varias peticiones a endpoints distintos: así todas salen con el mismo
+  // id sin que ningún call site tenga que acordarse (ver lib/syncLog.ts, y
+  // request-logger.middleware.ts del lado del server).
+  const syncId = getCurrentSyncId();
+  if (syncId) {
+    config.headers.set('X-Sync-Id', syncId);
   }
 
   return config;

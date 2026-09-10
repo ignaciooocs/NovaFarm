@@ -6,9 +6,10 @@ import {
   Button,
   HelperText,
   Text,
+  TextInput,
   TouchableRipple,
 } from 'react-native-paper';
-import { and, eq } from 'drizzle-orm';
+import { and, desc, eq, isNotNull } from 'drizzle-orm';
 import { OptionSelector } from '@/components/OptionSelector';
 import { Screen } from '@/components/Screen';
 import { DEFAULT_PRODUCT_ICON } from '@/constants/productIcon';
@@ -20,7 +21,9 @@ import {
   workdays,
 } from '@/db/schema';
 import { syncCatalogs } from '@/lib/catalogSync';
+import { formatCLP, sanitizeIntegerInput } from '@/lib/format';
 import { generateLocalId } from '@/lib/id';
+import { convertRate, type PayBasis } from '@/lib/pay';
 import { getErrorMessage } from '@/lib/errors';
 import { getActiveWorkdayWithRecovery } from '@/lib/recoverActiveWorkday';
 import { pushPendingWorkdays } from '@/lib/workdaySync';
@@ -64,6 +67,15 @@ export default function OpenWorkdayScreen() {
 
   const [productId, setProductId] = useState<string | null>(null);
   const [unitId, setUnitId] = useState<string | null>(null);
+
+  // Tarifa del día. Opcional: se puede abrir la jornada sin definirla (hay
+  // farms que pagan por día, y muchas veces el precio todavía no está
+  // cerrado a la hora de partir). `payTouched` existe solo para que la
+  // precarga no le pise encima lo que la persona ya tipeó.
+  const [payBasis, setPayBasis] = useState<PayBasis>('PER_UNIT');
+  const [payAmount, setPayAmount] = useState('');
+  const [payTouched, setPayTouched] = useState(false);
+  const [payPrefilled, setPayPrefilled] = useState(false);
 
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -135,6 +147,68 @@ export default function OpenWorkdayScreen() {
     loadCatalogs();
   }, [checkingActive]);
 
+  const selectedUnit = useMemo(
+    () => units.find((unit) => unit.id === unitId) ?? null,
+    [units, unitId],
+  );
+
+  // Propone la tarifa de la última jornada de este mismo cultivo con este
+  // mismo envase. Local, sin red — y a propósito solo con esa combinación
+  // exacta: heredar el precio del mismo tarro pero de otra fruta sería peor
+  // que no proponer nada, porque el número aparece puesto y nadie lo revisa.
+  useEffect(() => {
+    if (!productId || !unitId || payTouched) {
+      return;
+    }
+
+    let cancelled = false;
+    (async () => {
+      const farmId = useAuthStore.getState().claims.farmId ?? '';
+      const [last] = await db
+        .select()
+        .from(workdays)
+        .where(
+          and(
+            eq(workdays.farmId, farmId),
+            eq(workdays.productId, productId),
+            eq(workdays.defaultMeasurementUnitId, unitId),
+            isNotNull(workdays.payRate),
+          ),
+        )
+        .orderBy(desc(workdays.createdAt))
+        .limit(1);
+
+      if (cancelled) {
+        return;
+      }
+
+      if (last?.payRate != null) {
+        setPayAmount(String(last.payRate));
+        setPayBasis(last.payBasis ?? 'PER_KG');
+        setPayPrefilled(true);
+      } else {
+        setPayAmount('');
+        setPayPrefilled(false);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [productId, unitId, payTouched]);
+
+  // Un envase que se pesa en cada vuelta solo se puede pagar por kilo (el
+  // server rechaza lo otro). Se corrige acá y no al enviar para que el
+  // formulario nunca muestre una opción que después va a ser rechazada.
+  useEffect(() => {
+    if (selectedUnit?.mode === 'WEIGHT' && payBasis !== 'PER_KG') {
+      setPayBasis('PER_KG');
+    }
+  }, [selectedUnit, payBasis]);
+
+  const payRate = payAmount ? Number(payAmount) : null;
+  const rateLabel = buildRateLabel(payRate, payBasis, selectedUnit);
+
   const canSubmit = Boolean(productId) && Boolean(unitId) && !saving;
 
   const todayLabel = useMemo(() => {
@@ -173,6 +247,11 @@ export default function OpenWorkdayScreen() {
           defaultMeasurementUnitId: unitId,
           status: 'OPEN',
           finalTotalKg: null,
+          // Los dos juntos o los dos en null — sin monto, la base no dice
+          // nada. Si quedó sin tarifa, se puede definir después desde
+          // Cerrar Jornada mientras la jornada siga abierta.
+          payRate,
+          payBasis: payRate == null ? null : payBasis,
           synced: false,
           createdAt: now,
           createdByUid: uid,
@@ -268,6 +347,11 @@ export default function OpenWorkdayScreen() {
         style={styles.scroll}
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
+        keyboardShouldPersistTaps="handled"
+        // iOS no achica la ventana al abrir el teclado (Android sí, solo),
+        // así que sin esto el campo de la tarifa —el último de la pantalla—
+        // queda tapado mientras se escribe.
+        automaticallyAdjustKeyboardInsets
       >
         <Text variant="labelLarge" style={styles.sectionLabel}>
           {strings.workday.product}
@@ -320,6 +404,68 @@ export default function OpenWorkdayScreen() {
                 : strings.admin.unitEquivalence(unit.name, unit.kgFactor),
           }))}
         />
+
+        {selectedUnit ? (
+          <>
+            <Text variant="labelLarge" style={styles.sectionLabel}>
+              {strings.pay.section}
+            </Text>
+            {selectedUnit.mode === 'COUNT' ? (
+              <>
+                <Text style={styles.payNote}>{strings.pay.basisLabel}</Text>
+                <OptionSelector<PayBasis>
+                  value={payBasis}
+                  onChange={(value) => {
+                    setPayBasis(value);
+                    setPayTouched(true);
+                  }}
+                  style={styles.unitSelector}
+                  options={[
+                    {
+                      value: 'PER_UNIT',
+                      short: strings.pay.perUnitShort(selectedUnit.name),
+                      description: strings.pay.perUnitHelp(selectedUnit.name),
+                    },
+                    {
+                      value: 'PER_KG',
+                      short: strings.pay.perKgShort,
+                      description: strings.pay.perKgHelp(
+                        strings.admin.unitEquivalence(
+                          selectedUnit.name,
+                          selectedUnit.kgFactor ?? 0,
+                        ),
+                      ),
+                    },
+                  ]}
+                />
+              </>
+            ) : (
+              <Text style={styles.payNote}>
+                {strings.pay.weighedFixedNote}
+              </Text>
+            )}
+
+            <TextInput
+              mode="outlined"
+              label={strings.pay.amountLabel}
+              value={payAmount}
+              onChangeText={(text) => {
+                setPayAmount(sanitizeIntegerInput(text));
+                setPayTouched(true);
+              }}
+              keyboardType="number-pad"
+              left={<TextInput.Affix text="$" />}
+              outlineColor={colors.border}
+              activeOutlineColor={palette.primary}
+            />
+            <HelperText type="info" visible>
+              {rateLabel ?? strings.pay.optionalHelp}
+            </HelperText>
+            {payPrefilled && !payTouched && payAmount ? (
+              <Text style={styles.payNote}>{strings.pay.prefilledFrom}</Text>
+            ) : null}
+          </>
+        ) : null}
       </ScrollView>
 
       {error ? <HelperText type="error">{error}</HelperText> : null}
@@ -337,6 +483,41 @@ export default function OpenWorkdayScreen() {
       </Button>
     </Screen>
   );
+}
+
+// La tarifa escrita en las dos unidades. Con un envase de peso fijo las dos
+// opciones de pago dan la misma plata, así que mostrar la conversión es lo
+// que deja ver que son el mismo precio y no dos tratos distintos.
+function buildRateLabel(
+  payRate: number | null,
+  payBasis: PayBasis,
+  unit: LocalUnit | null,
+): string | null {
+  if (payRate == null || !unit) {
+    return null;
+  }
+
+  // Envase que se pesa en cada vuelta: no hay factor con qué convertir, y
+  // el pago por kilo es el único posible.
+  if (unit.mode !== 'COUNT' || unit.kgFactor == null) {
+    return strings.pay.ratePerKg(formatCLP(payRate));
+  }
+
+  const { converted, exact } = convertRate(payRate, unit.kgFactor, payBasis);
+
+  return payBasis === 'PER_UNIT'
+    ? strings.pay.ratePerUnitWithKg(
+        formatCLP(payRate),
+        formatCLP(converted),
+        unit.name,
+        exact,
+      )
+    : strings.pay.ratePerKgWithUnit(
+        formatCLP(payRate),
+        formatCLP(converted),
+        unit.name,
+        exact,
+      );
 }
 
 function createStyles(palette: ReturnType<typeof usePalette>) {
@@ -380,6 +561,11 @@ function createStyles(palette: ReturnType<typeof usePalette>) {
     productName: { fontWeight: 'bold', fontSize: 12, textAlign: 'center' },
     productNameSelected: { color: palette.primary },
     unitSelector: { marginBottom: spacing.md },
+    payNote: {
+      color: colors.textSecondary,
+      fontSize: 13,
+      marginBottom: spacing.md,
+    },
     buttonContent: { paddingVertical: spacing.xs },
     button: { marginTop: spacing.sm, borderRadius: 12 },
     emptyState: { flex: 1, alignItems: 'center', justifyContent: 'center' },

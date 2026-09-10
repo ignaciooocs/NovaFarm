@@ -25,6 +25,8 @@ import {
   CreateWorkdayResponseDto,
   FindWorkdayRequestDto,
   FindWorkdayResponseDto,
+  UpdateWorkdayPayRequestDto,
+  UpdateWorkdayPayResponseDto,
 } from './dto';
 
 @ApiTags('workdays')
@@ -61,6 +63,24 @@ export class WorkdaysController {
     @Query() filter: FindWorkdayRequestDto,
   ): Promise<FindWorkdayResponseDto[]> {
     return this.workdaysService.findAll(farmId, filter);
+  }
+
+  @Patch(':id/pay')
+  @ApiOperation({
+    summary:
+      'Define or correct how much is paid in an open workday (rejected once it is closed)',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'The workday pay was updated successfully.',
+    type: UpdateWorkdayPayResponseDto,
+  })
+  async updatePay(
+    @CurrentFarm() farmId: string,
+    @Param('id') id: string,
+    @Body() dto: UpdateWorkdayPayRequestDto,
+  ): Promise<UpdateWorkdayPayResponseDto> {
+    return this.workdaysService.updatePay(farmId, id, dto);
   }
 
   @Patch(':id/close')

@@ -1,4 +1,4 @@
-import { ApiProperty } from '@nestjs/swagger';
+import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 
 /**
  * Canonical shape of a HarvestEntry (delivery/"Anotar" tally) entity,
@@ -49,6 +49,17 @@ export class HarvestEntryDto {
     example: 30,
   })
   totalKg!: number;
+
+  // `type: Number` explícito: sin eso Swagger no infiere `number | null` y
+  // cae a `object` (mismo caso que kgFactor/recorderId).
+  @ApiPropertyOptional({
+    description:
+      'Actual weight recorded for this delivery, in kilos. Optional control reading for COUNT units only (the container says 3kg, someone weighed 3.4): never part of totalKg and never part of the pay. Null when nobody weighed this one.',
+    type: Number,
+    example: 3.4,
+    nullable: true,
+  })
+  measuredKg?: number | null;
 
   @ApiProperty({
     description:

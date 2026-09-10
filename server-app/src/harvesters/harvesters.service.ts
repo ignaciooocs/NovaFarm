@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model, Types } from 'mongoose';
+import { logSyncBatch } from '../common/logging/sync-batch-log';
 import { Harvester, HarvesterDocument } from './schemas/harvester.schema';
 import {
   CreateHarvesterRequestDto,
@@ -57,10 +58,14 @@ export class HarvestersService {
     farmId: string,
     entries: SyncHarvesterEntryDto[],
   ): Promise<SyncHarvesterResponseDto[]> {
+    const startedAt = Date.now();
     const results: SyncHarvesterResponseDto[] = [];
     for (const entry of entries) {
       results.push(await this.syncOne(farmId, entry));
     }
+
+    logSyncBatch('harvesters', `farm=${farmId}`, results, startedAt);
+
     return results;
   }
 
@@ -151,6 +156,30 @@ export class HarvestersService {
   // farm indicada. Se usa desde otros módulos (harvester-workday,
   // harvest-entries) para validar referencias sin exponerles el modelo de
   // Mongoose directamente.
+  // Cuáles de estos ids son cosechadores activos de la farm, en **una**
+  // consulta. Existe para el sync de entregas: preguntarlo de a uno eran
+  // tantas idas a Atlas como anotaciones traiga el lote, y con un día
+  // completo eso se pasaba del timeout del cliente (bug real, 2026-09-09).
+  // Devuelve solo los ids, no el documento: quien llama únicamente necesita
+  // saber si vale o no, y así no se pasea PII (nationalId) de más.
+  async findActiveIdsIn(farmId: string, ids: string[]): Promise<Set<string>> {
+    const valid = ids.filter((id) => Types.ObjectId.isValid(id));
+    if (valid.length === 0) {
+      return new Set();
+    }
+
+    const found = await this.harvesterModel
+      .find({
+        _id: { $in: valid.map((id) => new Types.ObjectId(id)) },
+        farmId: new Types.ObjectId(farmId),
+        active: true,
+      })
+      .select('_id')
+      .exec();
+
+    return new Set(found.map((doc) => doc._id.toString()));
+  }
+
   async findActiveById(
     farmId: string,
     id: string,

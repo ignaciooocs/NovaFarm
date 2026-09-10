@@ -1,4 +1,5 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
+import type { WorkdayPayBasis } from '../schemas/workday.schema';
 
 /**
  * Canonical shape of a Workday entity, independent of any specific action.
@@ -70,6 +71,27 @@ export class WorkdayDto {
     example: 'Juan Pérez',
   })
   recorderName?: string;
+
+  // `type: Number` explícito por lo mismo que kgFactor en MeasurementUnitDto:
+  // el plugin de Swagger no infiere `number | null` y cae a `object`, lo que
+  // le genera a ui-app un `{ [key: string]: unknown }` en vez de un número.
+  @ApiPropertyOptional({
+    description:
+      'How much a harvester is paid for what they deliver this workday, in whole Chilean pesos. Null when the farm does not pay per production (day wage) or has not defined the rate yet.',
+    type: Number,
+    example: 500,
+    nullable: true,
+  })
+  payRate?: number | null;
+
+  @ApiPropertyOptional({
+    description:
+      'What the pay rate is applied to. PER_UNIT: per container delivered (only valid with a COUNT unit). PER_KG: per kilo, the only option when the container is weighed every round (WEIGHT). Null whenever payRate is null.',
+    enum: ['PER_UNIT', 'PER_KG'],
+    example: 'PER_UNIT',
+    nullable: true,
+  })
+  payBasis?: WorkdayPayBasis | null;
 
   @ApiProperty({
     description:

@@ -20,6 +20,34 @@ export function formatKg(value: number): string {
 }
 
 /**
+ * Pesos chilenos como se escriben acá: sin decimales y con punto de miles
+ * ($12.500). El peso chileno no tiene centavos, así que un monto con
+ * decimales sería ruido, no precisión.
+ *
+ * No usa toLocaleString por lo mismo que formatKg: Hermes en Android puede
+ * venir sin ICU completo según cómo esté compilado el binario.
+ */
+export function formatCLP(value: number): string {
+  const rounded = Math.round(value);
+  const sign = rounded < 0 ? '-' : '';
+  const grouped = Math.abs(rounded)
+    .toString()
+    .replace(/\B(?=(\d{3})+(?!\d))/g, '.');
+
+  return `${sign}$${grouped}`;
+}
+
+/**
+ * Recorta lo tipeado a un entero sin ceros a la izquierda — el equivalente
+ * de sanitizeDecimalInput para la plata, que no lleva decimales ni
+ * separadores mientras se escribe (el punto de miles se muestra aparte, ya
+ * formateado, debajo del campo).
+ */
+export function sanitizeIntegerInput(text: string): string {
+  return text.replace(/[^0-9]/g, '').replace(/^0+(?=\d)/, '');
+}
+
+/**
  * Redondea a la resolución de la app.
  *
  * Multiplicar en float devuelve cosas como 3 × 12,1 = 36.299999999999997, y

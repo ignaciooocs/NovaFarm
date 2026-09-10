@@ -79,6 +79,19 @@ export const workdays = sqliteTable('workdays', {
     .notNull()
     .default('OPEN'),
   finalTotalKg: real('final_total_kg'),
+  // Cuánto se le paga al cosechador por lo que entrega en esta jornada, y
+  // sobre qué se calcula (espeja workday.schema.ts del server). Los dos
+  // nullables porque la tarifa es **opcional**: hay farms que pagan por día
+  // y no a trato, y en terreno el precio muchas veces todavía no está
+  // definido a la hora de abrir la jornada — exigirlo bloquearía la
+  // captura, que es lo único que no puede fallar. Sin tarifa, ninguna
+  // pantalla ni el PDF muestran plata (que no es lo mismo que mostrar $0).
+  //   PER_UNIT — $ por envase entregado; solo con unidades COUNT.
+  //   PER_KG   — $ por kilo; el único modo posible si el envase se pesa en
+  //              cada vuelta, donde pagar por envase sería pagar por viaje.
+  // Entero y no real: son pesos chilenos, sin centavos.
+  payRate: integer('pay_rate'),
+  payBasis: text('pay_basis', { enum: ['PER_UNIT', 'PER_KG'] }),
   synced: integer('synced', { mode: 'boolean' }).notNull().default(false),
   createdAt: text('created_at').notNull(),
   // uid de Firebase de quien abrió la jornada en este dispositivo — sin
@@ -115,6 +128,12 @@ export const harvestEntries = sqliteTable('harvest_entries', {
   measurementUnitId: text('measurement_unit_id').notNull(),
   unitCount: real('unit_count').notNull(),
   totalKg: real('total_kg').notNull(),
+  // Pesaje de control, opcional y solo en unidades COUNT: el envase vale
+  // 3,0 kg por catálogo y alguien dejó anotado que esa vuelta trajo 3,4.
+  // Es un dato aparte para comparar (merma, envases mal llenados, cuadrar
+  // con el packing) — **nunca** entra en totalKg ni en el pago. Ver
+  // lib/weighing.ts.
+  measuredKg: real('measured_kg'),
   recordedAt: text('recorded_at').notNull(),
   synced: integer('synced', { mode: 'boolean' }).notNull().default(false),
 });

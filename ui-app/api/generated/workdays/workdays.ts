@@ -10,6 +10,8 @@ import type {
   CreateWorkdayRequestDto,
   CreateWorkdayResponseDto,
   FindWorkdayResponseDto,
+  UpdateWorkdayPayRequestDto,
+  UpdateWorkdayPayResponseDto,
   WorkdaysControllerFindAllParams
 } from '../novaFarmAPI.schemas';
 
@@ -44,6 +46,20 @@ const workdaysControllerFindAll = (
       );
     }
   /**
+ * @summary Define or correct how much is paid in an open workday (rejected once it is closed)
+ */
+const workdaysControllerUpdatePay = (
+    id: string,
+    updateWorkdayPayRequestDto: UpdateWorkdayPayRequestDto,
+ ) => {
+      return apiClient<UpdateWorkdayPayResponseDto>(
+      {url: `/api/v1/workdays/${id}/pay`, method: 'PATCH',
+      headers: {'Content-Type': 'application/json', },
+      data: updateWorkdayPayRequestDto
+    },
+      );
+    }
+  /**
  * @summary Close a workday, freezing its aggregate total in kilos (RF-01.2)
  */
 const workdaysControllerClose = (
@@ -54,7 +70,8 @@ const workdaysControllerClose = (
     },
       );
     }
-  return {workdaysControllerCreate,workdaysControllerFindAll,workdaysControllerClose}};
+  return {workdaysControllerCreate,workdaysControllerFindAll,workdaysControllerUpdatePay,workdaysControllerClose}};
 export type WorkdaysControllerCreateResult = NonNullable<Awaited<ReturnType<ReturnType<typeof getWorkdays>['workdaysControllerCreate']>>>
 export type WorkdaysControllerFindAllResult = NonNullable<Awaited<ReturnType<ReturnType<typeof getWorkdays>['workdaysControllerFindAll']>>>
+export type WorkdaysControllerUpdatePayResult = NonNullable<Awaited<ReturnType<ReturnType<typeof getWorkdays>['workdaysControllerUpdatePay']>>>
 export type WorkdaysControllerCloseResult = NonNullable<Awaited<ReturnType<ReturnType<typeof getWorkdays>['workdaysControllerClose']>>>

@@ -1,6 +1,8 @@
 import * as Print from 'expo-print';
 import { strings } from '@/constants/strings';
-import { formatKg } from '@/lib/format';
+import { formatCLP, formatKg } from '@/lib/format';
+import { computePay, hasPay, sumPay, type WorkdayPay } from '@/lib/pay';
+import type { WeighingSummary } from '@/lib/weighing';
 
 export interface WorkdayPdfRosterRow {
   workdayNumber: number;
@@ -9,7 +11,13 @@ export interface WorkdayPdfRosterRow {
   totalKg: number;
 }
 
-export interface WorkdayPdfData {
+// Resumen del pesaje de control del día, o null si nadie pesó nada — en ese
+// caso el PDF no lo menciona (ver lib/weighing.ts).
+export type WorkdayPdfWeighing = WeighingSummary | null;
+
+// `pay` viene de la jornada misma. Si no tiene tarifa, el PDF no habla de
+// plata en absoluto: ni columna, ni total — no una columna con ceros.
+export interface WorkdayPdfData extends WorkdayPay {
   productName: string;
   productIcon: string;
   date: string;
@@ -17,6 +25,7 @@ export interface WorkdayPdfData {
   recorderName?: string;
   totalKg: number;
   roster: WorkdayPdfRosterRow[];
+  weighing: WorkdayPdfWeighing;
 }
 
 // El HTML lo renderiza el motor nativo de impresión (WKWebView/Chromium
@@ -46,16 +55,21 @@ function buildHtml(data: WorkdayPdfData): string {
   const totalLabel =
     data.status === 'OPEN' ? strings.history.syncedSoFar : strings.workday.totalKg;
 
+  const showPay = hasPay(data);
+  const totalPay = sumPay(data, data.roster);
+
   const rosterRows = data.roster
-    .map(
-      (row) => `
+    .map((row) => {
+      const pay = computePay(data, row);
+      return `
         <tr>
           <td>${row.workdayNumber}</td>
           <td>${escapeHtml(row.name)}</td>
           <td class="num">${row.unitCount}</td>
           <td class="num">${formatKg(row.totalKg)}</td>
-        </tr>`,
-    )
+          ${showPay ? `<td class="num pay">${formatCLP(pay ?? 0)}</td>` : ''}
+        </tr>`;
+    })
     .join('');
 
   return `
@@ -77,6 +91,11 @@ function buildHtml(data: WorkdayPdfData): string {
           th, td { text-align: left; padding: 8px; border-bottom: 1px solid #D9D9D9; font-size: 13px; }
           th { color: #5C5C5C; text-transform: uppercase; font-size: 11px; letter-spacing: 0.5px; }
           td.num, th.num { text-align: right; }
+          td.pay { font-weight: 700; }
+          .payTotal { font-size: 20px; font-weight: 700; margin-top: 8px; }
+          .payLabel { color: #5C5C5C; font-size: 12px; text-transform: uppercase; letter-spacing: 0.5px; }
+          .weighing { margin-bottom: 24px; font-size: 13px; }
+          .weighingNote { color: #5C5C5C; font-size: 11px; margin-top: 2px; }
         </style>
       </head>
       <body>
@@ -86,7 +105,22 @@ function buildHtml(data: WorkdayPdfData): string {
         <div class="totalBox">
           <div class="totalLabel">${totalLabel}</div>
           <div class="totalValue">${formatKg(data.totalKg)} ${strings.anotador.kg}</div>
+          ${
+            showPay
+              ? `<div class="payLabel">${strings.pay.totalToPay}</div>
+                 <div class="payTotal">${formatCLP(totalPay ?? 0)}</div>`
+              : ''
+          }
         </div>
+        ${
+          data.weighing
+            ? `<div class="weighing">
+                 <div class="payLabel">${strings.weighing.controlTitle}</div>
+                 <div>${strings.weighing.roundsSummary(data.weighing.weighedRounds, data.weighing.totalRounds)} · ${strings.weighing.comparison(formatKg(data.weighing.measuredKg), formatKg(data.weighing.expectedKg))} (${strings.weighing.difference(formatKg(data.weighing.differenceKg), data.weighing.differenceKg > 0)})</div>
+                 <div class="weighingNote">${strings.weighing.doesNotAffect}</div>
+               </div>`
+            : ''
+        }
         <table>
           <thead>
             <tr>
@@ -94,10 +128,14 @@ function buildHtml(data: WorkdayPdfData): string {
               <th>${strings.history.pdfHarvesterColumn}</th>
               <th class="num">${strings.history.pdfCountColumn}</th>
               <th class="num">${strings.history.pdfKgColumn}</th>
+              ${showPay ? `<th class="num">${strings.history.pdfPayColumn}</th>` : ''}
             </tr>
           </thead>
           <tbody>
-            ${rosterRows || `<tr><td colspan="4">${strings.history.pdfEmptyRoster}</td></tr>`}
+            ${
+              rosterRows ||
+              `<tr><td colspan="${showPay ? 5 : 4}">${strings.history.pdfEmptyRoster}</td></tr>`
+            }
           </tbody>
         </table>
       </body>

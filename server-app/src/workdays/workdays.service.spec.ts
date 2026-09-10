@@ -1,4 +1,8 @@
-import { NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  ConflictException,
+  NotFoundException,
+} from '@nestjs/common';
 import { getModelToken } from '@nestjs/mongoose';
 import { Test, TestingModule } from '@nestjs/testing';
 import { Types } from 'mongoose';
@@ -29,6 +33,7 @@ describe('WorkdaysService', () => {
 
   const measurementUnitsService = {
     findActiveById: jest.fn(),
+    findAnyById: jest.fn(),
   };
 
   const usersService = {
@@ -355,6 +360,225 @@ describe('WorkdaysService', () => {
           dto,
         ),
       ).rejects.toThrow('boom');
+    });
+
+    it('stores the pay rate and its basis when the workday is opened with one', async () => {
+      mockNoExistingClientEntry();
+      productsService.findActiveById.mockResolvedValue({
+        _id: productId,
+        active: true,
+      });
+      measurementUnitsService.findActiveById.mockResolvedValue({
+        _id: measurementUnitId,
+        active: true,
+        mode: 'COUNT',
+      });
+      usersService.findByFirebaseUid.mockResolvedValue(null);
+      workdayModel.create.mockResolvedValue({
+        _id: new Types.ObjectId(),
+        farmId: new Types.ObjectId(farmId),
+        date: new Date(dto.date),
+        productId: new Types.ObjectId(productId),
+        defaultMeasurementUnitId: new Types.ObjectId(measurementUnitId),
+        status: 'OPEN',
+        createdAt: new Date('2026-09-02T08:00:00.000Z'),
+        recorderId: null,
+        payRate: 500,
+        payBasis: 'PER_UNIT',
+        clientEntryId: dto.clientEntryId,
+      });
+
+      const result = await workdaysService.create(
+        farmId,
+        { uid: 'firebase-uid', farmId, roles: ['admin'] },
+        { ...dto, payRate: 500, payBasis: 'PER_UNIT' },
+      );
+
+      expect(workdayModel.create).toHaveBeenCalledWith(
+        expect.objectContaining({ payRate: 500, payBasis: 'PER_UNIT' }),
+      );
+      expect(result.payRate).toEqual(500);
+      expect(result.payBasis).toEqual('PER_UNIT');
+    });
+
+    it('opens a workday with no pay at all when no rate is sent', async () => {
+      mockNoExistingClientEntry();
+      productsService.findActiveById.mockResolvedValue({
+        _id: productId,
+        active: true,
+      });
+      measurementUnitsService.findActiveById.mockResolvedValue({
+        _id: measurementUnitId,
+        active: true,
+        mode: 'COUNT',
+      });
+      usersService.findByFirebaseUid.mockResolvedValue(null);
+      workdayModel.create.mockResolvedValue({
+        _id: new Types.ObjectId(),
+        farmId: new Types.ObjectId(farmId),
+        date: new Date(dto.date),
+        productId: new Types.ObjectId(productId),
+        defaultMeasurementUnitId: new Types.ObjectId(measurementUnitId),
+        status: 'OPEN',
+        createdAt: new Date('2026-09-02T08:00:00.000Z'),
+        recorderId: null,
+        clientEntryId: dto.clientEntryId,
+      });
+
+      const result = await workdaysService.create(
+        farmId,
+        { uid: 'firebase-uid', farmId, roles: ['admin'] },
+        dto,
+      );
+
+      expect(workdayModel.create).toHaveBeenCalledWith(
+        expect.objectContaining({ payRate: null, payBasis: null }),
+      );
+      expect(result.payRate).toBeNull();
+      expect(result.payBasis).toBeNull();
+    });
+
+    it('rejects paying per container when the unit is weighed on every round', async () => {
+      mockNoExistingClientEntry();
+      productsService.findActiveById.mockResolvedValue({
+        _id: productId,
+        active: true,
+      });
+      measurementUnitsService.findActiveById.mockResolvedValue({
+        _id: measurementUnitId,
+        active: true,
+        mode: 'WEIGHT',
+      });
+
+      await expect(
+        workdaysService.create(
+          farmId,
+          { uid: 'firebase-uid', farmId, roles: ['admin'] },
+          { ...dto, payRate: 500, payBasis: 'PER_UNIT' },
+        ),
+      ).rejects.toBeInstanceOf(BadRequestException);
+      expect(workdayModel.create).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('updatePay', () => {
+    const workdayId = new Types.ObjectId().toString();
+
+    function mockWorkday(overrides: Record<string, unknown> = {}) {
+      const doc = {
+        _id: new Types.ObjectId(workdayId),
+        farmId: new Types.ObjectId(farmId),
+        date: new Date('2026-09-02'),
+        productId: new Types.ObjectId(productId),
+        defaultMeasurementUnitId: new Types.ObjectId(measurementUnitId),
+        status: 'OPEN',
+        createdAt: new Date('2026-09-02T08:00:00.000Z'),
+        recorderId: null,
+        clientEntryId: 'local-8f3a2b1c',
+        ...overrides,
+      };
+      workdayModel.findOne.mockReturnValue({
+        exec: jest.fn().mockResolvedValue(doc),
+      });
+      workdayModel.findOneAndUpdate.mockReturnValue({
+        exec: jest.fn().mockResolvedValue(doc),
+      });
+      return doc;
+    }
+
+    it('sets the pay on a workday that is still open', async () => {
+      const doc = mockWorkday();
+      measurementUnitsService.findAnyById.mockResolvedValue({
+        _id: measurementUnitId,
+        mode: 'COUNT',
+      });
+      workdayModel.findOneAndUpdate.mockReturnValue({
+        exec: jest
+          .fn()
+          .mockResolvedValue({ ...doc, payRate: 500, payBasis: 'PER_UNIT' }),
+      });
+
+      const result = await workdaysService.updatePay(farmId, workdayId, {
+        payRate: 500,
+        payBasis: 'PER_UNIT',
+      });
+
+      expect(workdayModel.findOneAndUpdate).toHaveBeenCalledWith(
+        { _id: workdayId, farmId: new Types.ObjectId(farmId) },
+        { $set: { payRate: 500, payBasis: 'PER_UNIT' } },
+        { new: true },
+      );
+      expect(result.payRate).toEqual(500);
+      expect(result.payBasis).toEqual('PER_UNIT');
+    });
+
+    it('clears the basis together with the rate when the pay is removed', async () => {
+      mockWorkday({ payRate: 500, payBasis: 'PER_UNIT' });
+
+      await workdaysService.updatePay(farmId, workdayId, {
+        payRate: null,
+        payBasis: 'PER_UNIT',
+      });
+
+      expect(workdayModel.findOneAndUpdate).toHaveBeenCalledWith(
+        { _id: workdayId, farmId: new Types.ObjectId(farmId) },
+        { $set: { payRate: null, payBasis: null } },
+        { new: true },
+      );
+      // Sin tarifa no hay nada que validar contra el envase.
+      expect(measurementUnitsService.findAnyById).not.toHaveBeenCalled();
+    });
+
+    it('validates the basis against the unit even if it was deactivated afterwards', async () => {
+      mockWorkday();
+      measurementUnitsService.findAnyById.mockResolvedValue({
+        _id: measurementUnitId,
+        mode: 'WEIGHT',
+        active: false,
+      });
+
+      await expect(
+        workdaysService.updatePay(farmId, workdayId, {
+          payRate: 500,
+          payBasis: 'PER_UNIT',
+        }),
+      ).rejects.toBeInstanceOf(BadRequestException);
+      expect(workdayModel.findOneAndUpdate).not.toHaveBeenCalled();
+    });
+
+    it('refuses to change the pay of a closed workday', async () => {
+      mockWorkday({ status: 'CLOSED' });
+
+      await expect(
+        workdaysService.updatePay(farmId, workdayId, {
+          payRate: 500,
+          payBasis: 'PER_KG',
+        }),
+      ).rejects.toBeInstanceOf(ConflictException);
+      expect(workdayModel.findOneAndUpdate).not.toHaveBeenCalled();
+    });
+
+    it('throws NotFoundException when the workday does not exist for the caller farm', async () => {
+      workdayModel.findOne.mockReturnValue({
+        exec: jest.fn().mockResolvedValue(null),
+      });
+
+      await expect(
+        workdaysService.updatePay(farmId, workdayId, {
+          payRate: 500,
+          payBasis: 'PER_KG',
+        }),
+      ).rejects.toBeInstanceOf(NotFoundException);
+    });
+
+    it('throws NotFoundException without querying when the id is not a valid ObjectId', async () => {
+      await expect(
+        workdaysService.updatePay(farmId, 'not-an-id', {
+          payRate: 500,
+          payBasis: 'PER_KG',
+        }),
+      ).rejects.toBeInstanceOf(NotFoundException);
+      expect(workdayModel.findOne).not.toHaveBeenCalled();
     });
   });
 

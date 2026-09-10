@@ -114,6 +114,77 @@ export const strings = {
         ? 'Tienes 1 registro sin sincronizar. Sincroniza antes de cerrar, o el total va a quedar incompleto.'
         : `Tienes ${count} registros sin sincronizar. Sincroniza antes de cerrar, o el total va a quedar incompleto.`,
   },
+  // Pesaje de control (lib/weighing.ts): el peso real de una vuelta hecha
+  // con un envase de peso fijo. Se compara contra lo que dice el envase,
+  // pero no cambia ni el total ni el pago.
+  weighing: {
+    controlTitle: 'Pesaje de control',
+    roundsSummary: (weighed: number, total: number) =>
+      weighed === 1
+        ? `1 de ${total} vueltas pesada`
+        : `${weighed} de ${total} vueltas pesadas`,
+    comparison: (real: string, expected: string) =>
+      `${real} kg reales · ${expected} kg por envase`,
+    difference: (formatted: string, positive: boolean) =>
+      `${positive ? '+' : ''}${formatted} kg de diferencia`,
+    doesNotAffect: 'No cambia el total del día ni el pago.',
+    roundMeasured: (kg: string) => `Pesó ${kg} kg`,
+  },
+  // Todo lo que dice plata. La tarifa es opcional a propósito (ver
+  // db/schema.ts): sin ella, nada de esto se muestra.
+  pay: {
+    section: 'Pago',
+    optionalHelp: 'Opcional. Déjalo vacío si no pagas por lo cosechado.',
+    // No "¿cómo se paga?": con un envase de peso fijo las dos opciones dan
+    // exactamente la misma plata, y preguntarlo así las hace parecer dos
+    // tratos distintos. Lo único que se elige es en qué unidad viene el
+    // precio que le dictaron al anotador.
+    basisLabel: 'El precio que te dieron, ¿cómo viene?',
+    perUnitShort: (unitName: string) => `Por ${unitName}`,
+    perUnitHelp: (unitName: string) =>
+      `Escribes cuánto vale cada ${unitName}, se pese o no.`,
+    perKgShort: 'Por kilo',
+    perKgHelp: (equivalence: string) =>
+      `Escribes cuánto vale el kilo. Se multiplica por lo que trae el envase: ${equivalence}.`,
+    // En un envase que se pesa en cada vuelta no hay opción que elegir:
+    // pagar por envase sería pagar por viaje.
+    weighedFixedNote:
+      'Este envase se pesa en cada vuelta, así que el pago va por kilo.',
+    amountLabel: 'Cuánto se paga',
+    // Solo para el envase que se pesa en cada vuelta: ahí no hay factor con
+    // qué convertir, así que no hay dos caras que mostrar.
+    ratePerKg: (amount: string) => `${amount} por cada kilo`,
+    // Las dos caras del mismo precio, para el envase de peso fijo: es lo que
+    // muestra que las dos opciones llegan al mismo número, y evita el error
+    // caro de tipear el precio por envase pensando en kilos. `exact` en
+    // false cuando la conversión no da un peso redondo ($500 por un envase
+    // de 3,0 kg son $166,67 el kilo) — ahí va ≈, para que nadie tipee ese
+    // número redondeado creyendo que paga lo mismo.
+    ratePerKgWithUnit: (
+      perKg: string,
+      perUnit: string,
+      unitName: string,
+      exact: boolean,
+    ) => `${perKg} por kilo ${exact ? '=' : '≈'} ${perUnit} por cada ${unitName}`,
+    ratePerUnitWithKg: (
+      perUnit: string,
+      perKg: string,
+      unitName: string,
+      exact: boolean,
+    ) => `${perUnit} por cada ${unitName} ${exact ? '=' : '≈'} ${perKg} por kilo`,
+    prefilledFrom: 'Tarifa de la última jornada con este cultivo y envase.',
+    totalToPay: 'Total a pagar',
+    perPerson: 'Pago por cosechador',
+    define: 'Definir pago',
+    edit: 'Editar pago',
+    remove: 'Quitar',
+    dialogTitle: 'Pago de la jornada',
+    none: 'Esta jornada no tiene pago definido.',
+    // Se ve en Cerrar Jornada: el monto sale de lo anotado en este
+    // dispositivo, que es lo mismo que se está por congelar.
+    estimatedNote:
+      'Calculado con lo anotado hasta ahora. Se ajusta solo si anotas más.',
+  },
   history: {
     team: 'Equipo',
     workersCount: (n: number) => (n === 1 ? '1 cosechador' : `${n} cosechadores`),
@@ -123,6 +194,7 @@ export const strings = {
     pdfHarvesterColumn: 'Cosechador',
     pdfCountColumn: 'Envases',
     pdfKgColumn: 'Kg',
+    pdfPayColumn: 'Pago',
     pdfEmptyRoster: 'Sin cosechadores registrados.',
   },
   anotador: {
@@ -144,6 +216,16 @@ export const strings = {
     discountWeight: 'Descontar',
     grandTotal: 'Total del día',
     roundsTitle: 'Vueltas',
+    // El pesaje de control se anota desde acá y no con un botón propio en
+    // el Anotador: pesar un envase de peso fijo es la excepción (control de
+    // a ratos), y un botón junto a +1/+2/+5 tendría que resolver de quién es
+    // el peso cuando la vuelta fue de 3 envases. Acá la vuelta ya sabe
+    // cuántos envases fue, así que el peso se le cuelga entera.
+    measureHint: 'Toca una vuelta para anotar cuánto pesó de verdad',
+    measureTitle: (n: number) => `Peso real · Vuelta ${n}`,
+    measureExpected: (kg: string) => `Por el envase, esta vuelta son ${kg} kg`,
+    measureLabel: 'Peso real (kg)',
+    measureRemove: 'Quitar peso',
     round: (n: number) => `Vuelta ${n}`,
     noRoundsYet: 'Todavía no tiene vueltas anotadas.',
   },
@@ -156,6 +238,9 @@ export const strings = {
     syncedHelp: 'No queda nada pendiente por subir.',
     pendingSectionTitle: 'Pendiente de sincronizar',
     pendingWorkday: 'La jornada (abierta sin conexión)',
+    // Misma fila, otro motivo: la jornada ya está en el server y lo que
+    // falta subir es la tarifa que se definió o corrigió después.
+    pendingWorkdayPay: 'El pago de la jornada',
     pendingHarvesters: (n: number) =>
       n === 1 ? '1 cosechador nuevo' : `${n} cosechadores nuevos`,
     pendingRoster: (n: number) =>

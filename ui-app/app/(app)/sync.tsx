@@ -19,6 +19,7 @@ import {
 import { getErrorMessage } from '@/lib/errors';
 import { roundToOneDecimal } from '@/lib/format';
 import { pushPendingHarvesters } from '@/lib/harvesterSync';
+import { startSyncLog, summarizeBatch } from '@/lib/syncLog';
 import { pushPendingWorkdays } from '@/lib/workdaySync';
 import { useAuthStore, useConnectivityStore, usePalette } from '@/stores';
 import { colors, spacing } from '@/theme';
@@ -29,6 +30,15 @@ interface PendingCounts {
   roster: number;
   entries: number;
 }
+
+// Cuántas anotaciones van por request. El server resuelve cada lote en un
+// puñado de consultas (sin importar su tamaño), así que esto no es por
+// velocidad: es para que un día grande no viaje en una sola request enorme
+// —el cliente corta a los 15s y Express tiene un límite de tamaño de body— y
+// sobre todo para **guardar el avance**. Si el cuarto lote falla, los tres
+// anteriores ya quedaron marcados como sincronizados y el reintento arranca
+// desde ahí en vez de empezar de cero.
+const ENTRY_SYNC_CHUNK = 100;
 
 const EMPTY_PENDING: PendingCounts = {
   workday: 0,
@@ -153,6 +163,15 @@ export default function SyncScreen() {
     setError(null);
     setRejectedReasons([]);
 
+    // Log de la saga completa, etapa por etapa (ver lib/syncLog.ts): es lo
+    // que después permite reconstruir dónde se cortó una sincronización que
+    // alguien reporta desde el campo. Se crea fuera del try porque el catch
+    // también tiene que poder cerrarlo — mientras esté abierto, cada
+    // petición sale marcada con su id.
+    const log = startSyncLog(
+      `jornada ${workday.id} · ${pending.harvesters} cosechadores, ${pending.roster} en roster, ${pending.entries} anotaciones`,
+    );
+
     try {
       const reasons: string[] = [];
 
@@ -162,13 +181,29 @@ export default function SyncScreen() {
       // cosechadores nuevos (misma razón para `harvesterId`), y recién ahí
       // el roster y las entregas. Jornada y cosechadores son independientes
       // entre sí: si una falla, la otra igual sube.
-      const { rejectedReasons: workdayRejections } =
+      const { synced: workdaysSynced, rejectedReasons: workdayRejections } =
         await pushPendingWorkdays();
       reasons.push(...workdayRejections);
+      log.step(
+        'jornada',
+        workdayRejections.length > 0
+          ? `${workdaysSynced} subida(s), ${workdayRejections.length} rechazada(s)`
+          : workdaysSynced > 0
+            ? `${workdaysSynced} subida(s)`
+            : 'nada pendiente',
+      );
 
-      const { rejectedReasons: harvesterRejections } =
-        await pushPendingHarvesters();
+      const {
+        results: harvesterResults,
+        rejectedReasons: harvesterRejections,
+      } = await pushPendingHarvesters();
       reasons.push(...harvesterRejections);
+      log.step(
+        'cosechadores',
+        harvesterResults.length > 0
+          ? summarizeBatch(harvesterResults)
+          : 'nada pendiente',
+      );
 
       // Releído de la base: pushPendingWorkdays() acaba de escribirle el
       // serverId. Si sigue sin él (la jornada no pudo subir), roster y
@@ -180,6 +215,9 @@ export default function SyncScreen() {
         .where(eq(workdays.id, workday.id));
       const workdayServerId = current?.serverId;
       if (!workdayServerId) {
+        // Sin el _id real de la jornada, roster y anotaciones no tienen a
+        // qué colgarse: el sync se detiene acá a propósito.
+        log.done('detenido: la jornada todavía no está en el server');
         setRejectedReasons(reasons);
         await load();
         return;
@@ -244,45 +282,91 @@ export default function SyncScreen() {
               .where(eq(harvesterWorkday.id, result.clientEntryId));
           }
         }
+
+        log.step('roster', summarizeBatch(results));
+      } else {
+        log.step('roster', 'nada pendiente');
       }
 
       if (syncableEntryRows.length > 0) {
         const { harvestEntriesControllerSync } = getHarvestEntries();
-        const results = await harvestEntriesControllerSync({
-          workdayId: workdayServerId,
-          entries: syncableEntryRows.map((row) => ({
-            clientEntryId: row.id,
-            harvesterId: row.harvesterId,
-            measurementUnitId: row.measurementUnitId,
-            unitCount: row.unitCount,
-            // Los kilos de un envase pesado: el server los necesita porque
-            // en modo WEIGHT no hay factor con qué calcularlos. Va siempre
-            // la magnitud (el signo lo lleva unitCount) y va también en modo
-            // COUNT, donde el server lo ignora y calcula desde el kgFactor
-            // del catálogo — así esto no depende de mirar la unidad acá.
-            // Redondeado además de la escritura, porque una fila vieja
-            // (anotada antes de que existiera el redondeo) puede traer
-            // 37.049999999999997 y el server rechaza más de un decimal.
-            weightKg: roundToOneDecimal(Math.abs(row.totalKg)),
-            recordedAt: row.recordedAt,
-          })),
-        });
+        const chunks = Math.ceil(syncableEntryRows.length / ENTRY_SYNC_CHUNK);
+        const entryResults: { status: string }[] = [];
 
-        for (const result of results) {
-          if (result.status === 'rejected') {
-            reasons.push(result.reason ?? strings.errors.generic);
-          } else {
-            await db
-              .update(harvestEntries)
-              .set({ synced: true })
-              .where(eq(harvestEntries.id, result.clientEntryId));
+        for (
+          let start = 0;
+          start < syncableEntryRows.length;
+          start += ENTRY_SYNC_CHUNK
+        ) {
+          const chunk = syncableEntryRows.slice(
+            start,
+            start + ENTRY_SYNC_CHUNK,
+          );
+          const results = await harvestEntriesControllerSync({
+            workdayId: workdayServerId,
+            entries: chunk.map((row) => ({
+              clientEntryId: row.id,
+              harvesterId: row.harvesterId,
+              measurementUnitId: row.measurementUnitId,
+              unitCount: row.unitCount,
+              // Los kilos de un envase pesado: el server los necesita porque
+              // en modo WEIGHT no hay factor con qué calcularlos. Va siempre
+              // la magnitud (el signo lo lleva unitCount) y va también en modo
+              // COUNT, donde el server lo ignora y calcula desde el kgFactor
+              // del catálogo — así esto no depende de mirar la unidad acá.
+              // Redondeado además de la escritura, porque una fila vieja
+              // (anotada antes de que existiera el redondeo) puede traer
+              // 37.049999999999997 y el server rechaza más de un decimal.
+              weightKg: roundToOneDecimal(Math.abs(row.totalKg)),
+              // Peso de control (ver lib/weighing.ts). Va **el valor local tal
+              // cual, null incluido**: este dispositivo es el único que escribe
+              // ese campo, así que su null significa "no tiene peso", no "no
+              // sé". Mandarlo como undefined —lo que hacía antes— volvía
+              // imposible sacar un peso ya sincronizado: desaparecía de la
+              // pantalla pero seguía vivo en la base.
+              measuredKg: row.measuredKg,
+              recordedAt: row.recordedAt,
+            })),
+          });
+
+          for (const result of results) {
+            if (result.status === 'rejected') {
+              reasons.push(result.reason ?? strings.errors.generic);
+            } else {
+              await db
+                .update(harvestEntries)
+                .set({ synced: true })
+                .where(eq(harvestEntries.id, result.clientEntryId));
+            }
+          }
+
+          entryResults.push(...results);
+          // Solo si va en más de un lote: con uno solo, la línea de la etapa
+          // ya dice exactamente lo mismo.
+          if (chunks > 1) {
+            log.note(
+              `lote ${start / ENTRY_SYNC_CHUNK + 1}/${chunks} · ${summarizeBatch(results)}`,
+            );
           }
         }
+
+        log.step('anotaciones', summarizeBatch(entryResults));
+      } else {
+        log.step('anotaciones', 'nada pendiente');
       }
+
+      log.done(
+        reasons.length > 0
+          ? `${reasons.length} rechazo(s) — quedan pendientes para el próximo intento`
+          : 'todo sincronizado',
+      );
 
       setRejectedReasons(reasons);
       await load();
     } catch (err) {
+      // Cierra la saga con el mismo id que el resto de sus líneas, así se ve
+      // en qué etapa se cortó sin tener que cruzar dos consolas.
+      log.fail(getErrorMessage(err));
       setError(getErrorMessage(err));
     } finally {
       setSyncing(false);
@@ -350,7 +434,11 @@ export default function SyncScreen() {
               {pending.workday > 0 ? (
                 <PendingRow
                   icon="calendar-outline"
-                  label={strings.sync.pendingWorkday}
+                  label={
+                    workday?.serverId
+                      ? strings.sync.pendingWorkdayPay
+                      : strings.sync.pendingWorkday
+                  }
                   color={palette.primary}
                 />
               ) : null}

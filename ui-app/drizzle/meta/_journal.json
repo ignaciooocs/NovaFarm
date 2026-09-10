@@ -43,6 +43,20 @@
       "when": 1788910831058,
       "tag": "0005_products_catalog",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "6",
+      "when": 1788979801407,
+      "tag": "0006_wise_vector",
+      "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "6",
+      "when": 1788992740039,
+      "tag": "0007_steady_goliath",
+      "breakpoints": true
     }
   ]
 }

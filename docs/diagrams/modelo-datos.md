@@ -90,6 +90,8 @@ erDiagram
         datetime createdAt
         decimal finalTotalKg "frozen on close, RF-01.2"
         ObjectId recorderId FK "optional/nullable, null = guest mode"
+        int payRate "optional, whole CLP per unit or per kg"
+        string payBasis "PER_UNIT | PER_KG, null when there is no rate"
     }
 
     HARVESTER_WORKDAY {
@@ -110,6 +112,7 @@ erDiagram
         ObjectId measurementUnitId FK
         decimal unitCount "containers, never kilos"
         decimal totalKg
+        decimal measuredKg "optional control weight, COUNT units only"
         datetime recordedAt
         boolean syncedOffline
     }
@@ -171,6 +174,10 @@ This used to be inferred from `kgFactor === 1`, which had no way to say "one con
 ### `workdays`
 Represents **one day of harvest**: the unit of work a recorder opens at the start of a shift (RF-01.1), fixing the crop and default container/unit used unless a specific entry says otherwise. Its `status` (`OPEN`/`CLOSED`) controls whether deliveries can still be recorded or whether the day has already closed and its totals are frozen (RF-01.2). It's the container that groups all of a day's `harvestEntries`.
 
+**`payRate`/`payBasis` are what a harvester earns for what they deliver that day**, and they live on the workday rather than on `measurementUnits` because the price follows the crop, not the container: the same 20kg crate is worth one thing full of lemons and another full of avocados, and it changes from day to day with the market. They are **optional and always nullable** — a farm that pays a day wage never sets them, and in the field the price is often still undecided when the workday is opened, so requiring it would block capture (RNF-01), which is the one thing that can never fail. Either both are set or both are null: a rate with no basis can't be computed and a basis with no rate says nothing. Nothing money-related is shown anywhere when they're null — not a \$0, which would read as "nobody earned anything".
+
+`payRate` is a whole number of Chilean pesos (no cents), so it's a plain `Number` and not the `Decimal128` used for `kgFactor`/`finalTotalKg` — there are no decimals to accumulate drift over. `PER_UNIT` is rejected for a `WEIGHT` unit: a container that gets weighed every round is weighed precisely because it varies, so paying per container would be paying per trip. Each harvester's amount is **derived, never stored** — it's their delivered totals times the rate, rounded to the peso *per person* so the day's total is exactly the sum of what each one is handed. The rate can be corrected while the workday is `OPEN` (`PATCH /workdays/:id/pay`) and is frozen with everything else on close, for the same reason `finalTotalKg` is: changing it afterwards would rewrite what each harvester was told they had earned.
+
 ### `harvesterWorkday`
 The day's **roster**: which harvesters (from the farm's catalog) are participating in a specific workday, independent of whether they already have a delivery recorded. Solves RF-02.1 (list the day's active harvesters) because someone can appear on the recorder's screen with 0 entries as soon as they're added, with no need for a `harvestEntries` record to exist yet. Lets someone be removed from the day's list (added by mistake) without touching their catalog entry or their history from other workdays.
 
@@ -178,6 +185,10 @@ The day's **roster**: which harvesters (from the farm's catalog) are participati
 
 ### `harvestEntries`
 Each **individual delivery entry**: the digital equivalent of a tally mark on the paper notebook. Records that a given harvester delivered a certain number of **containers** of fruit, at what time, and with which measurement unit. `unitCount` is always a whole container count — never kilos, in either mode (in `WEIGHT` it's 1, or -1 for a correction) — and the kilos live only in `totalKg`, always resolved server-side and rounded to one decimal, the resolution of the whole system. `syncedOffline` indicates whether that record has already traveled from the local device (SQLite) to the server. It's the highest-volume entity in the system: every "+1" tap on the recorder screen creates (or increments) a record of this type.
+
+**`measuredKg` is an optional control weight, and it is never money.** With a fixed-weight container the kilos are derived, not measured — 3 trays × 3.0 = 9.0 kg — and that derived figure is what gets totalled and paid. `measuredKg` is what someone chose to record about what that round *actually* weighed (3.4 instead of 3.0), and it exists purely so the two can be compared: trays going out over- or under-filled, whether the `kgFactor` still reflects reality, whether it squares with what the packing house weighed. It never enters `totalKg` and never enters the pay — that line is what prevents the obvious complaint ("you wrote down 3.4 and paid me 3.0"). If the real weight is supposed to drive the money, that's a `WEIGHT` unit, and the app already does it; this is the other case, where the container is counted and the weighing is a spot check. Consistently, it's **rejected for `WEIGHT` units**, where the scale reading already *is* `totalKg` — two fields meaning the same thing is exactly the ambiguity the explicit `mode` removed.
+
+It's also the one exception to entries being immutable once synced: re-sending an already-synced entry with a `measuredKg` updates **only** that field (`unitCount` and `totalKg` are left exactly as they were), because a round often gets weighed after the fact. Any comparison built on it only ever compares the rounds that were actually weighed against what those same rounds are worth by catalog — never against the whole day's total, which would invent a difference.
 
 ## Onboarding: how `farmId` gets assigned
 

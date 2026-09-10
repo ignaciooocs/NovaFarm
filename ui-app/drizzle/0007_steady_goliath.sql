@@ -1,0 +1,1 @@
+ALTER TABLE `harvest_entries` ADD `measured_kg` real;

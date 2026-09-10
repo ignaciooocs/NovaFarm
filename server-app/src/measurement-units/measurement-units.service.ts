@@ -188,11 +188,18 @@ export class MeasurementUnitsService {
   }
 
   // Como findActiveById pero sin filtrar por active — update() necesita ver
-  // el estado actual de una unidad aunque esté desactivada.
-  private async findAnyById(
+  // el estado actual de una unidad aunque esté desactivada, y workdays
+  // necesita lo mismo para validar la base del pago de una jornada ya
+  // abierta: que el admin haya desactivado el envase después no cambia que
+  // esa jornada se está anotando con él.
+  async findAnyById(
     farmId: string,
     id: string,
   ): Promise<MeasurementUnitDto | null> {
+    if (!Types.ObjectId.isValid(id)) {
+      return null;
+    }
+
     const found = await this.measurementUnitModel
       .findOne({ _id: id, farmId: new Types.ObjectId(farmId) })
       .exec();

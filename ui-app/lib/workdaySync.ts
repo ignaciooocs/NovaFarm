@@ -19,11 +19,12 @@ import { useAuthStore } from '@/stores';
 // referencian y mandan el suyo propio como clientEntryId), así que lo único
 // que se escribe de vuelta es serverId + synced sobre la misma fila.
 export async function pushPendingWorkdays(): Promise<{
+  synced: number;
   rejectedReasons: string[];
 }> {
   const farmId = useAuthStore.getState().claims.farmId;
   if (!farmId) {
-    return { rejectedReasons: [] };
+    return { synced: 0, rejectedReasons: [] };
   }
 
   const pending = await db
@@ -32,7 +33,9 @@ export async function pushPendingWorkdays(): Promise<{
     .where(and(eq(workdays.synced, false), eq(workdays.farmId, farmId)));
 
   const rejectedReasons: string[] = [];
-  const { workdaysControllerCreate } = getWorkdays();
+  let synced = 0;
+  const { workdaysControllerCreate, workdaysControllerUpdatePay } =
+    getWorkdays();
 
   // Una por una y cada una con su propio try/catch: POST /workdays no es un
   // endpoint batch con resultado por ítem como los /sync — un fallo (ej. 404
@@ -41,22 +44,46 @@ export async function pushPendingWorkdays(): Promise<{
   // upsert por {farmId, clientEntryId}.
   for (const workday of pending) {
     try {
+      // Una jornada con serverId que quedó marcada como pendiente solo pudo
+      // haber cambiado en una cosa: el pago (close.tsx deja definirlo o
+      // corregirlo mientras siga abierta). Repetir el POST no serviría —
+      // es idempotente y devuelve la jornada tal cual está guardada, sin
+      // tocar la tarifa — así que va por su propio endpoint.
+      if (workday.serverId) {
+        await workdaysControllerUpdatePay(workday.serverId, {
+          payRate: workday.payRate ?? null,
+          payBasis: workday.payBasis ?? undefined,
+        });
+
+        await db
+          .update(workdays)
+          .set({ synced: true })
+          .where(eq(workdays.id, workday.id));
+        synced += 1;
+        continue;
+      }
+
       const created = await workdaysControllerCreate({
         clientEntryId: workday.id,
         date: workday.date,
         productId: workday.productId,
         defaultMeasurementUnitId: workday.defaultMeasurementUnitId,
         createdAt: workday.createdAt,
+        // undefined y no null: el DTO de creación los acepta solo juntos, y
+        // una jornada sin tarifa simplemente no manda ninguno de los dos.
+        payRate: workday.payRate ?? undefined,
+        payBasis: workday.payBasis ?? undefined,
       });
 
       await db
         .update(workdays)
         .set({ serverId: created._id, synced: true })
         .where(eq(workdays.id, workday.id));
+      synced += 1;
     } catch (err) {
       rejectedReasons.push(getErrorMessage(err));
     }
   }
 
-  return { rejectedReasons };
+  return { synced, rejectedReasons };
 }

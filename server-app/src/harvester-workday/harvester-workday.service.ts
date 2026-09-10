@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model, Types } from 'mongoose';
+import { logSyncBatch } from '../common/logging/sync-batch-log';
 import { HarvestersService } from '../harvesters/harvesters.service';
 import { WorkdaysService } from '../workdays/workdays.service';
 import {
@@ -42,24 +43,33 @@ export class HarvesterWorkdayService {
     workdayId: string,
     entries: SyncHarvesterWorkdayEntryDto[],
   ): Promise<SyncHarvesterWorkdayResponseDto[]> {
+    const startedAt = Date.now();
+    const scope = 'harvester-workday';
+    const context = `workday=${workdayId}`;
     const workday = await this.workdaysService.findById(farmId, workdayId);
 
     if (!workday) {
-      return entries.map((entry) =>
+      const rejectedAll = entries.map((entry) =>
         this.rejected(entry.clientEntryId, 'Workday not found'),
       );
+      logSyncBatch(scope, context, rejectedAll, startedAt);
+      return rejectedAll;
     }
 
     if (workday.status === 'CLOSED') {
-      return entries.map((entry) =>
+      const rejectedAll = entries.map((entry) =>
         this.rejected(entry.clientEntryId, 'Workday is already closed'),
       );
+      logSyncBatch(scope, context, rejectedAll, startedAt);
+      return rejectedAll;
     }
 
     const results: SyncHarvesterWorkdayResponseDto[] = [];
     for (const entry of entries) {
       results.push(await this.syncOne(farmId, workdayId, entry));
     }
+
+    logSyncBatch(scope, context, results, startedAt);
 
     return results;
   }
@@ -82,6 +92,29 @@ export class HarvesterWorkdayService {
   // Chequea si un cosechador ya está en el roster de una jornada. Lo usa
   // harvest-entries para no dejar registrar una entrega de alguien que
   // nunca fue agregado al roster primero.
+  // Todo el roster de la jornada de una sola vez. Mismo motivo que
+  // findActiveIdsIn en harvesters: el sync de entregas preguntaba
+  // existsInRoster una vez por anotación, y con un lote grande eso solo
+  // eran cientos de consultas en serie contra Atlas.
+  async findRosterHarvesterIds(
+    farmId: string,
+    workdayId: string,
+  ): Promise<Set<string>> {
+    if (!Types.ObjectId.isValid(workdayId)) {
+      return new Set();
+    }
+
+    const found = await this.harvesterWorkdayModel
+      .find({
+        farmId: new Types.ObjectId(farmId),
+        workdayId: new Types.ObjectId(workdayId),
+      })
+      .select('harvesterId')
+      .exec();
+
+    return new Set(found.map((doc) => doc.harvesterId.toString()));
+  }
+
   async existsInRoster(
     farmId: string,
     workdayId: string,

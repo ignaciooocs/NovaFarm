@@ -1,4 +1,9 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  ConflictException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model, Types } from 'mongoose';
 import { AuthenticatedUser } from '../auth/guards/farm-scope.guard';
@@ -6,10 +11,15 @@ import { HarvestEntry } from '../harvest-entries/schemas/harvest-entry.schema';
 import { ProductsService } from '../products/products.service';
 import { MeasurementUnitsService } from '../measurement-units/measurement-units.service';
 import { UsersService } from '../users/users.service';
-import { Workday, WorkdayDocument } from './schemas/workday.schema';
+import {
+  Workday,
+  WorkdayDocument,
+  WorkdayPayBasis,
+} from './schemas/workday.schema';
 import {
   CreateWorkdayRequestDto,
   FindWorkdayRequestDto,
+  UpdateWorkdayPayRequestDto,
   WorkdayDto,
 } from './dto';
 
@@ -78,6 +88,8 @@ export class WorkdaysService {
       );
     }
 
+    this.assertPayBasisFitsUnit(dto.payBasis, measurementUnit.mode);
+
     const { recorderId, recorderName } = await this.resolveRecorder(authUser);
 
     try {
@@ -94,6 +106,10 @@ export class WorkdaysService {
         // que se sincronizó, no el que se trabajó.
         createdAt: dto.createdAt ? new Date(dto.createdAt) : new Date(),
         recorderId,
+        // Los dos juntos o los dos en null: el DTO ya no deja mandar uno
+        // solo, y una jornada sin tarifa simplemente no muestra pagos.
+        payRate: dto.payRate ?? null,
+        payBasis: dto.payRate === undefined ? null : (dto.payBasis ?? null),
         clientEntryId: dto.clientEntryId,
       });
 
@@ -247,6 +263,85 @@ export class WorkdaysService {
     return this.toDto(updated, recorderName);
   }
 
+  // Define o corrige cuánto se paga en una jornada **abierta** (el precio
+  // del día muchas veces todavía no está definido a la hora de abrirla, o
+  // llega mal tipeado). Cerrada no se toca: cerrar congela el resultado del
+  // día (RF-01.2), y cambiar la tarifa después reescribiría cuánto se le
+  // dijo a cada cosechador que había ganado. payRate en null limpia la
+  // tarifa completa, base incluida.
+  async updatePay(
+    farmId: string,
+    id: string,
+    dto: UpdateWorkdayPayRequestDto,
+  ): Promise<WorkdayDto> {
+    if (!Types.ObjectId.isValid(id)) {
+      throw new NotFoundException('Workday not found');
+    }
+
+    const workday = await this.workdayModel
+      .findOne({ _id: id, farmId: new Types.ObjectId(farmId) })
+      .exec();
+
+    if (!workday) {
+      throw new NotFoundException('Workday not found');
+    }
+
+    if (workday.status === 'CLOSED') {
+      throw new ConflictException('Cannot change the pay of a closed workday');
+    }
+
+    const payRate = dto.payRate;
+    const payBasis = payRate === null ? null : (dto.payBasis ?? null);
+
+    if (payBasis) {
+      // findAnyById y no findActiveById: si el admin desactivó el envase
+      // después de abrir la jornada, la jornada se sigue anotando con él y
+      // su modo sigue siendo lo que decide si PER_UNIT tiene sentido.
+      const unit = await this.measurementUnitsService.findAnyById(
+        farmId,
+        workday.defaultMeasurementUnitId.toString(),
+      );
+      this.assertPayBasisFitsUnit(payBasis, unit?.mode);
+    }
+
+    // findOneAndUpdate + $set por lo mismo que close(): .save() revalidaría
+    // el documento completo y cualquier jornada anterior a que
+    // clientEntryId fuera required se caería con un ValidationError.
+    const updated = await this.workdayModel
+      .findOneAndUpdate(
+        { _id: id, farmId: new Types.ObjectId(farmId) },
+        { $set: { payRate, payBasis } },
+        { new: true },
+      )
+      .exec();
+
+    if (!updated) {
+      throw new NotFoundException('Workday not found');
+    }
+
+    return this.toDto(
+      updated,
+      await this.resolveRecorderName(updated.recorderId),
+    );
+  }
+
+  // Pagar por envase (PER_UNIT) solo tiene sentido si el envase es de peso
+  // fijo: en una unidad WEIGHT cada capacho se pesa justamente porque trae
+  // distinto cada vez, así que pagar por capacho sería pagar por viaje y
+  // dejaría sin sentido haberlo pesado. unitMode puede venir undefined si la
+  // unidad ya no está (jornada vieja, unidad borrada): ahí no se bloquea
+  // nada — validar que la unidad exista es trabajo de create(), no de esto.
+  private assertPayBasisFitsUnit(
+    payBasis: WorkdayPayBasis | null | undefined,
+    unitMode: 'COUNT' | 'WEIGHT' | undefined,
+  ): void {
+    if (payBasis === 'PER_UNIT' && unitMode === 'WEIGHT') {
+      throw new BadRequestException(
+        'A WEIGHT measurement unit can only be paid PER_KG',
+      );
+    }
+  }
+
   // Si quien abre la jornada tiene el rol recorder asignado (sin importar
   // qué otros roles tenga, ni cuál sea su "modo activo" en la UI — el server
   // no conoce ese concepto, ver ui-arquitectura.md), resuelve su _id de
@@ -318,6 +413,11 @@ export class WorkdaysService {
         : undefined,
       recorderId: doc.recorderId ? doc.recorderId.toString() : null,
       recorderName,
+      // ?? null y no el valor crudo: una jornada abierta antes de que
+      // existiera el pago se hidrata con undefined, y el cliente distingue
+      // "sin tarifa" por null, no por el campo ausente.
+      payRate: doc.payRate ?? null,
+      payBasis: doc.payBasis ?? null,
       clientEntryId: doc.clientEntryId,
     };
   }

@@ -616,6 +616,17 @@ export interface UpdateMeasurementUnitResponseDto {
   active: boolean;
 }
 
+/**
+ * What the pay rate is applied to. PER_UNIT (per container) is rejected for a WEIGHT unit, where each container is weighed and paying per container would mean paying per trip. Must be sent together with payRate.
+ */
+export type CreateWorkdayRequestDtoPayBasis = typeof CreateWorkdayRequestDtoPayBasis[keyof typeof CreateWorkdayRequestDtoPayBasis];
+
+
+export const CreateWorkdayRequestDtoPayBasis = {
+  PER_UNIT: 'PER_UNIT',
+  PER_KG: 'PER_KG',
+} as const;
+
 export interface CreateWorkdayRequestDto {
   /** Client-generated id (the local workday row id) — makes retrying this call after a dropped response idempotent, same pattern as harvester-workday/harvest-entries sync */
   clientEntryId: string;
@@ -625,6 +636,10 @@ export interface CreateWorkdayRequestDto {
   productId: string;
   /** Default measurement unit for entries recorded this workday (must exist and be active in the caller farm catalog) */
   defaultMeasurementUnitId: string;
+  /** How much a harvester is paid for what they deliver this workday, in whole Chilean pesos. Optional — a farm that pays a day wage, or that does not know the price yet when it opens the workday, simply omits it. Must be sent together with payBasis. */
+  payRate?: number;
+  /** What the pay rate is applied to. PER_UNIT (per container) is rejected for a WEIGHT unit, where each container is weighed and paying per container would mean paying per trip. Must be sent together with payRate. */
+  payBasis?: CreateWorkdayRequestDtoPayBasis;
   /** When the workday was actually opened on the device (ISO 8601). Only needed when it was opened offline and uploaded later — omitted, the server stamps its own clock, which would date a Monday workday on the Wednesday it finally synced. */
   createdAt?: string;
 }
@@ -638,6 +653,18 @@ export type CreateWorkdayResponseDtoStatus = typeof CreateWorkdayResponseDtoStat
 export const CreateWorkdayResponseDtoStatus = {
   OPEN: 'OPEN',
   CLOSED: 'CLOSED',
+} as const;
+
+/**
+ * What the pay rate is applied to. PER_UNIT: per container delivered (only valid with a COUNT unit). PER_KG: per kilo, the only option when the container is weighed every round (WEIGHT). Null whenever payRate is null.
+ * @nullable
+ */
+export type CreateWorkdayResponseDtoPayBasis = typeof CreateWorkdayResponseDtoPayBasis[keyof typeof CreateWorkdayResponseDtoPayBasis] | null;
+
+
+export const CreateWorkdayResponseDtoPayBasis = {
+  PER_UNIT: 'PER_UNIT',
+  PER_KG: 'PER_KG',
 } as const;
 
 export interface CreateWorkdayResponseDto {
@@ -664,6 +691,16 @@ export interface CreateWorkdayResponseDto {
   recorderId: string | null;
   /** Display name of the recorder attributed to this workday. Absent for guest-mode workdays (recorderId is null). */
   recorderName?: string;
+  /**
+     * How much a harvester is paid for what they deliver this workday, in whole Chilean pesos. Null when the farm does not pay per production (day wage) or has not defined the rate yet.
+     * @nullable
+     */
+  payRate?: number | null;
+  /**
+     * What the pay rate is applied to. PER_UNIT: per container delivered (only valid with a COUNT unit). PER_KG: per kilo, the only option when the container is weighed every round (WEIGHT). Null whenever payRate is null.
+     * @nullable
+     */
+  payBasis?: CreateWorkdayResponseDtoPayBasis;
   /** Client-generated id (the originating local workday row id) used to make retrying POST /workdays idempotent */
   clientEntryId: string;
 }
@@ -677,6 +714,18 @@ export type FindWorkdayResponseDtoStatus = typeof FindWorkdayResponseDtoStatus[k
 export const FindWorkdayResponseDtoStatus = {
   OPEN: 'OPEN',
   CLOSED: 'CLOSED',
+} as const;
+
+/**
+ * What the pay rate is applied to. PER_UNIT: per container delivered (only valid with a COUNT unit). PER_KG: per kilo, the only option when the container is weighed every round (WEIGHT). Null whenever payRate is null.
+ * @nullable
+ */
+export type FindWorkdayResponseDtoPayBasis = typeof FindWorkdayResponseDtoPayBasis[keyof typeof FindWorkdayResponseDtoPayBasis] | null;
+
+
+export const FindWorkdayResponseDtoPayBasis = {
+  PER_UNIT: 'PER_UNIT',
+  PER_KG: 'PER_KG',
 } as const;
 
 export interface FindWorkdayResponseDto {
@@ -703,6 +752,98 @@ export interface FindWorkdayResponseDto {
   recorderId: string | null;
   /** Display name of the recorder attributed to this workday. Absent for guest-mode workdays (recorderId is null). */
   recorderName?: string;
+  /**
+     * How much a harvester is paid for what they deliver this workday, in whole Chilean pesos. Null when the farm does not pay per production (day wage) or has not defined the rate yet.
+     * @nullable
+     */
+  payRate?: number | null;
+  /**
+     * What the pay rate is applied to. PER_UNIT: per container delivered (only valid with a COUNT unit). PER_KG: per kilo, the only option when the container is weighed every round (WEIGHT). Null whenever payRate is null.
+     * @nullable
+     */
+  payBasis?: FindWorkdayResponseDtoPayBasis;
+  /** Client-generated id (the originating local workday row id) used to make retrying POST /workdays idempotent */
+  clientEntryId: string;
+}
+
+/**
+ * What the pay rate is applied to. Required whenever payRate is not null; PER_UNIT is rejected for a WEIGHT unit. Ignored when clearing the pay.
+ */
+export type UpdateWorkdayPayRequestDtoPayBasis = typeof UpdateWorkdayPayRequestDtoPayBasis[keyof typeof UpdateWorkdayPayRequestDtoPayBasis];
+
+
+export const UpdateWorkdayPayRequestDtoPayBasis = {
+  PER_UNIT: 'PER_UNIT',
+  PER_KG: 'PER_KG',
+} as const;
+
+export interface UpdateWorkdayPayRequestDto {
+  /**
+     * How much a harvester is paid for what they deliver this workday, in whole Chilean pesos. Send null to clear the pay entirely (payBasis is cleared with it).
+     * @nullable
+     */
+  payRate: number | null;
+  /** What the pay rate is applied to. Required whenever payRate is not null; PER_UNIT is rejected for a WEIGHT unit. Ignored when clearing the pay. */
+  payBasis?: UpdateWorkdayPayRequestDtoPayBasis;
+}
+
+/**
+ * Lifecycle status of the workday
+ */
+export type UpdateWorkdayPayResponseDtoStatus = typeof UpdateWorkdayPayResponseDtoStatus[keyof typeof UpdateWorkdayPayResponseDtoStatus];
+
+
+export const UpdateWorkdayPayResponseDtoStatus = {
+  OPEN: 'OPEN',
+  CLOSED: 'CLOSED',
+} as const;
+
+/**
+ * What the pay rate is applied to. PER_UNIT: per container delivered (only valid with a COUNT unit). PER_KG: per kilo, the only option when the container is weighed every round (WEIGHT). Null whenever payRate is null.
+ * @nullable
+ */
+export type UpdateWorkdayPayResponseDtoPayBasis = typeof UpdateWorkdayPayResponseDtoPayBasis[keyof typeof UpdateWorkdayPayResponseDtoPayBasis] | null;
+
+
+export const UpdateWorkdayPayResponseDtoPayBasis = {
+  PER_UNIT: 'PER_UNIT',
+  PER_KG: 'PER_KG',
+} as const;
+
+export interface UpdateWorkdayPayResponseDto {
+  /** Unique identifier of the workday */
+  _id: string;
+  /** Farm this workday belongs to */
+  farmId: string;
+  /** Date this workday covers (ISO 8601) */
+  date: string;
+  /** Product being harvested this workday */
+  productId: string;
+  /** Default measurement unit for entries recorded this workday */
+  defaultMeasurementUnitId: string;
+  /** Lifecycle status of the workday */
+  status: UpdateWorkdayPayResponseDtoStatus;
+  /** When the workday was opened (ISO 8601) */
+  createdAt: string;
+  /** Frozen aggregate total in kilos, computed and set when the workday is closed (RF-01.2) */
+  finalTotalKg?: number;
+  /**
+     * Recorder attributed to this workday, or null for guest mode (opened by an admin, not tied to a specific recorder)
+     * @nullable
+     */
+  recorderId: string | null;
+  /** Display name of the recorder attributed to this workday. Absent for guest-mode workdays (recorderId is null). */
+  recorderName?: string;
+  /**
+     * How much a harvester is paid for what they deliver this workday, in whole Chilean pesos. Null when the farm does not pay per production (day wage) or has not defined the rate yet.
+     * @nullable
+     */
+  payRate?: number | null;
+  /**
+     * What the pay rate is applied to. PER_UNIT: per container delivered (only valid with a COUNT unit). PER_KG: per kilo, the only option when the container is weighed every round (WEIGHT). Null whenever payRate is null.
+     * @nullable
+     */
+  payBasis?: UpdateWorkdayPayResponseDtoPayBasis;
   /** Client-generated id (the originating local workday row id) used to make retrying POST /workdays idempotent */
   clientEntryId: string;
 }
@@ -716,6 +857,18 @@ export type CloseWorkdayResponseDtoStatus = typeof CloseWorkdayResponseDtoStatus
 export const CloseWorkdayResponseDtoStatus = {
   OPEN: 'OPEN',
   CLOSED: 'CLOSED',
+} as const;
+
+/**
+ * What the pay rate is applied to. PER_UNIT: per container delivered (only valid with a COUNT unit). PER_KG: per kilo, the only option when the container is weighed every round (WEIGHT). Null whenever payRate is null.
+ * @nullable
+ */
+export type CloseWorkdayResponseDtoPayBasis = typeof CloseWorkdayResponseDtoPayBasis[keyof typeof CloseWorkdayResponseDtoPayBasis] | null;
+
+
+export const CloseWorkdayResponseDtoPayBasis = {
+  PER_UNIT: 'PER_UNIT',
+  PER_KG: 'PER_KG',
 } as const;
 
 export interface CloseWorkdayResponseDto {
@@ -742,6 +895,16 @@ export interface CloseWorkdayResponseDto {
   recorderId: string | null;
   /** Display name of the recorder attributed to this workday. Absent for guest-mode workdays (recorderId is null). */
   recorderName?: string;
+  /**
+     * How much a harvester is paid for what they deliver this workday, in whole Chilean pesos. Null when the farm does not pay per production (day wage) or has not defined the rate yet.
+     * @nullable
+     */
+  payRate?: number | null;
+  /**
+     * What the pay rate is applied to. PER_UNIT: per container delivered (only valid with a COUNT unit). PER_KG: per kilo, the only option when the container is weighed every round (WEIGHT). Null whenever payRate is null.
+     * @nullable
+     */
+  payBasis?: CloseWorkdayResponseDtoPayBasis;
   /** Client-generated id (the originating local workday row id) used to make retrying POST /workdays idempotent */
   clientEntryId: string;
 }
@@ -815,6 +978,11 @@ export interface SyncHarvestEntryEntryDto {
   unitCount: number;
   /** Weight read off the scale for this delivery, in kilos, at most one decimal. Required for WEIGHT units; ignored for COUNT ones, which get their kilos from the unit kgFactor instead. Always positive: the sign of the entry comes from unitCount. */
   weightKg?: number;
+  /**
+     * Actual weight of this delivery in kilos, at most one decimal — an optional control reading for COUNT units (the container is worth 3kg by catalog, this one really weighed 3.4). Rejected for WEIGHT units, where the scale reading is already weightKg. Never affects totalKg or the pay. The device is the only writer of this field, so it always sends its local value: a number sets it, **null clears it** (the recorder removed a weight they had recorded), and omitting it leaves whatever is stored untouched.
+     * @nullable
+     */
+  measuredKg?: number | null;
   /** When the delivery actually happened on-device (ISO 8601), not when it is synced */
   recordedAt: string;
 }
@@ -864,6 +1032,11 @@ export interface FindHarvestEntryResponseDto {
   unitCount: number;
   /** Total kilos, always resolved server-side: unitCount x measurementUnit.kgFactor for a COUNT unit, or the weight read off the scale for a WEIGHT one */
   totalKg: number;
+  /**
+     * Actual weight recorded for this delivery, in kilos. Optional control reading for COUNT units only (the container says 3kg, someone weighed 3.4): never part of totalKg and never part of the pay. Null when nobody weighed this one.
+     * @nullable
+     */
+  measuredKg?: number | null;
   /** Client-generated id (the originating SQLite row id) used to make offline-sync retries idempotent */
   clientEntryId: string;
   /** When the delivery actually happened on-device (ISO 8601), not when it was synced */

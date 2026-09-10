@@ -18,6 +18,7 @@ import {
   SegmentedButtons,
   Text,
   TextInput,
+  TouchableRipple,
 } from 'react-native-paper';
 import { KeyboardAwareDialog } from '@/components/KeyboardAwareDialog';
 import { Screen } from '@/components/Screen';
@@ -58,6 +59,7 @@ interface RoundEntry {
   id: string;
   unitCount: number;
   totalKg: number;
+  measuredKg: number | null;
   recordedAt: string;
 }
 
@@ -105,6 +107,17 @@ export default function AnotadorScreen() {
   // magnitud positiva.
   const [weightMode, setWeightMode] = useState<'add' | 'discount'>('add');
   const [infoHarvesterId, setInfoHarvesterId] = useState<string | null>(null);
+
+  // Pesaje de control (ver lib/weighing.ts): el peso real de una vuelta
+  // hecha con un envase de peso fijo. Es opcional y no toca ni el total ni
+  // el pago — se anota desde el diálogo de vueltas, nunca desde el camino
+  // rápido de anotar.
+  const [measuring, setMeasuring] = useState<{
+    harvesterId: string;
+    round: RoundEntry & { roundNumber: number };
+  } | null>(null);
+  const [measureInput, setMeasureInput] = useState('');
+  const [savingMeasure, setSavingMeasure] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -177,6 +190,7 @@ export default function AnotadorScreen() {
           id: row.id,
           unitCount: row.unitCount,
           totalKg: row.totalKg,
+          measuredKg: row.measuredKg,
           recordedAt: row.recordedAt,
         });
         entries[row.harvesterId] = list;
@@ -250,7 +264,13 @@ export default function AnotadorScreen() {
         ...prev,
         [harvesterId]: [
           ...current,
-          { id: entryId, unitCount, totalKg: totalKgDelta, recordedAt },
+          {
+            id: entryId,
+            unitCount,
+            totalKg: totalKgDelta,
+            measuredKg: null,
+            recordedAt,
+          },
         ],
       };
     });
@@ -316,6 +336,89 @@ export default function AnotadorScreen() {
     0,
   );
   const isDirectWeighing = defaultUnit?.mode === 'WEIGHT';
+  function openMeasureDialog(
+    harvesterId: string,
+    round: RoundEntry & { roundNumber: number },
+  ) {
+    setMeasuring({ harvesterId, round });
+    // La coma es lo que muestra formatKg y lo que el campo acepta de vuelta.
+    setMeasureInput(
+      round.measuredKg != null ? String(round.measuredKg).replace('.', ',') : '',
+    );
+    // Se cierra el de vueltas en vez de apilar dos diálogos: con dos
+    // encima, el de arriba queda con doble velo y el teclado se pelea con
+    // los dos contenedores.
+    setInfoHarvesterId(null);
+  }
+
+  function closeMeasureDialog() {
+    const harvesterId = measuring?.harvesterId ?? null;
+    setMeasuring(null);
+    // Vuelve al listado de vueltas, que es de donde se entró — y ya
+    // muestra el peso recién anotado.
+    setInfoHarvesterId(harvesterId);
+  }
+
+  async function saveMeasure(measuredKg: number | null) {
+    if (!measuring) {
+      return;
+    }
+
+    const { harvesterId, round } = measuring;
+    setSavingMeasure(true);
+    try {
+      // `synced: false` vuelve a poner la anotación en la cola de subida:
+      // el server, al recibirla de nuevo, actualiza **solo** measuredKg y
+      // deja intactos los envases y los kilos (ver harvest-entries.service).
+      await db
+        .update(harvestEntries)
+        .set({ measuredKg, synced: false })
+        .where(eq(harvestEntries.id, round.id));
+
+      setEntriesByHarvester((prev) => ({
+        ...prev,
+        [harvesterId]: (prev[harvesterId] ?? []).map((entry) =>
+          entry.id === round.id ? { ...entry, measuredKg } : entry,
+        ),
+      }));
+
+      closeMeasureDialog();
+    } catch (err) {
+      setError(getErrorMessage(err));
+    } finally {
+      setSavingMeasure(false);
+    }
+  }
+
+  function submitMeasure() {
+    const value = parseDecimalInput(measureInput);
+    if (!Number.isFinite(value) || value <= 0) {
+      return;
+    }
+
+    saveMeasure(roundToOneDecimal(value));
+  }
+
+  // La diferencia contra lo que dice el envase, en vivo mientras se tipea:
+  // es el dato por el que alguien pesa (¿van llenas de más o de menos?), y
+  // verlo antes de guardar evita tener que ir a buscarlo después.
+  const measureDifference = (() => {
+    if (!measuring) {
+      return null;
+    }
+
+    const value = parseDecimalInput(measureInput);
+    if (!Number.isFinite(value) || value <= 0) {
+      return null;
+    }
+
+    const difference = roundToOneDecimal(
+      value - Math.abs(measuring.round.totalKg),
+    );
+
+    return strings.weighing.difference(formatKg(difference), difference > 0);
+  })();
+
   const infoHarvester = infoHarvesterId
     ? harvestersById[infoHarvesterId]
     : null;
@@ -543,23 +646,62 @@ export default function AnotadorScreen() {
                   {strings.anotador.noRoundsYet}
                 </Text>
               ) : (
-                infoRounds.map((round) => (
-                  <View key={round.id} style={styles.roundRow}>
-                    <Text variant="titleSmall">
-                      {strings.anotador.round(round.roundNumber)}
+                <>
+                  {/* Solo con envases de peso fijo: en modo pesaje la vuelta
+                      ya trae su peso real, no hay nada que agregarle. */}
+                  {isDirectWeighing ? null : (
+                    <Text variant="bodySmall" style={styles.measureHint}>
+                      {strings.anotador.measureHint}
                     </Text>
-                    <Text>
-                      {strings.anotador.containers(round.unitCount)} ·{' '}
-                      {formatKg(round.totalKg)} {strings.anotador.kg}
-                    </Text>
-                    <Text variant="bodySmall" style={styles.roundTime}>
-                      {new Date(round.recordedAt).toLocaleTimeString('es-CL', {
-                        hour: '2-digit',
-                        minute: '2-digit',
-                      })}
-                    </Text>
-                  </View>
-                ))
+                  )}
+                  {infoRounds.map((round) => {
+                    const row = (
+                      <View style={styles.roundRow}>
+                        <Text variant="titleSmall">
+                          {strings.anotador.round(round.roundNumber)}
+                        </Text>
+                        <Text>
+                          {strings.anotador.containers(round.unitCount)} ·{' '}
+                          {formatKg(round.totalKg)} {strings.anotador.kg}
+                        </Text>
+                        {round.measuredKg != null ? (
+                          <Text
+                            variant="bodySmall"
+                            style={[
+                              styles.roundMeasured,
+                              { color: palette.primary },
+                            ]}
+                          >
+                            {strings.weighing.roundMeasured(
+                              formatKg(round.measuredKg),
+                            )}
+                          </Text>
+                        ) : null}
+                        <Text variant="bodySmall" style={styles.roundTime}>
+                          {new Date(round.recordedAt).toLocaleTimeString(
+                            'es-CL',
+                            { hour: '2-digit', minute: '2-digit' },
+                          )}
+                        </Text>
+                      </View>
+                    );
+
+                    // Una corrección (-1) no se pesa: lo que se controla es
+                    // lo que se entregó, no el descuento.
+                    return isDirectWeighing || round.unitCount <= 0 ? (
+                      <View key={round.id}>{row}</View>
+                    ) : (
+                      <TouchableRipple
+                        key={round.id}
+                        onPress={() =>
+                          openMeasureDialog(infoHarvesterId ?? '', round)
+                        }
+                      >
+                        {row}
+                      </TouchableRipple>
+                    );
+                  })}
+                </>
               )}
             </ScrollView>
           </Dialog.ScrollArea>
@@ -569,6 +711,63 @@ export default function AnotadorScreen() {
             </Button>
           </Dialog.Actions>
         </Dialog>
+
+        {/* KeyboardAwareDialog porque tiene campo de texto (ver el
+            componente): en iOS el teclado taparía el campo y los botones. */}
+        <KeyboardAwareDialog
+          theme={{ version: 3 }}
+          visible={measuring !== null}
+          onDismiss={closeMeasureDialog}
+        >
+          <Dialog.Title>
+            {measuring
+              ? strings.anotador.measureTitle(measuring.round.roundNumber)
+              : ''}
+          </Dialog.Title>
+          <Dialog.Content>
+            <Text variant="bodySmall" style={styles.measureExpected}>
+              {measuring
+                ? strings.anotador.measureExpected(
+                    formatKg(Math.abs(measuring.round.totalKg)),
+                  )
+                : ''}
+            </Text>
+            <TextInput
+              mode="outlined"
+              label={strings.anotador.measureLabel}
+              value={measureInput}
+              onChangeText={(text) =>
+                setMeasureInput(sanitizeDecimalInput(text))
+              }
+              keyboardType="decimal-pad"
+              autoFocus
+            />
+            <HelperText type="info">
+              {measureDifference ?? strings.anotador.weightHelp}
+            </HelperText>
+          </Dialog.Content>
+          <Dialog.Actions>
+            {measuring?.round.measuredKg != null ? (
+              <Button
+                onPress={() => saveMeasure(null)}
+                disabled={savingMeasure}
+                textColor={palette.textSecondary}
+              >
+                {strings.anotador.measureRemove}
+              </Button>
+            ) : null}
+            <Button onPress={closeMeasureDialog} disabled={savingMeasure}>
+              {strings.common.cancel}
+            </Button>
+            <Button
+              onPress={submitMeasure}
+              loading={savingMeasure}
+              disabled={savingMeasure}
+            >
+              {strings.common.save}
+            </Button>
+          </Dialog.Actions>
+        </KeyboardAwareDialog>
       </Portal>
     </Screen>
   );
@@ -658,6 +857,15 @@ function createStyles(colors: ReturnType<typeof usePalette>) {
       borderBottomWidth: StyleSheet.hairlineWidth,
       borderBottomColor: colors.border,
     },
+    measureHint: {
+      color: colors.textSecondary,
+      paddingBottom: spacing.sm,
+    },
+    measureExpected: {
+      color: colors.textSecondary,
+      marginBottom: spacing.sm,
+    },
+    roundMeasured: { fontWeight: '700', marginTop: 2 },
     roundTime: { color: colors.textSecondary, marginTop: spacing.xs },
     noRounds: { paddingVertical: spacing.md },
   });

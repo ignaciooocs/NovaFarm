@@ -20,11 +20,12 @@ import { useAuthStore } from '@/stores';
 // desaparece por diseño — el usuario no está anotando activamente mientras
 // está parado en la pantalla de Sincronizar.
 export async function pushPendingHarvesters(): Promise<{
+  results: { status: string }[];
   rejectedReasons: string[];
 }> {
   const farmId = useAuthStore.getState().claims.farmId;
   if (!farmId) {
-    return { rejectedReasons: [] };
+    return { results: [], rejectedReasons: [] };
   }
 
   const pending = await db
@@ -33,7 +34,7 @@ export async function pushPendingHarvesters(): Promise<{
     .where(and(eq(harvesters.synced, false), eq(harvesters.farmId, farmId)));
 
   if (pending.length === 0) {
-    return { rejectedReasons: [] };
+    return { results: [], rejectedReasons: [] };
   }
 
   const { harvestersControllerSync } = getHarvesters();
@@ -75,5 +76,5 @@ export async function pushPendingHarvesters(): Promise<{
     }
   });
 
-  return { rejectedReasons };
+  return { results, rejectedReasons };
 }

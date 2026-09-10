@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
-import { Model, Types } from 'mongoose';
+import { AnyBulkWriteOperation, Model, Types } from 'mongoose';
+import { logSyncBatch } from '../common/logging/sync-batch-log';
 import { HarvesterWorkdayService } from '../harvester-workday/harvester-workday.service';
 import { HarvestersService } from '../harvesters/harvesters.service';
 import { MeasurementUnitDto } from '../measurement-units/dto';
@@ -36,33 +37,256 @@ export class HarvestEntriesService {
     private readonly harvesterWorkdayService: HarvesterWorkdayService,
   ) {}
 
-  // Sube un batch de entregas capturadas offline. Igual que en
-  // harvester-workday: si la jornada no existe o ya está cerrada, rechaza
-  // TODO el batch de una sola vez; si está abierta, procesa cada entrada y
-  // devuelve un resultado por ítem (nunca un error HTTP).
+  // Sube un batch de entregas capturadas offline. Primero valida la jornada
+  // una sola vez: si no existe o ya está cerrada, rechaza TODO el batch sin
+  // gastar una consulta por ítem. Devuelve un resultado por entrada
+  // (created/already-synced/rejected), nunca un error HTTP.
+  //
+  // **Todo se resuelve por lote, no por entrada** (reescrito el 2026-09-09,
+  // por un bug real en dispositivo): antes cada anotación costaba ~5 idas a
+  // Atlas en serie —¿ya existe?, cosechador, roster, unidad, insert— así que
+  // un día completo (98 anotaciones) eran ~490 consultas encadenadas, más de
+  // los 15s de timeout del cliente. La petición moría siempre en el mismo
+  // punto y las anotaciones no bajaban nunca del contador de pendientes.
+  // Ahora son ~5 consultas para todo el lote, sea de 1 o de 500.
   async sync(
     farmId: string,
     workdayId: string,
     entries: SyncHarvestEntryEntryDto[],
   ): Promise<SyncHarvestEntryResponseDto[]> {
+    const startedAt = Date.now();
+    const scope = 'harvest-entries';
+    const context = `workday=${workdayId}`;
     const workday = await this.workdaysService.findById(farmId, workdayId);
 
     if (!workday) {
-      return entries.map((entry) =>
+      const rejectedAll = entries.map((entry) =>
         this.rejected(entry.clientEntryId, 'Workday not found'),
       );
+      logSyncBatch(scope, context, rejectedAll, startedAt);
+      return rejectedAll;
     }
 
     if (workday.status === 'CLOSED') {
-      return entries.map((entry) =>
+      const rejectedAll = entries.map((entry) =>
         this.rejected(entry.clientEntryId, 'Workday is already closed'),
       );
+      logSyncBatch(scope, context, rejectedAll, startedAt);
+      return rejectedAll;
     }
 
+    const workdayObjectId = new Types.ObjectId(workdayId);
+    const [existingDocs, activeHarvesterIds, rosterHarvesterIds, units] =
+      await Promise.all([
+        this.harvestEntryModel
+          .find({
+            workdayId: workdayObjectId,
+            clientEntryId: { $in: entries.map((entry) => entry.clientEntryId) },
+          })
+          .exec(),
+        this.harvestersService.findActiveIdsIn(
+          farmId,
+          entries.map((entry) => entry.harvesterId),
+        ),
+        this.harvesterWorkdayService.findRosterHarvesterIds(farmId, workdayId),
+        // El catálogo entero de la farm en vez de una consulta por unidad:
+        // son un puñado de filas, y una jornada usa una o dos.
+        this.measurementUnitsService.findAll(farmId, { active: true }),
+      ]);
+
+    const existingByClientEntryId = new Map(
+      existingDocs.map((doc) => [doc.clientEntryId, doc]),
+    );
+    const unitsById = new Map(units.map((unit) => [unit._id, unit]));
+
     const results: SyncHarvestEntryResponseDto[] = [];
+    const operations: AnyBulkWriteOperation<HarvestEntry>[] = [];
+    const creating: string[] = [];
+
     for (const entry of entries) {
-      results.push(await this.syncOne(farmId, workdayId, entry));
+      const existing = existingByClientEntryId.get(entry.clientEntryId);
+      if (existing) {
+        // Lo único que un reintento puede cambiar de una anotación ya
+        // sincronizada es el peso de control (ver el schema): los envases y
+        // los kilos del total quedan intactos.
+        //
+        // `null` **también se escribe**: significa que el anotador le sacó
+        // el peso que le había puesto. Antes se ignoraba (solo se escribía
+        // si el campo traía número), así que quitar un peso lo borraba de la
+        // pantalla pero lo dejaba vivo en la base — bug real, encontrado
+        // mirando Atlas el 2026-09-09. El celular es el único que escribe
+        // este campo, así que su valor local es la verdad, null incluido.
+        if (entry.measuredKg !== undefined) {
+          const stored = existing.measuredKg
+            ? Number(existing.measuredKg.toString())
+            : null;
+
+          // Solo si de verdad cambió: un reintento del mismo lote no tiene
+          // por qué reescribir lo que ya está igual.
+          if (stored !== entry.measuredKg) {
+            operations.push({
+              updateOne: {
+                filter: { _id: existing._id },
+                update: {
+                  $set: {
+                    measuredKg:
+                      entry.measuredKg === null
+                        ? null
+                        : Types.Decimal128.fromString(
+                            entry.measuredKg.toString(),
+                          ),
+                  },
+                },
+              },
+            });
+          }
+        }
+
+        results.push({
+          clientEntryId: entry.clientEntryId,
+          status: 'already-synced',
+          _id: existing._id.toString(),
+        });
+        continue;
+      }
+
+      if (!activeHarvesterIds.has(entry.harvesterId)) {
+        results.push(
+          this.rejected(
+            entry.clientEntryId,
+            'Harvester not found in the caller farm roster',
+          ),
+        );
+        continue;
+      }
+
+      if (!rosterHarvesterIds.has(entry.harvesterId)) {
+        results.push(
+          this.rejected(
+            entry.clientEntryId,
+            'Harvester is not on this workday roster',
+          ),
+        );
+        continue;
+      }
+
+      const measurementUnit = unitsById.get(entry.measurementUnitId);
+      if (!measurementUnit) {
+        results.push(
+          this.rejected(
+            entry.clientEntryId,
+            'Measurement unit not found in the caller farm catalog',
+          ),
+        );
+        continue;
+      }
+
+      // En una unidad WEIGHT el peso real ya es el total de la entrega
+      // (weightKg): aceptar además un measuredKg dejaría dos campos peleando
+      // por significar lo mismo, que es justo la ambigüedad que el `mode`
+      // explícito vino a matar.
+      // `!= null` y no `!== undefined`: el cliente manda el campo en todas
+      // sus anotaciones (mandar null es como dice "sin peso"), así que
+      // comparar contra undefined rechazaría **toda** entrega hecha con un
+      // envase que se pesa.
+      if (entry.measuredKg != null && measurementUnit.mode === 'WEIGHT') {
+        results.push(
+          this.rejected(
+            entry.clientEntryId,
+            'measuredKg only applies to COUNT units — a WEIGHT unit already carries its real weight in weightKg',
+          ),
+        );
+        continue;
+      }
+
+      const totalKg = this.resolveTotalKg(entry, measurementUnit);
+      if (totalKg === null) {
+        results.push(
+          this.rejected(
+            entry.clientEntryId,
+            measurementUnit.mode === 'WEIGHT'
+              ? 'weightKg is required for entries made with a WEIGHT measurement unit'
+              : 'Measurement unit has no kgFactor configured',
+          ),
+        );
+        continue;
+      }
+
+      // upsert sobre {workdayId, clientEntryId} — el mismo índice único que
+      // antes hacía idempotente el create(), ahora sin una consulta previa
+      // por entrada. $setOnInsert y no $set: si la fila ya existiera (una
+      // carrera entre dos reintentos), no se le pisa nada de lo ya guardado.
+      operations.push({
+        updateOne: {
+          filter: {
+            workdayId: workdayObjectId,
+            clientEntryId: entry.clientEntryId,
+          },
+          update: {
+            $setOnInsert: {
+              farmId: new Types.ObjectId(farmId),
+              workdayId: workdayObjectId,
+              harvesterId: new Types.ObjectId(entry.harvesterId),
+              measurementUnitId: new Types.ObjectId(entry.measurementUnitId),
+              unitCount: Types.Decimal128.fromString(
+                entry.unitCount.toString(),
+              ),
+              totalKg: Types.Decimal128.fromString(totalKg.toString()),
+              measuredKg:
+                entry.measuredKg == null
+                  ? null
+                  : Types.Decimal128.fromString(entry.measuredKg.toString()),
+              recordedAt: new Date(entry.recordedAt),
+              syncedOffline: true,
+            },
+          },
+          upsert: true,
+        },
+      });
+      creating.push(entry.clientEntryId);
+      results.push({
+        clientEntryId: entry.clientEntryId,
+        status: 'created',
+      });
     }
+
+    if (operations.length > 0) {
+      try {
+        await this.harvestEntryModel.bulkWrite(operations, { ordered: false });
+      } catch (error) {
+        // Carrera entre dos reintentos concurrentes del mismo lote: el
+        // índice único la resuelve y la fila queda igual escrita una sola
+        // vez, así que un choque de llave duplicada no es una falla — con
+        // `ordered: false` el resto del lote se aplicó igual. Cualquier otro
+        // error sí se propaga.
+        if (!this.isOnlyDuplicateKeyErrors(error)) {
+          throw error;
+        }
+      }
+    }
+
+    // Los _id de lo recién insertado, en una sola consulta (bulkWrite no
+    // devuelve los de un upsert de forma utilizable por clientEntryId).
+    if (creating.length > 0) {
+      const created = await this.harvestEntryModel
+        .find({
+          workdayId: workdayObjectId,
+          clientEntryId: { $in: creating },
+        })
+        .select('_id clientEntryId')
+        .exec();
+      const idsByClientEntryId = new Map(
+        created.map((doc) => [doc.clientEntryId, doc._id.toString()]),
+      );
+
+      for (const result of results) {
+        if (result.status === 'created') {
+          result._id = idsByClientEntryId.get(result.clientEntryId);
+        }
+      }
+    }
+
+    logSyncBatch(scope, context, results, startedAt);
 
     return results;
   }
@@ -77,119 +301,6 @@ export class HarvestEntriesService {
       .exec();
 
     return found.map((doc) => this.toDto(doc));
-  }
-
-  // Procesa una sola entrega del batch:
-  // 1) si el clientEntryId ya existe, es un reintento — already-synced.
-  // 2) valida que el cosechador exista y esté activo en la farm.
-  // 3) valida que el cosechador ya esté en el roster de esta jornada (no se
-  //    puede registrar una entrega de alguien que nunca fue agregado).
-  // 4) valida que la unidad de medida exista y esté activa.
-  // 5) resuelve los kilos del lado del servidor según el modo de la unidad
-  //    (ver resolveTotalKg) y crea el registro.
-  private async syncOne(
-    farmId: string,
-    workdayId: string,
-    entry: SyncHarvestEntryEntryDto,
-  ): Promise<SyncHarvestEntryResponseDto> {
-    const existing = await this.harvestEntryModel
-      .findOne({
-        workdayId: new Types.ObjectId(workdayId),
-        clientEntryId: entry.clientEntryId,
-      })
-      .exec();
-
-    if (existing) {
-      return {
-        clientEntryId: entry.clientEntryId,
-        status: 'already-synced',
-        _id: existing._id.toString(),
-      };
-    }
-
-    const harvester = await this.harvestersService.findActiveById(
-      farmId,
-      entry.harvesterId,
-    );
-    if (!harvester) {
-      return this.rejected(
-        entry.clientEntryId,
-        'Harvester not found in the caller farm roster',
-      );
-    }
-
-    const onRoster = await this.harvesterWorkdayService.existsInRoster(
-      farmId,
-      workdayId,
-      entry.harvesterId,
-    );
-    if (!onRoster) {
-      return this.rejected(
-        entry.clientEntryId,
-        'Harvester is not on this workday roster',
-      );
-    }
-
-    const measurementUnit = await this.measurementUnitsService.findActiveById(
-      farmId,
-      entry.measurementUnitId,
-    );
-    if (!measurementUnit) {
-      return this.rejected(
-        entry.clientEntryId,
-        'Measurement unit not found in the caller farm catalog',
-      );
-    }
-
-    const totalKg = this.resolveTotalKg(entry, measurementUnit);
-    if (totalKg === null) {
-      return this.rejected(
-        entry.clientEntryId,
-        measurementUnit.mode === 'WEIGHT'
-          ? 'weightKg is required for entries made with a WEIGHT measurement unit'
-          : 'Measurement unit has no kgFactor configured',
-      );
-    }
-
-    try {
-      const created = await this.harvestEntryModel.create({
-        farmId: new Types.ObjectId(farmId),
-        workdayId: new Types.ObjectId(workdayId),
-        harvesterId: new Types.ObjectId(entry.harvesterId),
-        measurementUnitId: new Types.ObjectId(entry.measurementUnitId),
-        unitCount: Types.Decimal128.fromString(entry.unitCount.toString()),
-        totalKg: Types.Decimal128.fromString(totalKg.toString()),
-        recordedAt: new Date(entry.recordedAt),
-        clientEntryId: entry.clientEntryId,
-        syncedOffline: true,
-      });
-
-      return {
-        clientEntryId: entry.clientEntryId,
-        status: 'created',
-        _id: created._id.toString(),
-      };
-    } catch (error) {
-      // Única colisión posible acá (a diferencia del roster, no hay otros
-      // índices únicos sobre esta colección): dos reintentos concurrentes
-      // con el mismo clientEntryId. Se resuelve re-consultando y
-      // devolviendo already-synced.
-      if (this.isDuplicateClientEntryIdError(error)) {
-        const raced = await this.harvestEntryModel
-          .findOne({
-            workdayId: new Types.ObjectId(workdayId),
-            clientEntryId: entry.clientEntryId,
-          })
-          .exec();
-        return {
-          clientEntryId: entry.clientEntryId,
-          status: 'already-synced',
-          _id: raced?._id.toString(),
-        };
-      }
-
-      throw error;
-    }
   }
 
   // Kilos de una entrega, según cómo se captura su unidad de medida (ver
@@ -239,20 +350,29 @@ export class HarvestEntriesService {
     return { clientEntryId, status: 'rejected', reason };
   }
 
-  // Chequea si el error de Mongo es específicamente un choque en el índice
-  // único {workdayId, clientEntryId} (código 11000 + keyPattern.clientEntryId).
-  private isDuplicateClientEntryIdError(error: unknown): boolean {
-    return (
-      typeof error === 'object' &&
-      error !== null &&
-      'code' in error &&
-      (error as { code?: number }).code === MONGO_DUPLICATE_KEY_ERROR_CODE &&
-      'keyPattern' in error &&
-      Boolean(
-        (error as { keyPattern?: Record<string, unknown> }).keyPattern
-          ?.clientEntryId,
-      )
-    );
+  // Chequea si todo lo que falló en un bulkWrite fueron choques de llave
+  // duplicada (código 11000) — o sea, filas que otro reintento concurrente
+  // ya había escrito. Cualquier otra cosa mezclada ahí adentro no se puede
+  // tragar en silencio.
+  private isOnlyDuplicateKeyErrors(error: unknown): boolean {
+    if (typeof error !== 'object' || error === null) {
+      return false;
+    }
+
+    const { code, writeErrors } = error as {
+      code?: number;
+      writeErrors?: { code?: number; err?: { code?: number } }[];
+    };
+
+    if (Array.isArray(writeErrors) && writeErrors.length > 0) {
+      return writeErrors.every(
+        (writeError) =>
+          (writeError.code ?? writeError.err?.code) ===
+          MONGO_DUPLICATE_KEY_ERROR_CODE,
+      );
+    }
+
+    return code === MONGO_DUPLICATE_KEY_ERROR_CODE;
   }
 
   // Convierte el documento a DTO, incluyendo unitCount y totalKg de
@@ -266,6 +386,9 @@ export class HarvestEntriesService {
       measurementUnitId: doc.measurementUnitId.toString(),
       unitCount: Number(doc.unitCount.toString()),
       totalKg: Number(doc.totalKg.toString()),
+      // ?? null y no el crudo: una entrega anterior a este campo se hidrata
+      // con undefined, y el cliente distingue "nadie la pesó" por null.
+      measuredKg: doc.measuredKg ? Number(doc.measuredKg.toString()) : null,
       clientEntryId: doc.clientEntryId,
       recordedAt: doc.recordedAt.toISOString(),
       syncedOffline: doc.syncedOffline,

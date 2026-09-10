@@ -65,6 +65,25 @@ export class SyncHarvestEntryEntryDto {
   @IsPositive()
   weightKg?: number;
 
+  // `type: Number` + nullable explícitos: sin eso Swagger no infiere
+  // `number | null` y le genera a ui-app un tipo que no acepta el null.
+  @ApiPropertyOptional({
+    description:
+      'Actual weight of this delivery in kilos, at most one decimal — an optional control reading for COUNT units (the container is worth 3kg by catalog, this one really weighed 3.4). Rejected for WEIGHT units, where the scale reading is already weightKg. Never affects totalKg or the pay. The device is the only writer of this field, so it always sends its local value: a number sets it, **null clears it** (the recorder removed a weight they had recorded), and omitting it leaves whatever is stored untouched.',
+    type: Number,
+    example: 3.4,
+    nullable: true,
+  })
+  // null pasa sin validar: es un valor con significado propio (sacar el
+  // peso), no un peso mal formado.
+  @ValidateIf(
+    (dto: SyncHarvestEntryEntryDto) =>
+      dto.measuredKg !== undefined && dto.measuredKg !== null,
+  )
+  @IsNumber({ maxDecimalPlaces: 1 })
+  @IsPositive()
+  measuredKg?: number | null;
+
   @ApiProperty({
     description:
       'When the delivery actually happened on-device (ISO 8601), not when it is synced',

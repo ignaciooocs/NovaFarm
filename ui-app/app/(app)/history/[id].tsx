@@ -1,10 +1,10 @@
-import { useCallback, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 import { FlatList, Modal, Platform, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { WebView } from 'react-native-webview';
 import * as Print from 'expo-print';
 import * as Sharing from 'expo-sharing';
-import { Stack, useFocusEffect, useLocalSearchParams } from 'expo-router';
+import { Stack, useLocalSearchParams } from 'expo-router';
 import {
   ActivityIndicator,
   HelperText,
@@ -12,19 +12,27 @@ import {
   Text,
 } from 'react-native-paper';
 import {
-  harvestEntriesControllerFindAll,
+  useHarvestEntriesControllerFindAll,
+  type HarvestEntriesControllerFindAllQueryResult,
 } from '@/api/generated/harvest-entries/harvest-entries';
 import {
-  harvesterWorkdayControllerFindAll,
+  useHarvesterWorkdayControllerFindAll,
+  type HarvesterWorkdayControllerFindAllQueryResult,
 } from '@/api/generated/harvester-workday/harvester-workday';
-import { workdaysControllerFindAll } from '@/api/generated/workdays/workdays';
+import type { FindWorkdayResponseDto } from '@/api/generated/novaFarmAPI.schemas';
+import { useWorkdaysControllerFindAll } from '@/api/generated/workdays/workdays';
 import { Screen } from '@/components/Screen';
 import { DEFAULT_PRODUCT_ICON } from '@/constants/productIcon';
 import { strings } from '@/constants/strings';
-import { db } from '@/db/client';
-import { products, harvesters as harvestersTable } from '@/db/schema';
 import { getErrorMessage } from '@/lib/errors';
 import { formatCLP, formatKg } from '@/lib/format';
+import {
+  readHarvesterNamesById,
+  readProductsById,
+  useLocalRead,
+  type ProductInfo,
+} from '@/lib/localCatalogNames';
+import { useRefreshOnFocus } from '@/lib/useRefreshOnFocus';
 import { computePay, hasPay, sumPay, type WorkdayPay } from '@/lib/pay';
 import { summarizeWeighing, type WeighingSummary } from '@/lib/weighing';
 import { generateWorkdaySummaryPdf } from '@/lib/workdayPdf';
@@ -50,6 +58,69 @@ interface WorkdayDetail extends WorkdayPay {
   weighing: WeighingSummary | null;
 }
 
+// Sin filtro de status: esta pantalla también se usa para ver la jornada
+// ABIERTA de alguien desde Mi equipo, no solo jornadas cerradas del
+// Historial. (No hay GET /workdays/:id en el server, por eso se pide la
+// lista y se busca.)
+const ALL_WORKDAYS = {};
+
+// Arma el detalle a partir de lo que ya trajeron las queries y la caché
+// local de nombres. Pura: React Query decide cuándo hay datos nuevos, y esto
+// solo se recalcula entonces.
+function buildDetail(
+  workday: FindWorkdayResponseDto,
+  entryRows: HarvestEntriesControllerFindAllQueryResult,
+  rosterRows: HarvesterWorkdayControllerFindAllQueryResult,
+  productsById: Record<string, ProductInfo>,
+  harvesterNamesById: Record<string, string>,
+): WorkdayDetail {
+  const totalsByHarvester: Record<
+    string,
+    { unitCount: number; totalKg: number }
+  > = {};
+  entryRows.forEach((entry) => {
+    const current = totalsByHarvester[entry.harvesterId] ?? {
+      unitCount: 0,
+      totalKg: 0,
+    };
+    totalsByHarvester[entry.harvesterId] = {
+      unitCount: current.unitCount + entry.unitCount,
+      totalKg: current.totalKg + entry.totalKg,
+    };
+  });
+
+  const roster = rosterRows
+    .map((row) => ({
+      harvesterId: row.harvesterId,
+      workdayNumber: row.workdayNumber,
+      name: harvesterNamesById[row.harvesterId] ?? '...',
+      unitCount: totalsByHarvester[row.harvesterId]?.unitCount ?? 0,
+      totalKg: totalsByHarvester[row.harvesterId]?.totalKg ?? 0,
+    }))
+    .sort((a, b) => a.workdayNumber - b.workdayNumber);
+
+  const product = productsById[workday.productId];
+  return {
+    // La tarifa vive en la jornada del server, no en la caché local: esta
+    // pantalla también muestra jornadas capturadas por otro dispositivo, que
+    // nunca pasaron por este SQLite.
+    payRate: workday.payRate ?? null,
+    payBasis: workday.payBasis ?? null,
+    productName: product?.name ?? workday.productId,
+    productIcon: product?.icon ?? DEFAULT_PRODUCT_ICON,
+    date: workday.date,
+    status: workday.status,
+    recorderName: workday.recorderName,
+    totalKg:
+      workday.finalTotalKg ??
+      roster.reduce((sum, row) => sum + row.totalKg, 0),
+    roster,
+    // Sobre las entregas en vivo del server, no sobre el roster: el pesaje es
+    // por vuelta, y el roster ya viene sumado.
+    weighing: summarizeWeighing(entryRows),
+  };
+}
+
 // Detalle de una jornada, cerrada (drill-down desde history.tsx) o
 // **abierta** (drill-down desde team.tsx: "Jornada activa" en Mi equipo —
 // ver ahí por qué). A diferencia del Anotador, acá no se puede confiar en la
@@ -72,118 +143,51 @@ export default function HistoryDetailScreen() {
   // los botones del visor de PDF quedaban tapados por la barra de estado).
   const insets = useSafeAreaInsets();
 
-  const [detail, setDetail] = useState<WorkdayDetail | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
   const [exportingPdf, setExportingPdf] = useState(false);
   const [previewUri, setPreviewUri] = useState<string | null>(null);
   const [sharing, setSharing] = useState(false);
 
-  useFocusEffect(
-    useCallback(() => {
-      let cancelled = false;
+  const workdaysQuery = useWorkdaysControllerFindAll(ALL_WORKDAYS);
+  const entriesQuery = useHarvestEntriesControllerFindAll({
+    workdayId: workdayServerId,
+  });
+  const rosterQuery = useHarvesterWorkdayControllerFindAll({
+    workdayId: workdayServerId,
+  });
+  useRefreshOnFocus([
+    workdaysQuery.queryKey,
+    entriesQuery.queryKey,
+    rosterQuery.queryKey,
+  ]);
+  const productsById = useLocalRead(readProductsById);
+  const harvesterNamesById = useLocalRead(readHarvesterNamesById);
 
-      (async () => {
-        setLoading(true);
-        setError(null);
-        try {
-
-          const [allWorkdays, entryRows, rosterRows, productRows, harvestersRows] =
-            await Promise.all([
-              // Sin filtro de status: esta pantalla también se usa para ver
-              // la jornada ABIERTA de alguien desde Mi equipo, no solo
-              // jornadas cerradas del Historial.
-              workdaysControllerFindAll({}),
-              harvestEntriesControllerFindAll({ workdayId: workdayServerId }),
-              harvesterWorkdayControllerFindAll({ workdayId: workdayServerId }),
-              db.select().from(products),
-              db.select().from(harvestersTable),
-            ]);
-          if (cancelled) {
-            return;
-          }
-
-          const workday = allWorkdays.find((w) => w._id === workdayServerId);
-          if (!workday) {
-            setError(strings.errors.generic);
-            return;
-          }
-
-          const productsById: Record<string, { name: string; icon: string }> =
-            {};
-          productRows.forEach((product) => {
-            productsById[product.id] = {
-              name: product.name,
-              icon: product.icon ?? DEFAULT_PRODUCT_ICON,
-            };
-          });
-          const harvesterNamesById: Record<string, string> = {};
-          harvestersRows.forEach((harvester) => {
-            harvesterNamesById[harvester.id] =
-              `${harvester.firstName} ${harvester.lastName}`;
-          });
-
-          const totalsByHarvester: Record<
-            string,
-            { unitCount: number; totalKg: number }
-          > = {};
-          entryRows.forEach((entry) => {
-            const current = totalsByHarvester[entry.harvesterId] ?? {
-              unitCount: 0,
-              totalKg: 0,
-            };
-            totalsByHarvester[entry.harvesterId] = {
-              unitCount: current.unitCount + entry.unitCount,
-              totalKg: current.totalKg + entry.totalKg,
-            };
-          });
-
-          const roster = rosterRows
-            .map((row) => ({
-              harvesterId: row.harvesterId,
-              workdayNumber: row.workdayNumber,
-              name: harvesterNamesById[row.harvesterId] ?? '...',
-              unitCount: totalsByHarvester[row.harvesterId]?.unitCount ?? 0,
-              totalKg: totalsByHarvester[row.harvesterId]?.totalKg ?? 0,
-            }))
-            .sort((a, b) => a.workdayNumber - b.workdayNumber);
-
-          const product = productsById[workday.productId];
-          setDetail({
-            // La tarifa vive en la jornada del server, no en la caché local:
-            // esta pantalla también muestra jornadas capturadas por otro
-            // dispositivo, que nunca pasaron por este SQLite.
-            payRate: workday.payRate ?? null,
-            payBasis: workday.payBasis ?? null,
-            productName: product?.name ?? workday.productId,
-            productIcon: product?.icon ?? DEFAULT_PRODUCT_ICON,
-            date: workday.date,
-            status: workday.status,
-            recorderName: workday.recorderName,
-            totalKg:
-              workday.finalTotalKg ??
-              roster.reduce((sum, row) => sum + row.totalKg, 0),
-            roster,
-            // Sobre las entregas en vivo del server, no sobre el roster:
-            // el pesaje es por vuelta, y el roster ya viene sumado.
-            weighing: summarizeWeighing(entryRows),
-          });
-        } catch (err) {
-          if (!cancelled) {
-            setError(getErrorMessage(err));
-          }
-        } finally {
-          if (!cancelled) {
-            setLoading(false);
-          }
-        }
-      })();
-
-      return () => {
-        cancelled = true;
-      };
-    }, [workdayServerId]),
+  // find() devuelve el mismo objeto mientras la lista no cambie, así que el
+  // useMemo de abajo no se recalcula en cada render.
+  const workday = workdaysQuery.data?.find((w) => w._id === workdayServerId);
+  const detail = useMemo(
+    () =>
+      workday && entriesQuery.data && rosterQuery.data
+        ? buildDetail(
+            workday,
+            entriesQuery.data,
+            rosterQuery.data,
+            productsById,
+            harvesterNamesById,
+          )
+        : null,
+    [
+      workday,
+      entriesQuery.data,
+      rosterQuery.data,
+      productsById,
+      harvesterNamesById,
+    ],
   );
+  const isPending =
+    workdaysQuery.isPending || entriesQuery.isPending || rosterQuery.isPending;
+  const queryError =
+    workdaysQuery.error ?? entriesQuery.error ?? rosterQuery.error;
 
   async function handleExportPdf() {
     if (!detail) {
@@ -230,7 +234,9 @@ export default function HistoryDetailScreen() {
     }
   }
 
-  if (loading) {
+  // Spinner solo si todavía no hay nada que mostrar: al volver a una jornada
+  // ya vista, el detalle en caché se ve al tiro mientras se refresca.
+  if (isPending && !detail) {
     return (
       <Screen edges={['bottom', 'left', 'right']}>
         <ActivityIndicator />
@@ -238,10 +244,14 @@ export default function HistoryDetailScreen() {
     );
   }
 
-  if (error || !detail) {
+  if (!detail) {
     return (
       <Screen edges={['bottom', 'left', 'right']}>
-        <HelperText type="error">{error ?? strings.errors.generic}</HelperText>
+        <HelperText type="error">
+          {/* Sin error de red y sin detalle: la lista llegó pero esa jornada
+              no está en ella. */}
+          {queryError ? getErrorMessage(queryError) : strings.errors.generic}
+        </HelperText>
       </Screen>
     );
   }
@@ -264,6 +274,12 @@ export default function HistoryDetailScreen() {
             ),
         }}
       />
+
+      {/* Hay detalle en caché pero el último refresco falló (sin señal): se
+          avisa arriba en vez de tapar lo que ya se tenía. */}
+      {queryError ? (
+        <HelperText type="error">{getErrorMessage(queryError)}</HelperText>
+      ) : null}
 
       <FlatList
         data={detail.roster}

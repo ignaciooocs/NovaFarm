@@ -12,7 +12,10 @@ import {
   Text,
   TextInput,
 } from 'react-native-paper';
-import { workdaysControllerClose } from '@/api/generated/workdays/workdays';
+import {
+  getWorkdaysControllerFindAllQueryKey,
+  workdaysControllerClose,
+} from '@/api/generated/workdays/workdays';
 import { KeyboardAwareDialog } from '@/components/KeyboardAwareDialog';
 import { OptionSelector } from '@/components/OptionSelector';
 import { Screen } from '@/components/Screen';
@@ -37,6 +40,7 @@ import {
   type PayBasis,
 } from '@/lib/pay';
 import { summarizeWeighing, type WeighingSummary } from '@/lib/weighing';
+import { queryClient } from '@/lib/queryClient';
 import { pushPendingWorkdays } from '@/lib/workdaySync';
 import { usePalette } from '@/stores';
 import { colors, spacing } from '@/theme';
@@ -222,6 +226,14 @@ export default function CloseWorkdayScreen() {
           finalTotalKg: result.finalTotalKg ?? null,
         })
         .where(eq(workdays.id, workdayId));
+
+      // Sin parámetros la key es el prefijo de todas las listas de jornadas
+      // (cerradas del Historial, abiertas de Inicio/Mi equipo, todas del
+      // detalle): la recién cerrada cambia de una a otra, y así ninguna
+      // pantalla la muestra en el lugar viejo mientras se refresca.
+      queryClient.invalidateQueries({
+        queryKey: getWorkdaysControllerFindAllQueryKey(),
+      });
 
       router.replace('/home');
     } catch (err) {

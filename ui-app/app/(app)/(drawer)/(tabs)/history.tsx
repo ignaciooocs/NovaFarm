@@ -1,6 +1,6 @@
-import { useCallback, useMemo, useState } from 'react';
+import { useMemo } from 'react';
 import { FlatList, StyleSheet, View } from 'react-native';
-import { useFocusEffect, useRouter } from 'expo-router';
+import { useRouter } from 'expo-router';
 import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
 import {
   ActivityIndicator,
@@ -8,90 +8,51 @@ import {
   Text,
   TouchableRipple,
 } from 'react-native-paper';
-import type { FindWorkdayResponseDto } from '@/api/generated/novaFarmAPI.schemas';
-import { workdaysControllerFindAll } from '@/api/generated/workdays/workdays';
+import { useWorkdaysControllerFindAll } from '@/api/generated/workdays/workdays';
 import { Screen } from '@/components/Screen';
-import { DEFAULT_PRODUCT_ICON } from '@/constants/productIcon';
 import { strings } from '@/constants/strings';
-import { db } from '@/db/client';
-import { products } from '@/db/schema';
 import { getErrorMessage } from '@/lib/errors';
 import { formatKg } from '@/lib/format';
+import { readProductsById, useLocalRead } from '@/lib/localCatalogNames';
+import { useRefreshOnFocus } from '@/lib/useRefreshOnFocus';
 import { usePalette } from '@/stores';
 import { spacing } from '@/theme';
 
-interface ProductInfo {
-  name: string;
-  icon: string;
-}
+const CLOSED_WORKDAYS = { status: 'CLOSED' } as const;
 
 // Lista de jornadas cerradas de la farm. Es una acción online igual que los
 // catálogos de admin (no RF-01: una jornada ya cerrada no es captura en
-// terreno) — se pide en vivo cada vez. Los nombres de fruta sí se resuelven
-// contra la caché local (lib/catalogSync.ts) en vez de otro pedido en vivo,
-// ya que products guarda el catálogo completo (activas e inactivas), y una
-// jornada vieja puede apuntar a una fruta que ya se desactivó.
+// terreno), así que va por React Query: se pide cada vez que la pantalla
+// recupera el foco, pero lo último que se trajo se ve al tiro mientras tanto
+// — el spinner es solo para la primera vez. Los nombres de cultivo salen de
+// la caché local (ver lib/localCatalogNames.ts).
 export default function HistoryScreen() {
   const router = useRouter();
   const palette = usePalette();
   const styles = useMemo(() => createStyles(palette), [palette]);
-  const [workdays, setWorkdays] = useState<FindWorkdayResponseDto[]>([]);
-  const [productsById, setProductsById] = useState<Record<string, ProductInfo>>({});
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const closedWorkdays = useWorkdaysControllerFindAll(CLOSED_WORKDAYS);
+  useRefreshOnFocus([closedWorkdays.queryKey]);
+  const productsById = useLocalRead(readProductsById);
 
-  useFocusEffect(
-    useCallback(() => {
-      let cancelled = false;
-
-      (async () => {
-        setLoading(true);
-        setError(null);
-        try {
-          const [closedWorkdays, productRows] = await Promise.all([
-            workdaysControllerFindAll({ status: 'CLOSED' }),
-            db.select().from(products),
-          ]);
-          if (cancelled) {
-            return;
-          }
-
-          const byId: Record<string, ProductInfo> = {};
-          productRows.forEach((product) => {
-            byId[product.id] = {
-              name: product.name,
-              icon: product.icon ?? DEFAULT_PRODUCT_ICON,
-            };
-          });
-          setProductsById(byId);
-
-          setWorkdays(
-            [...closedWorkdays].sort(
-              (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime(),
-            ),
-          );
-        } catch (err) {
-          if (!cancelled) {
-            setError(getErrorMessage(err));
-          }
-        } finally {
-          if (!cancelled) {
-            setLoading(false);
-          }
-        }
-      })();
-
-      return () => {
-        cancelled = true;
-      };
-    }, []),
+  const workdays = useMemo(
+    () =>
+      [...(closedWorkdays.data ?? [])].sort(
+        (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime(),
+      ),
+    [closedWorkdays.data],
   );
 
   return (
     <Screen edges={['bottom', 'left', 'right']}>
-      {error ? <HelperText type="error">{error}</HelperText> : null}
+      {/* Con datos en caché y un refresco que falla (sin señal), se ven los
+          dos: el aviso arriba y lo último que se trajo abajo. */}
+      {closedWorkdays.error ? (
+        <HelperText type="error">
+          {getErrorMessage(closedWorkdays.error)}
+        </HelperText>
+      ) : null}
 
-      {loading ? (
+      {closedWorkdays.isPending ? (
         <ActivityIndicator />
       ) : (
         <FlatList

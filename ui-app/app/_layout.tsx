@@ -3,6 +3,7 @@ import { View } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { Stack } from 'expo-router';
 import { useMigrations } from 'drizzle-orm/expo-sqlite/migrator';
+import { QueryClientProvider } from '@tanstack/react-query';
 import { PaperProvider, Text } from 'react-native-paper';
 import { LoadingScreen } from '@/components/LoadingScreen';
 import { db } from '@/db/client';
@@ -12,6 +13,7 @@ import { buildTheme } from '@/theme';
 import { bootstrapCatalogSyncOnReconnect } from '@/lib/catalogSync';
 import { bootstrapClaimsSyncOnReconnect } from '@/lib/claimsSync';
 import { bootstrapFarmSettingsOnReconnect } from '@/lib/farmSettings';
+import { bootstrapQueryManagers, queryClient } from '@/lib/queryClient';
 import {
   bootstrapAuthListener,
   bootstrapConnectivityListener,
@@ -34,12 +36,14 @@ export default function RootLayout() {
     const unsubscribeCatalogSync = bootstrapCatalogSyncOnReconnect();
     const unsubscribeFarmSettings = bootstrapFarmSettingsOnReconnect();
     const unsubscribeClaimsSync = bootstrapClaimsSyncOnReconnect();
+    const unsubscribeQueryManagers = bootstrapQueryManagers();
     return () => {
       unsubscribeAuth();
       unsubscribeConnectivity();
       unsubscribeCatalogSync();
       unsubscribeFarmSettings();
       unsubscribeClaimsSync();
+      unsubscribeQueryManagers();
     };
   }, []);
 
@@ -59,9 +63,11 @@ export default function RootLayout() {
     // El drawer de (app)/(drawer)/_layout.tsx necesita este wrapper en la
     // raíz para que el gesto de deslizar a abrir/cerrar funcione.
     <GestureHandlerRootView style={{ flex: 1 }}>
-      <PaperProvider theme={theme}>
-        <Stack screenOptions={{ headerShown: false }} />
-      </PaperProvider>
+      <QueryClientProvider client={queryClient}>
+        <PaperProvider theme={theme}>
+          <Stack screenOptions={{ headerShown: false }} />
+        </PaperProvider>
+      </QueryClientProvider>
     </GestureHandlerRootView>
   );
 }

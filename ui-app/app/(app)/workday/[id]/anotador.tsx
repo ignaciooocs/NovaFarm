@@ -123,8 +123,15 @@ export default function AnotadorScreen() {
   // pantalla no necesita la fecha, por eso no estaba guardada.
   const [workdayDate, setWorkdayDate] = useState<string | null>(null);
 
+  // Sin setLoading(true) acá, a propósito: `loading` nace en true y solo
+  // cubre la primera carga. Esta función corre también cada vez que la
+  // pantalla recupera el foco (al volver de agregar cosechador, sincronizar o
+  // cerrar), y si volviera a prender el spinner reemplazaría la pantalla
+  // entera por un instante — el pestañeo que reportó el usuario. Es la
+  // pantalla más usada del día y entre recarga y recarga no hay nada que
+  // esperar: SQLite responde en milisegundos y los datos anteriores siguen
+  // siendo válidos hasta que llegan los nuevos.
   const load = useCallback(async () => {
-    setLoading(true);
     try {
       const [workdayRow] = await db
         .select()

@@ -9,7 +9,7 @@ import {
   TouchableRipple,
 } from 'react-native-paper';
 import type { FindWorkdayResponseDto } from '@/api/generated/novaFarmAPI.schemas';
-import { getWorkdays } from '@/api/generated/workdays/workdays';
+import { workdaysControllerFindAll } from '@/api/generated/workdays/workdays';
 import { Screen } from '@/components/Screen';
 import { DEFAULT_PRODUCT_ICON } from '@/constants/productIcon';
 import { strings } from '@/constants/strings';
@@ -48,7 +48,6 @@ export default function HistoryScreen() {
         setLoading(true);
         setError(null);
         try {
-          const { workdaysControllerFindAll } = getWorkdays();
           const [closedWorkdays, productRows] = await Promise.all([
             workdaysControllerFindAll({ status: 'CLOSED' }),
             db.select().from(products),

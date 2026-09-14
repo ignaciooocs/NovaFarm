@@ -5,6 +5,20 @@
  * API del backend de NovaFarm (server-app)
  * OpenAPI spec version: 1.0
  */
+import {
+  useMutation,
+  useQuery
+} from '@tanstack/react-query';
+import type {
+  MutationFunction,
+  QueryFunction,
+  QueryKey,
+  UseMutationOptions,
+  UseMutationResult,
+  UseQueryOptions,
+  UseQueryResult
+} from '@tanstack/react-query';
+
 import type {
   CreateFarmRequestDto,
   CreateFarmResponseDto,
@@ -17,45 +31,215 @@ import { apiClient } from '../../axios-instance';
 
 
 
-  export const getFarms = () => {
+
+const withQueryKey = <T extends object, K>(query: T, queryKey: K): T & { queryKey: K } => {
+  const result = { queryKey } as T & { queryKey: K };
+  for (const key of Object.keys(query)) {
+    // The explicit queryKey always wins, matching the previous
+    // `{ ...query, queryKey }` spread where it was set last.
+    if (key === 'queryKey') continue;
+    Object.defineProperty(result, key, {
+      enumerable: true,
+      configurable: true,
+      get: () => (query as Record<string, unknown>)[key],
+    });
+  }
+  return result;
+};
+
 /**
  * @summary Create a new farm (tenant root)
  */
-const farmsControllerCreate = (
+export const farmsControllerCreate = (
     createFarmRequestDto: CreateFarmRequestDto,
- ) => {
+ signal?: AbortSignal
+) => {
+
+
       return apiClient<CreateFarmResponseDto>(
       {url: `/api/v1/farms`, method: 'POST',
       headers: {'Content-Type': 'application/json', },
-      data: createFarmRequestDto
+      data: createFarmRequestDto, signal
     },
       );
     }
-  /**
+
+
+
+
+export const getFarmsControllerCreateMutationOptions = <TError = unknown,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof farmsControllerCreate>>, TError,{data: CreateFarmRequestDto}, TContext>, }
+): UseMutationOptions<Awaited<ReturnType<typeof farmsControllerCreate>>, TError,{data: CreateFarmRequestDto}, TContext> => {
+
+const mutationKey = ['farmsControllerCreate'];
+const {mutation: mutationOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof farmsControllerCreate>>, {data: CreateFarmRequestDto}> = (props) => {
+          const {data} = props ?? {};
+
+          return  farmsControllerCreate(data,)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type FarmsControllerCreateMutationResult = NonNullable<Awaited<ReturnType<typeof farmsControllerCreate>>>
+    export type FarmsControllerCreateMutationBody = CreateFarmRequestDto
+    export type FarmsControllerCreateMutationError = unknown
+
+    /**
+ * @summary Create a new farm (tenant root)
+ */
+export const useFarmsControllerCreate = <TError = unknown,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof farmsControllerCreate>>, TError,{data: CreateFarmRequestDto}, TContext>, }
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof farmsControllerCreate>>,
+        TError,
+        {data: CreateFarmRequestDto},
+        TContext
+      > => {
+      return useMutation(getFarmsControllerCreateMutationOptions(options));
+    }
+    /**
  * @summary Get the caller's own farm
  */
-const farmsControllerFindMe = (
+export const farmsControllerFindMe = (
 
- ) => {
+ signal?: AbortSignal
+) => {
+
+
       return apiClient<FindFarmResponseDto>(
-      {url: `/api/v1/farms/me`, method: 'GET'
+      {url: `/api/v1/farms/me`, method: 'GET', signal
     },
       );
     }
-  /**
+
+
+
+
+export const getFarmsControllerFindMeQueryKey = () => {
+    return [
+    `/api/v1/farms/me`
+    ] as const;
+    }
+
+
+export const getFarmsControllerFindMeQueryOptions = <TData = Awaited<ReturnType<typeof farmsControllerFindMe>>, TError = unknown>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof farmsControllerFindMe>>, TError, TData>, }
+) => {
+
+const {query: queryOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getFarmsControllerFindMeQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof farmsControllerFindMe>>> = ({ signal }) => farmsControllerFindMe(signal);
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof farmsControllerFindMe>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type FarmsControllerFindMeQueryResult = NonNullable<Awaited<ReturnType<typeof farmsControllerFindMe>>>
+export type FarmsControllerFindMeQueryError = unknown
+
+
+/**
+ * @summary Get the caller's own farm
+ */
+
+export function useFarmsControllerFindMe<TData = Awaited<ReturnType<typeof farmsControllerFindMe>>, TError = unknown>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof farmsControllerFindMe>>, TError, TData>, }
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getFarmsControllerFindMeQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+/**
  * @summary Update the caller's own farm settings (admin only) — currently just recordersCanManageCatalog
  */
-const farmsControllerUpdateMe = (
+export const farmsControllerUpdateMe = (
     updateFarmRequestDto: UpdateFarmRequestDto,
- ) => {
+ signal?: AbortSignal
+) => {
+
+
       return apiClient<UpdateFarmResponseDto>(
       {url: `/api/v1/farms/me`, method: 'PATCH',
       headers: {'Content-Type': 'application/json', },
-      data: updateFarmRequestDto
+      data: updateFarmRequestDto, signal
     },
       );
     }
-  return {farmsControllerCreate,farmsControllerFindMe,farmsControllerUpdateMe}};
-export type FarmsControllerCreateResult = NonNullable<Awaited<ReturnType<ReturnType<typeof getFarms>['farmsControllerCreate']>>>
-export type FarmsControllerFindMeResult = NonNullable<Awaited<ReturnType<ReturnType<typeof getFarms>['farmsControllerFindMe']>>>
-export type FarmsControllerUpdateMeResult = NonNullable<Awaited<ReturnType<ReturnType<typeof getFarms>['farmsControllerUpdateMe']>>>
+
+
+
+
+export const getFarmsControllerUpdateMeMutationOptions = <TError = unknown,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof farmsControllerUpdateMe>>, TError,{data: UpdateFarmRequestDto}, TContext>, }
+): UseMutationOptions<Awaited<ReturnType<typeof farmsControllerUpdateMe>>, TError,{data: UpdateFarmRequestDto}, TContext> => {
+
+const mutationKey = ['farmsControllerUpdateMe'];
+const {mutation: mutationOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof farmsControllerUpdateMe>>, {data: UpdateFarmRequestDto}> = (props) => {
+          const {data} = props ?? {};
+
+          return  farmsControllerUpdateMe(data,)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type FarmsControllerUpdateMeMutationResult = NonNullable<Awaited<ReturnType<typeof farmsControllerUpdateMe>>>
+    export type FarmsControllerUpdateMeMutationBody = UpdateFarmRequestDto
+    export type FarmsControllerUpdateMeMutationError = unknown
+
+    /**
+ * @summary Update the caller's own farm settings (admin only) — currently just recordersCanManageCatalog
+ */
+export const useFarmsControllerUpdateMe = <TError = unknown,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof farmsControllerUpdateMe>>, TError,{data: UpdateFarmRequestDto}, TContext>, }
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof farmsControllerUpdateMe>>,
+        TError,
+        {data: UpdateFarmRequestDto},
+        TContext
+      > => {
+      return useMutation(getFarmsControllerUpdateMeMutationOptions(options));
+    }

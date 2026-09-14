@@ -5,6 +5,15 @@
  * API del backend de NovaFarm (server-app)
  * OpenAPI spec version: 1.0
  */
+import {
+  useMutation
+} from '@tanstack/react-query';
+import type {
+  MutationFunction,
+  UseMutationOptions,
+  UseMutationResult
+} from '@tanstack/react-query';
+
 import type {
   RegisterAdminRequestDto,
   RegisterAdminResponseDto,
@@ -16,35 +25,134 @@ import { apiClient } from '../../axios-instance';
 
 
 
-  export const getAuth = () => {
+
 /**
  * Requires a valid Firebase ID token (the account must already exist in Firebase Authentication; ui-app signs up/in against Firebase directly). After a successful call, the farmId/roles custom claims are set on the Firebase user — the client must force a token refresh (getIdToken(true)) before calling any endpoint protected by FarmScopeGuard, since the ID token already held in memory predates those claims.
  * @summary Complete onboarding as an admin, creating a new farm
  */
-const authControllerRegisterAdmin = (
+export const authControllerRegisterAdmin = (
     registerAdminRequestDto: RegisterAdminRequestDto,
- ) => {
+ signal?: AbortSignal
+) => {
+
+
       return apiClient<RegisterAdminResponseDto>(
       {url: `/api/v1/auth/register/admin`, method: 'POST',
       headers: {'Content-Type': 'application/json', },
-      data: registerAdminRequestDto
+      data: registerAdminRequestDto, signal
     },
       );
     }
-  /**
+
+
+
+
+export const getAuthControllerRegisterAdminMutationOptions = <TError = unknown,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof authControllerRegisterAdmin>>, TError,{data: RegisterAdminRequestDto}, TContext>, }
+): UseMutationOptions<Awaited<ReturnType<typeof authControllerRegisterAdmin>>, TError,{data: RegisterAdminRequestDto}, TContext> => {
+
+const mutationKey = ['authControllerRegisterAdmin'];
+const {mutation: mutationOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof authControllerRegisterAdmin>>, {data: RegisterAdminRequestDto}> = (props) => {
+          const {data} = props ?? {};
+
+          return  authControllerRegisterAdmin(data,)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type AuthControllerRegisterAdminMutationResult = NonNullable<Awaited<ReturnType<typeof authControllerRegisterAdmin>>>
+    export type AuthControllerRegisterAdminMutationBody = RegisterAdminRequestDto
+    export type AuthControllerRegisterAdminMutationError = unknown
+
+    /**
+ * @summary Complete onboarding as an admin, creating a new farm
+ */
+export const useAuthControllerRegisterAdmin = <TError = unknown,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof authControllerRegisterAdmin>>, TError,{data: RegisterAdminRequestDto}, TContext>, }
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof authControllerRegisterAdmin>>,
+        TError,
+        {data: RegisterAdminRequestDto},
+        TContext
+      > => {
+      return useMutation(getAuthControllerRegisterAdminMutationOptions(options));
+    }
+    /**
  * Requires a valid Firebase ID token (the account must already exist in Firebase Authentication; ui-app signs up/in against Firebase directly). After a successful call, the farmId/roles custom claims are set on the Firebase user — the client must force a token refresh (getIdToken(true)) before calling any endpoint protected by FarmScopeGuard, since the ID token already held in memory predates those claims.
  * @summary Complete onboarding as a recorder, joining an existing farm
  */
-const authControllerRegisterRecorder = (
+export const authControllerRegisterRecorder = (
     registerRecorderRequestDto: RegisterRecorderRequestDto,
- ) => {
+ signal?: AbortSignal
+) => {
+
+
       return apiClient<RegisterRecorderResponseDto>(
       {url: `/api/v1/auth/register/recorder`, method: 'POST',
       headers: {'Content-Type': 'application/json', },
-      data: registerRecorderRequestDto
+      data: registerRecorderRequestDto, signal
     },
       );
     }
-  return {authControllerRegisterAdmin,authControllerRegisterRecorder}};
-export type AuthControllerRegisterAdminResult = NonNullable<Awaited<ReturnType<ReturnType<typeof getAuth>['authControllerRegisterAdmin']>>>
-export type AuthControllerRegisterRecorderResult = NonNullable<Awaited<ReturnType<ReturnType<typeof getAuth>['authControllerRegisterRecorder']>>>
+
+
+
+
+export const getAuthControllerRegisterRecorderMutationOptions = <TError = unknown,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof authControllerRegisterRecorder>>, TError,{data: RegisterRecorderRequestDto}, TContext>, }
+): UseMutationOptions<Awaited<ReturnType<typeof authControllerRegisterRecorder>>, TError,{data: RegisterRecorderRequestDto}, TContext> => {
+
+const mutationKey = ['authControllerRegisterRecorder'];
+const {mutation: mutationOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof authControllerRegisterRecorder>>, {data: RegisterRecorderRequestDto}> = (props) => {
+          const {data} = props ?? {};
+
+          return  authControllerRegisterRecorder(data,)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type AuthControllerRegisterRecorderMutationResult = NonNullable<Awaited<ReturnType<typeof authControllerRegisterRecorder>>>
+    export type AuthControllerRegisterRecorderMutationBody = RegisterRecorderRequestDto
+    export type AuthControllerRegisterRecorderMutationError = unknown
+
+    /**
+ * @summary Complete onboarding as a recorder, joining an existing farm
+ */
+export const useAuthControllerRegisterRecorder = <TError = unknown,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof authControllerRegisterRecorder>>, TError,{data: RegisterRecorderRequestDto}, TContext>, }
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof authControllerRegisterRecorder>>,
+        TError,
+        {data: RegisterRecorderRequestDto},
+        TContext
+      > => {
+      return useMutation(getAuthControllerRegisterRecorderMutationOptions(options));
+    }

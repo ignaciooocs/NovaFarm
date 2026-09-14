@@ -1,4 +1,4 @@
-import { getUsers } from '@/api/generated/users/users';
+import { usersControllerFindMe } from '@/api/generated/users/users';
 import { useAuthStore, useConnectivityStore, type Role } from '@/stores';
 
 let inFlight: Promise<void> | null = null;
@@ -39,7 +39,6 @@ async function performSync(): Promise<void> {
       return;
     }
 
-    const { usersControllerFindMe } = getUsers();
     const me = await usersControllerFindMe();
     if (sameRoles(me.roles, claims.roles)) {
       return;

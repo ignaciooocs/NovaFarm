@@ -1,4 +1,4 @@
-import { getFarms } from '@/api/generated/farms/farms';
+import { farmsControllerFindMe } from '@/api/generated/farms/farms';
 import { useConnectivityStore, useFarmSettingsStore } from '@/stores';
 
 let inFlight: Promise<void> | null = null;
@@ -19,7 +19,6 @@ export function syncFarmSettings(): Promise<void> {
 
 async function performSync(): Promise<void> {
   try {
-    const { farmsControllerFindMe } = getFarms();
     const farm = await farmsControllerFindMe();
     useFarmSettingsStore.setState({
       recordersCanManageCatalog: farm.recordersCanManageCatalog,

@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { StyleSheet } from 'react-native';
 import { Stack, useRouter } from 'expo-router';
 import { Button, HelperText, Text, TextInput } from 'react-native-paper';
-import { getAuth } from '@/api/generated/auth/auth';
+import { authControllerRegisterAdmin } from '@/api/generated/auth/auth';
 import { OptionSelector } from '@/components/OptionSelector';
 import { Screen } from '@/components/Screen';
 import { strings } from '@/constants/strings';
@@ -29,7 +29,6 @@ export default function CreateFarmScreen() {
     setError(null);
     setLoading(true);
     try {
-      const { authControllerRegisterAdmin } = getAuth();
       const result = await authControllerRegisterAdmin({
         name: name.trim(),
         farmName: farmName.trim(),

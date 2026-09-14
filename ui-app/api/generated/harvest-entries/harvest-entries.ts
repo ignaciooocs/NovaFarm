@@ -5,6 +5,20 @@
  * API del backend de NovaFarm (server-app)
  * OpenAPI spec version: 1.0
  */
+import {
+  useMutation,
+  useQuery
+} from '@tanstack/react-query';
+import type {
+  MutationFunction,
+  QueryFunction,
+  QueryKey,
+  UseMutationOptions,
+  UseMutationResult,
+  UseQueryOptions,
+  UseQueryResult
+} from '@tanstack/react-query';
+
 import type {
   FindHarvestEntryResponseDto,
   HarvestEntriesControllerFindAllParams,
@@ -16,32 +30,152 @@ import { apiClient } from '../../axios-instance';
 
 
 
-  export const getHarvestEntries = () => {
+
+const withQueryKey = <T extends object, K>(query: T, queryKey: K): T & { queryKey: K } => {
+  const result = { queryKey } as T & { queryKey: K };
+  for (const key of Object.keys(query)) {
+    // The explicit queryKey always wins, matching the previous
+    // `{ ...query, queryKey }` spread where it was set last.
+    if (key === 'queryKey') continue;
+    Object.defineProperty(result, key, {
+      enumerable: true,
+      configurable: true,
+      get: () => (query as Record<string, unknown>)[key],
+    });
+  }
+  return result;
+};
+
 /**
  * @summary Upload a batch of delivery entries ("Anotar") captured offline. Always returns 200 with a per-item result — rejection (workday not found/closed, harvester not found/not on roster, unit not found) is a business outcome, not an HTTP error.
  */
-const harvestEntriesControllerSync = (
+export const harvestEntriesControllerSync = (
     syncHarvestEntryRequestDto: SyncHarvestEntryRequestDto,
- ) => {
+ signal?: AbortSignal
+) => {
+
+
       return apiClient<SyncHarvestEntryResponseDto[]>(
       {url: `/api/v1/harvest-entries/sync`, method: 'POST',
       headers: {'Content-Type': 'application/json', },
-      data: syncHarvestEntryRequestDto
+      data: syncHarvestEntryRequestDto, signal
     },
       );
     }
-  /**
+
+
+
+
+export const getHarvestEntriesControllerSyncMutationOptions = <TError = unknown,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof harvestEntriesControllerSync>>, TError,{data: SyncHarvestEntryRequestDto}, TContext>, }
+): UseMutationOptions<Awaited<ReturnType<typeof harvestEntriesControllerSync>>, TError,{data: SyncHarvestEntryRequestDto}, TContext> => {
+
+const mutationKey = ['harvestEntriesControllerSync'];
+const {mutation: mutationOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof harvestEntriesControllerSync>>, {data: SyncHarvestEntryRequestDto}> = (props) => {
+          const {data} = props ?? {};
+
+          return  harvestEntriesControllerSync(data,)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type HarvestEntriesControllerSyncMutationResult = NonNullable<Awaited<ReturnType<typeof harvestEntriesControllerSync>>>
+    export type HarvestEntriesControllerSyncMutationBody = SyncHarvestEntryRequestDto
+    export type HarvestEntriesControllerSyncMutationError = unknown
+
+    /**
+ * @summary Upload a batch of delivery entries ("Anotar") captured offline. Always returns 200 with a per-item result — rejection (workday not found/closed, harvester not found/not on roster, unit not found) is a business outcome, not an HTTP error.
+ */
+export const useHarvestEntriesControllerSync = <TError = unknown,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof harvestEntriesControllerSync>>, TError,{data: SyncHarvestEntryRequestDto}, TContext>, }
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof harvestEntriesControllerSync>>,
+        TError,
+        {data: SyncHarvestEntryRequestDto},
+        TContext
+      > => {
+      return useMutation(getHarvestEntriesControllerSyncMutationOptions(options));
+    }
+    /**
  * @summary List the delivery entries for a workday
  */
-const harvestEntriesControllerFindAll = (
+export const harvestEntriesControllerFindAll = (
     params: HarvestEntriesControllerFindAllParams,
- ) => {
+ signal?: AbortSignal
+) => {
+
+
       return apiClient<FindHarvestEntryResponseDto[]>(
       {url: `/api/v1/harvest-entries`, method: 'GET',
-        params
+        params, signal
     },
       );
     }
-  return {harvestEntriesControllerSync,harvestEntriesControllerFindAll}};
-export type HarvestEntriesControllerSyncResult = NonNullable<Awaited<ReturnType<ReturnType<typeof getHarvestEntries>['harvestEntriesControllerSync']>>>
-export type HarvestEntriesControllerFindAllResult = NonNullable<Awaited<ReturnType<ReturnType<typeof getHarvestEntries>['harvestEntriesControllerFindAll']>>>
+
+
+
+
+export const getHarvestEntriesControllerFindAllQueryKey = (params?: HarvestEntriesControllerFindAllParams,) => {
+    return [
+    `/api/v1/harvest-entries`, ...(params ? [params] : [])
+    ] as const;
+    }
+
+
+export const getHarvestEntriesControllerFindAllQueryOptions = <TData = Awaited<ReturnType<typeof harvestEntriesControllerFindAll>>, TError = unknown>(params: HarvestEntriesControllerFindAllParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof harvestEntriesControllerFindAll>>, TError, TData>, }
+) => {
+
+const {query: queryOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getHarvestEntriesControllerFindAllQueryKey(params);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof harvestEntriesControllerFindAll>>> = ({ signal }) => harvestEntriesControllerFindAll(params, signal);
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof harvestEntriesControllerFindAll>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type HarvestEntriesControllerFindAllQueryResult = NonNullable<Awaited<ReturnType<typeof harvestEntriesControllerFindAll>>>
+export type HarvestEntriesControllerFindAllQueryError = unknown
+
+
+/**
+ * @summary List the delivery entries for a workday
+ */
+
+export function useHarvestEntriesControllerFindAll<TData = Awaited<ReturnType<typeof harvestEntriesControllerFindAll>>, TError = unknown>(
+ params: HarvestEntriesControllerFindAllParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof harvestEntriesControllerFindAll>>, TError, TData>, }
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getHarvestEntriesControllerFindAllQueryOptions(params,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+

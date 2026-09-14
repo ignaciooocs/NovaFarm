@@ -14,7 +14,11 @@ import {
   TextInput,
 } from 'react-native-paper';
 import type { FindHarvesterResponseDto } from '@/api/generated/novaFarmAPI.schemas';
-import { getHarvesters } from '@/api/generated/harvesters/harvesters';
+import {
+  harvestersControllerCreate,
+  harvestersControllerFindAll,
+  harvestersControllerUpdate,
+} from '@/api/generated/harvesters/harvesters';
 import { KeyboardAwareDialog } from '@/components/KeyboardAwareDialog';
 import { Screen } from '@/components/Screen';
 import { strings } from '@/constants/strings';
@@ -58,7 +62,6 @@ export default function HarvestersScreen() {
   async function loadHarvesters() {
     setLoading(true);
     try {
-      const { harvestersControllerFindAll } = getHarvesters();
       setHarvesters(await harvestersControllerFindAll());
     } catch (err) {
       setError(getErrorMessage(err));
@@ -127,8 +130,6 @@ export default function HarvestersScreen() {
     setError(null);
     setSaving(true);
     try {
-      const { harvestersControllerCreate, harvestersControllerUpdate } =
-        getHarvesters();
       if (editingId) {
         // null explícito (no undefined) borra un apodo existente si el
         // campo quedó vacío — ver el comentario en harvesters.service.ts.
@@ -160,7 +161,6 @@ export default function HarvestersScreen() {
     setTogglingId(harvester._id);
     setError(null);
     try {
-      const { harvestersControllerUpdate } = getHarvesters();
       await harvestersControllerUpdate(harvester._id, {
         active: !harvester.active,
       });

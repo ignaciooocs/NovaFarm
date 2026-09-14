@@ -16,7 +16,12 @@ import {
   TouchableRipple,
 } from 'react-native-paper';
 import type { FindProductResponseDto } from '@/api/generated/novaFarmAPI.schemas';
-import { getProducts } from '@/api/generated/products/products';
+import {
+  productsControllerCreate,
+  productsControllerFindAll,
+  productsControllerFindAvailable,
+  productsControllerUpdate,
+} from '@/api/generated/products/products';
 import { KeyboardAwareDialog } from '@/components/KeyboardAwareDialog';
 import { Screen } from '@/components/Screen';
 import { PRODUCT_ICON_OPTIONS } from '@/constants/productIcon';
@@ -86,8 +91,6 @@ export default function ProductsScreen() {
   async function loadProducts() {
     setLoading(true);
     try {
-      const { productsControllerFindAll, productsControllerFindAvailable } =
-        getProducts();
       const [own, addable] = await Promise.all([
         productsControllerFindAll(),
         productsControllerFindAvailable(),
@@ -131,8 +134,6 @@ export default function ProductsScreen() {
     setError(null);
     setSaving(true);
     try {
-      const { productsControllerCreate, productsControllerUpdate } =
-        getProducts();
       // Emoji en blanco = dejarlo como estaba al editar, o dejar que el
       // server aplique su propio default al crear — nunca se manda un string
       // vacío (el server lo rechaza con @IsNotEmpty igual que name).
@@ -167,7 +168,6 @@ export default function ProductsScreen() {
     setTogglingId(product._id);
     setError(null);
     try {
-      const { productsControllerUpdate } = getProducts();
       await productsControllerUpdate(product._id, {
         active: !(product.active ?? true),
       });
@@ -190,7 +190,6 @@ export default function ProductsScreen() {
     setAddingSuggestion(suggestion.name);
     setError(null);
     try {
-      const { productsControllerCreate } = getProducts();
       // Solo el id: el nombre y el emoji los pone el server desde el producto
       // global, así dos farms que suman el mismo cultivo quedan comparables.
       await productsControllerCreate({ productId: suggestion._id });

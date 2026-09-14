@@ -1,5 +1,7 @@
 import { and, eq } from 'drizzle-orm';
-import { getHarvesters } from '@/api/generated/harvesters/harvesters';
+import {
+  harvestersControllerSync,
+} from '@/api/generated/harvesters/harvesters';
 import { db } from '@/db/client';
 import { harvestEntries, harvesters, harvesterWorkday } from '@/db/schema';
 import { useAuthStore } from '@/stores';
@@ -37,7 +39,6 @@ export async function pushPendingHarvesters(): Promise<{
     return { results: [], rejectedReasons: [] };
   }
 
-  const { harvestersControllerSync } = getHarvesters();
   const results = await harvestersControllerSync({
     entries: pending.map((harvester) => ({
       clientEntryId: harvester.id,

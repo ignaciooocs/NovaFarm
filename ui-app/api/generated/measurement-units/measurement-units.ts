@@ -5,6 +5,20 @@
  * API del backend de NovaFarm (server-app)
  * OpenAPI spec version: 1.0
  */
+import {
+  useMutation,
+  useQuery
+} from '@tanstack/react-query';
+import type {
+  MutationFunction,
+  QueryFunction,
+  QueryKey,
+  UseMutationOptions,
+  UseMutationResult,
+  UseQueryOptions,
+  UseQueryResult
+} from '@tanstack/react-query';
+
 import type {
   CreateMeasurementUnitRequestDto,
   CreateMeasurementUnitResponseDto,
@@ -18,47 +32,217 @@ import { apiClient } from '../../axios-instance';
 
 
 
-  export const getMeasurementUnits = () => {
+
+const withQueryKey = <T extends object, K>(query: T, queryKey: K): T & { queryKey: K } => {
+  const result = { queryKey } as T & { queryKey: K };
+  for (const key of Object.keys(query)) {
+    // The explicit queryKey always wins, matching the previous
+    // `{ ...query, queryKey }` spread where it was set last.
+    if (key === 'queryKey') continue;
+    Object.defineProperty(result, key, {
+      enumerable: true,
+      configurable: true,
+      get: () => (query as Record<string, unknown>)[key],
+    });
+  }
+  return result;
+};
+
 /**
  * @summary Create a new measurement unit in the caller farm catalog
  */
-const measurementUnitsControllerCreate = (
+export const measurementUnitsControllerCreate = (
     createMeasurementUnitRequestDto: CreateMeasurementUnitRequestDto,
- ) => {
+ signal?: AbortSignal
+) => {
+
+
       return apiClient<CreateMeasurementUnitResponseDto>(
       {url: `/api/v1/measurement-units`, method: 'POST',
       headers: {'Content-Type': 'application/json', },
-      data: createMeasurementUnitRequestDto
+      data: createMeasurementUnitRequestDto, signal
     },
       );
     }
-  /**
+
+
+
+
+export const getMeasurementUnitsControllerCreateMutationOptions = <TError = unknown,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof measurementUnitsControllerCreate>>, TError,{data: CreateMeasurementUnitRequestDto}, TContext>, }
+): UseMutationOptions<Awaited<ReturnType<typeof measurementUnitsControllerCreate>>, TError,{data: CreateMeasurementUnitRequestDto}, TContext> => {
+
+const mutationKey = ['measurementUnitsControllerCreate'];
+const {mutation: mutationOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof measurementUnitsControllerCreate>>, {data: CreateMeasurementUnitRequestDto}> = (props) => {
+          const {data} = props ?? {};
+
+          return  measurementUnitsControllerCreate(data,)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type MeasurementUnitsControllerCreateMutationResult = NonNullable<Awaited<ReturnType<typeof measurementUnitsControllerCreate>>>
+    export type MeasurementUnitsControllerCreateMutationBody = CreateMeasurementUnitRequestDto
+    export type MeasurementUnitsControllerCreateMutationError = unknown
+
+    /**
+ * @summary Create a new measurement unit in the caller farm catalog
+ */
+export const useMeasurementUnitsControllerCreate = <TError = unknown,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof measurementUnitsControllerCreate>>, TError,{data: CreateMeasurementUnitRequestDto}, TContext>, }
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof measurementUnitsControllerCreate>>,
+        TError,
+        {data: CreateMeasurementUnitRequestDto},
+        TContext
+      > => {
+      return useMutation(getMeasurementUnitsControllerCreateMutationOptions(options));
+    }
+    /**
  * @summary List the measurement units in the caller farm catalog
  */
-const measurementUnitsControllerFindAll = (
+export const measurementUnitsControllerFindAll = (
     params?: MeasurementUnitsControllerFindAllParams,
- ) => {
+ signal?: AbortSignal
+) => {
+
+
       return apiClient<FindMeasurementUnitResponseDto[]>(
       {url: `/api/v1/measurement-units`, method: 'GET',
-        params
+        params, signal
     },
       );
     }
-  /**
+
+
+
+
+export const getMeasurementUnitsControllerFindAllQueryKey = (params?: MeasurementUnitsControllerFindAllParams,) => {
+    return [
+    `/api/v1/measurement-units`, ...(params ? [params] : [])
+    ] as const;
+    }
+
+
+export const getMeasurementUnitsControllerFindAllQueryOptions = <TData = Awaited<ReturnType<typeof measurementUnitsControllerFindAll>>, TError = unknown>(params?: MeasurementUnitsControllerFindAllParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof measurementUnitsControllerFindAll>>, TError, TData>, }
+) => {
+
+const {query: queryOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getMeasurementUnitsControllerFindAllQueryKey(params);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof measurementUnitsControllerFindAll>>> = ({ signal }) => measurementUnitsControllerFindAll(params, signal);
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof measurementUnitsControllerFindAll>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type MeasurementUnitsControllerFindAllQueryResult = NonNullable<Awaited<ReturnType<typeof measurementUnitsControllerFindAll>>>
+export type MeasurementUnitsControllerFindAllQueryError = unknown
+
+
+/**
+ * @summary List the measurement units in the caller farm catalog
+ */
+
+export function useMeasurementUnitsControllerFindAll<TData = Awaited<ReturnType<typeof measurementUnitsControllerFindAll>>, TError = unknown>(
+ params?: MeasurementUnitsControllerFindAllParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof measurementUnitsControllerFindAll>>, TError, TData>, }
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getMeasurementUnitsControllerFindAllQueryOptions(params,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+/**
  * @summary Partially update a measurement unit in the caller farm catalog (edit and/or activate/deactivate)
  */
-const measurementUnitsControllerUpdate = (
+export const measurementUnitsControllerUpdate = (
     id: string,
     updateMeasurementUnitRequestDto: UpdateMeasurementUnitRequestDto,
- ) => {
+ signal?: AbortSignal
+) => {
+
+
       return apiClient<UpdateMeasurementUnitResponseDto>(
       {url: `/api/v1/measurement-units/${id}`, method: 'PATCH',
       headers: {'Content-Type': 'application/json', },
-      data: updateMeasurementUnitRequestDto
+      data: updateMeasurementUnitRequestDto, signal
     },
       );
     }
-  return {measurementUnitsControllerCreate,measurementUnitsControllerFindAll,measurementUnitsControllerUpdate}};
-export type MeasurementUnitsControllerCreateResult = NonNullable<Awaited<ReturnType<ReturnType<typeof getMeasurementUnits>['measurementUnitsControllerCreate']>>>
-export type MeasurementUnitsControllerFindAllResult = NonNullable<Awaited<ReturnType<ReturnType<typeof getMeasurementUnits>['measurementUnitsControllerFindAll']>>>
-export type MeasurementUnitsControllerUpdateResult = NonNullable<Awaited<ReturnType<ReturnType<typeof getMeasurementUnits>['measurementUnitsControllerUpdate']>>>
+
+
+
+
+export const getMeasurementUnitsControllerUpdateMutationOptions = <TError = unknown,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof measurementUnitsControllerUpdate>>, TError,{id: string;data: UpdateMeasurementUnitRequestDto}, TContext>, }
+): UseMutationOptions<Awaited<ReturnType<typeof measurementUnitsControllerUpdate>>, TError,{id: string;data: UpdateMeasurementUnitRequestDto}, TContext> => {
+
+const mutationKey = ['measurementUnitsControllerUpdate'];
+const {mutation: mutationOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof measurementUnitsControllerUpdate>>, {id: string;data: UpdateMeasurementUnitRequestDto}> = (props) => {
+          const {id,data} = props ?? {};
+
+          return  measurementUnitsControllerUpdate(id,data,)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type MeasurementUnitsControllerUpdateMutationResult = NonNullable<Awaited<ReturnType<typeof measurementUnitsControllerUpdate>>>
+    export type MeasurementUnitsControllerUpdateMutationBody = UpdateMeasurementUnitRequestDto
+    export type MeasurementUnitsControllerUpdateMutationError = unknown
+
+    /**
+ * @summary Partially update a measurement unit in the caller farm catalog (edit and/or activate/deactivate)
+ */
+export const useMeasurementUnitsControllerUpdate = <TError = unknown,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof measurementUnitsControllerUpdate>>, TError,{id: string;data: UpdateMeasurementUnitRequestDto}, TContext>, }
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof measurementUnitsControllerUpdate>>,
+        TError,
+        {id: string;data: UpdateMeasurementUnitRequestDto},
+        TContext
+      > => {
+      return useMutation(getMeasurementUnitsControllerUpdateMutationOptions(options));
+    }

@@ -10,7 +10,10 @@ import {
   TouchableRipple,
 } from 'react-native-paper';
 import type { FindProductResponseDto } from '@/api/generated/novaFarmAPI.schemas';
-import { getProducts } from '@/api/generated/products/products';
+import {
+  productsControllerCreate,
+  productsControllerFindAvailable,
+} from '@/api/generated/products/products';
 import { Screen } from '@/components/Screen';
 import { strings } from '@/constants/strings';
 import { getErrorMessage } from '@/lib/errors';
@@ -49,7 +52,6 @@ export default function StarterProductsScreen() {
   useEffect(() => {
     (async () => {
       try {
-        const { productsControllerFindAvailable } = getProducts();
         const catalog = await productsControllerFindAvailable();
         setFeatured(catalog.filter((product) => product.featured));
       } catch (err) {
@@ -76,7 +78,6 @@ export default function StarterProductsScreen() {
     setError(null);
     setSaving(true);
     try {
-      const { productsControllerCreate } = getProducts();
       await Promise.all(
         [...selected].map((productId) =>
           productsControllerCreate({ productId }),

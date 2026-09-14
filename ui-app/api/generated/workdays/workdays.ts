@@ -5,6 +5,20 @@
  * API del backend de NovaFarm (server-app)
  * OpenAPI spec version: 1.0
  */
+import {
+  useMutation,
+  useQuery
+} from '@tanstack/react-query';
+import type {
+  MutationFunction,
+  QueryFunction,
+  QueryKey,
+  UseMutationOptions,
+  UseMutationResult,
+  UseQueryOptions,
+  UseQueryResult
+} from '@tanstack/react-query';
+
 import type {
   CloseWorkdayResponseDto,
   CreateWorkdayRequestDto,
@@ -19,59 +33,279 @@ import { apiClient } from '../../axios-instance';
 
 
 
-  export const getWorkdays = () => {
+
+const withQueryKey = <T extends object, K>(query: T, queryKey: K): T & { queryKey: K } => {
+  const result = { queryKey } as T & { queryKey: K };
+  for (const key of Object.keys(query)) {
+    // The explicit queryKey always wins, matching the previous
+    // `{ ...query, queryKey }` spread where it was set last.
+    if (key === 'queryKey') continue;
+    Object.defineProperty(result, key, {
+      enumerable: true,
+      configurable: true,
+      get: () => (query as Record<string, unknown>)[key],
+    });
+  }
+  return result;
+};
+
 /**
  * @summary Open a new workday for the caller farm
  */
-const workdaysControllerCreate = (
+export const workdaysControllerCreate = (
     createWorkdayRequestDto: CreateWorkdayRequestDto,
- ) => {
+ signal?: AbortSignal
+) => {
+
+
       return apiClient<CreateWorkdayResponseDto>(
       {url: `/api/v1/workdays`, method: 'POST',
       headers: {'Content-Type': 'application/json', },
-      data: createWorkdayRequestDto
+      data: createWorkdayRequestDto, signal
     },
       );
     }
-  /**
+
+
+
+
+export const getWorkdaysControllerCreateMutationOptions = <TError = unknown,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof workdaysControllerCreate>>, TError,{data: CreateWorkdayRequestDto}, TContext>, }
+): UseMutationOptions<Awaited<ReturnType<typeof workdaysControllerCreate>>, TError,{data: CreateWorkdayRequestDto}, TContext> => {
+
+const mutationKey = ['workdaysControllerCreate'];
+const {mutation: mutationOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof workdaysControllerCreate>>, {data: CreateWorkdayRequestDto}> = (props) => {
+          const {data} = props ?? {};
+
+          return  workdaysControllerCreate(data,)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type WorkdaysControllerCreateMutationResult = NonNullable<Awaited<ReturnType<typeof workdaysControllerCreate>>>
+    export type WorkdaysControllerCreateMutationBody = CreateWorkdayRequestDto
+    export type WorkdaysControllerCreateMutationError = unknown
+
+    /**
+ * @summary Open a new workday for the caller farm
+ */
+export const useWorkdaysControllerCreate = <TError = unknown,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof workdaysControllerCreate>>, TError,{data: CreateWorkdayRequestDto}, TContext>, }
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof workdaysControllerCreate>>,
+        TError,
+        {data: CreateWorkdayRequestDto},
+        TContext
+      > => {
+      return useMutation(getWorkdaysControllerCreateMutationOptions(options));
+    }
+    /**
  * @summary List the workdays for the caller farm
  */
-const workdaysControllerFindAll = (
+export const workdaysControllerFindAll = (
     params?: WorkdaysControllerFindAllParams,
- ) => {
+ signal?: AbortSignal
+) => {
+
+
       return apiClient<FindWorkdayResponseDto[]>(
       {url: `/api/v1/workdays`, method: 'GET',
-        params
+        params, signal
     },
       );
     }
-  /**
+
+
+
+
+export const getWorkdaysControllerFindAllQueryKey = (params?: WorkdaysControllerFindAllParams,) => {
+    return [
+    `/api/v1/workdays`, ...(params ? [params] : [])
+    ] as const;
+    }
+
+
+export const getWorkdaysControllerFindAllQueryOptions = <TData = Awaited<ReturnType<typeof workdaysControllerFindAll>>, TError = unknown>(params?: WorkdaysControllerFindAllParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof workdaysControllerFindAll>>, TError, TData>, }
+) => {
+
+const {query: queryOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getWorkdaysControllerFindAllQueryKey(params);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof workdaysControllerFindAll>>> = ({ signal }) => workdaysControllerFindAll(params, signal);
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof workdaysControllerFindAll>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type WorkdaysControllerFindAllQueryResult = NonNullable<Awaited<ReturnType<typeof workdaysControllerFindAll>>>
+export type WorkdaysControllerFindAllQueryError = unknown
+
+
+/**
+ * @summary List the workdays for the caller farm
+ */
+
+export function useWorkdaysControllerFindAll<TData = Awaited<ReturnType<typeof workdaysControllerFindAll>>, TError = unknown>(
+ params?: WorkdaysControllerFindAllParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof workdaysControllerFindAll>>, TError, TData>, }
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getWorkdaysControllerFindAllQueryOptions(params,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+/**
  * @summary Define or correct how much is paid in an open workday (rejected once it is closed)
  */
-const workdaysControllerUpdatePay = (
+export const workdaysControllerUpdatePay = (
     id: string,
     updateWorkdayPayRequestDto: UpdateWorkdayPayRequestDto,
- ) => {
+ signal?: AbortSignal
+) => {
+
+
       return apiClient<UpdateWorkdayPayResponseDto>(
       {url: `/api/v1/workdays/${id}/pay`, method: 'PATCH',
       headers: {'Content-Type': 'application/json', },
-      data: updateWorkdayPayRequestDto
+      data: updateWorkdayPayRequestDto, signal
     },
       );
     }
-  /**
+
+
+
+
+export const getWorkdaysControllerUpdatePayMutationOptions = <TError = unknown,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof workdaysControllerUpdatePay>>, TError,{id: string;data: UpdateWorkdayPayRequestDto}, TContext>, }
+): UseMutationOptions<Awaited<ReturnType<typeof workdaysControllerUpdatePay>>, TError,{id: string;data: UpdateWorkdayPayRequestDto}, TContext> => {
+
+const mutationKey = ['workdaysControllerUpdatePay'];
+const {mutation: mutationOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof workdaysControllerUpdatePay>>, {id: string;data: UpdateWorkdayPayRequestDto}> = (props) => {
+          const {id,data} = props ?? {};
+
+          return  workdaysControllerUpdatePay(id,data,)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type WorkdaysControllerUpdatePayMutationResult = NonNullable<Awaited<ReturnType<typeof workdaysControllerUpdatePay>>>
+    export type WorkdaysControllerUpdatePayMutationBody = UpdateWorkdayPayRequestDto
+    export type WorkdaysControllerUpdatePayMutationError = unknown
+
+    /**
+ * @summary Define or correct how much is paid in an open workday (rejected once it is closed)
+ */
+export const useWorkdaysControllerUpdatePay = <TError = unknown,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof workdaysControllerUpdatePay>>, TError,{id: string;data: UpdateWorkdayPayRequestDto}, TContext>, }
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof workdaysControllerUpdatePay>>,
+        TError,
+        {id: string;data: UpdateWorkdayPayRequestDto},
+        TContext
+      > => {
+      return useMutation(getWorkdaysControllerUpdatePayMutationOptions(options));
+    }
+    /**
  * @summary Close a workday, freezing its aggregate total in kilos (RF-01.2)
  */
-const workdaysControllerClose = (
+export const workdaysControllerClose = (
     id: string,
- ) => {
+ signal?: AbortSignal
+) => {
+
+
       return apiClient<CloseWorkdayResponseDto>(
-      {url: `/api/v1/workdays/${id}/close`, method: 'PATCH'
+      {url: `/api/v1/workdays/${id}/close`, method: 'PATCH', signal
     },
       );
     }
-  return {workdaysControllerCreate,workdaysControllerFindAll,workdaysControllerUpdatePay,workdaysControllerClose}};
-export type WorkdaysControllerCreateResult = NonNullable<Awaited<ReturnType<ReturnType<typeof getWorkdays>['workdaysControllerCreate']>>>
-export type WorkdaysControllerFindAllResult = NonNullable<Awaited<ReturnType<ReturnType<typeof getWorkdays>['workdaysControllerFindAll']>>>
-export type WorkdaysControllerUpdatePayResult = NonNullable<Awaited<ReturnType<ReturnType<typeof getWorkdays>['workdaysControllerUpdatePay']>>>
-export type WorkdaysControllerCloseResult = NonNullable<Awaited<ReturnType<ReturnType<typeof getWorkdays>['workdaysControllerClose']>>>
+
+
+
+
+export const getWorkdaysControllerCloseMutationOptions = <TError = unknown,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof workdaysControllerClose>>, TError,{id: string}, TContext>, }
+): UseMutationOptions<Awaited<ReturnType<typeof workdaysControllerClose>>, TError,{id: string}, TContext> => {
+
+const mutationKey = ['workdaysControllerClose'];
+const {mutation: mutationOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof workdaysControllerClose>>, {id: string}> = (props) => {
+          const {id} = props ?? {};
+
+          return  workdaysControllerClose(id,)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type WorkdaysControllerCloseMutationResult = NonNullable<Awaited<ReturnType<typeof workdaysControllerClose>>>
+
+    export type WorkdaysControllerCloseMutationError = unknown
+
+    /**
+ * @summary Close a workday, freezing its aggregate total in kilos (RF-01.2)
+ */
+export const useWorkdaysControllerClose = <TError = unknown,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof workdaysControllerClose>>, TError,{id: string}, TContext>, }
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof workdaysControllerClose>>,
+        TError,
+        {id: string},
+        TContext
+      > => {
+      return useMutation(getWorkdaysControllerCloseMutationOptions(options));
+    }

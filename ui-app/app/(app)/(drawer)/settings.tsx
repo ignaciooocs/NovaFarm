@@ -10,7 +10,10 @@ import {
   Switch,
   Text,
 } from 'react-native-paper';
-import { getFarms } from '@/api/generated/farms/farms';
+import {
+  farmsControllerFindMe,
+  farmsControllerUpdateMe,
+} from '@/api/generated/farms/farms';
 import { Screen } from '@/components/Screen';
 import { strings } from '@/constants/strings';
 import { getErrorMessage } from '@/lib/errors';
@@ -39,7 +42,6 @@ export default function SettingsScreen() {
     async function load() {
       setLoading(true);
       try {
-        const { farmsControllerFindMe } = getFarms();
         const farm = await farmsControllerFindMe();
         setFarmName(farm.name);
         setInvitationCode(farm.invitationCode);
@@ -64,7 +66,6 @@ export default function SettingsScreen() {
     setSaving(true);
     setError(null);
     try {
-      const { farmsControllerUpdateMe } = getFarms();
       await farmsControllerUpdateMe({ recordersCanManageCatalog: value });
     } catch (err) {
       setRecordersCanManageCatalog(previous);

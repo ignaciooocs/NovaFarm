@@ -11,9 +11,13 @@ import {
   IconButton,
   Text,
 } from 'react-native-paper';
-import { getHarvestEntries } from '@/api/generated/harvest-entries/harvest-entries';
-import { getHarvesterWorkday } from '@/api/generated/harvester-workday/harvester-workday';
-import { getWorkdays } from '@/api/generated/workdays/workdays';
+import {
+  harvestEntriesControllerFindAll,
+} from '@/api/generated/harvest-entries/harvest-entries';
+import {
+  harvesterWorkdayControllerFindAll,
+} from '@/api/generated/harvester-workday/harvester-workday';
+import { workdaysControllerFindAll } from '@/api/generated/workdays/workdays';
 import { Screen } from '@/components/Screen';
 import { DEFAULT_PRODUCT_ICON } from '@/constants/productIcon';
 import { strings } from '@/constants/strings';
@@ -83,9 +87,6 @@ export default function HistoryDetailScreen() {
         setLoading(true);
         setError(null);
         try {
-          const { workdaysControllerFindAll } = getWorkdays();
-          const { harvestEntriesControllerFindAll } = getHarvestEntries();
-          const { harvesterWorkdayControllerFindAll } = getHarvesterWorkday();
 
           const [allWorkdays, entryRows, rosterRows, productRows, harvestersRows] =
             await Promise.all([

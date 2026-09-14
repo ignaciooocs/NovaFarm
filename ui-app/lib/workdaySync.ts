@@ -1,5 +1,8 @@
 import { and, eq } from 'drizzle-orm';
-import { getWorkdays } from '@/api/generated/workdays/workdays';
+import {
+  workdaysControllerCreate,
+  workdaysControllerUpdatePay,
+} from '@/api/generated/workdays/workdays';
 import { db } from '@/db/client';
 import { workdays } from '@/db/schema';
 import { getErrorMessage } from '@/lib/errors';
@@ -34,8 +37,6 @@ export async function pushPendingWorkdays(): Promise<{
 
   const rejectedReasons: string[] = [];
   let synced = 0;
-  const { workdaysControllerCreate, workdaysControllerUpdatePay } =
-    getWorkdays();
 
   // Una por una y cada una con su propio try/catch: POST /workdays no es un
   // endpoint batch con resultado por ítem como los /sync — un fallo (ej. 404

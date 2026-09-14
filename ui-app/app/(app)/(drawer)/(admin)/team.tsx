@@ -14,8 +14,11 @@ import {
   TouchableRipple,
 } from 'react-native-paper';
 import type { FindUserResponseDto } from '@/api/generated/novaFarmAPI.schemas';
-import { getUsers } from '@/api/generated/users/users';
-import { getWorkdays } from '@/api/generated/workdays/workdays';
+import {
+  usersControllerFindAll,
+  usersControllerUpdateRoles,
+} from '@/api/generated/users/users';
+import { workdaysControllerFindAll } from '@/api/generated/workdays/workdays';
 import { Screen } from '@/components/Screen';
 import { strings } from '@/constants/strings';
 import { getErrorMessage } from '@/lib/errors';
@@ -79,8 +82,6 @@ export default function TeamScreen() {
   async function load() {
     setLoading(true);
     try {
-      const { usersControllerFindAll } = getUsers();
-      const { workdaysControllerFindAll } = getWorkdays();
       const [usersResult, openWorkdays] = await Promise.all([
         usersControllerFindAll(),
         workdaysControllerFindAll({ status: 'OPEN' }),
@@ -138,7 +139,6 @@ export default function TeamScreen() {
     setSavingRoles(true);
     setError(null);
     try {
-      const { usersControllerUpdateRoles } = getUsers();
       await usersControllerUpdateRoles(rolesEditTarget._id, {
         roles: Array.from(editRoles),
       });

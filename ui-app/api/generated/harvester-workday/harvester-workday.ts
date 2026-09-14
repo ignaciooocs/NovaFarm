@@ -5,6 +5,20 @@
  * API del backend de NovaFarm (server-app)
  * OpenAPI spec version: 1.0
  */
+import {
+  useMutation,
+  useQuery
+} from '@tanstack/react-query';
+import type {
+  MutationFunction,
+  QueryFunction,
+  QueryKey,
+  UseMutationOptions,
+  UseMutationResult,
+  UseQueryOptions,
+  UseQueryResult
+} from '@tanstack/react-query';
+
 import type {
   FindHarvesterWorkdayResponseDto,
   HarvesterWorkdayControllerFindAllParams,
@@ -16,32 +30,152 @@ import { apiClient } from '../../axios-instance';
 
 
 
-  export const getHarvesterWorkday = () => {
+
+const withQueryKey = <T extends object, K>(query: T, queryKey: K): T & { queryKey: K } => {
+  const result = { queryKey } as T & { queryKey: K };
+  for (const key of Object.keys(query)) {
+    // The explicit queryKey always wins, matching the previous
+    // `{ ...query, queryKey }` spread where it was set last.
+    if (key === 'queryKey') continue;
+    Object.defineProperty(result, key, {
+      enumerable: true,
+      configurable: true,
+      get: () => (query as Record<string, unknown>)[key],
+    });
+  }
+  return result;
+};
+
 /**
  * @summary Upload a batch of roster entries captured offline. Always returns 200 with a per-item result — rejection (workday not found/closed, harvester not found) is a business outcome, not an HTTP error.
  */
-const harvesterWorkdayControllerSync = (
+export const harvesterWorkdayControllerSync = (
     syncHarvesterWorkdayRequestDto: SyncHarvesterWorkdayRequestDto,
- ) => {
+ signal?: AbortSignal
+) => {
+
+
       return apiClient<SyncHarvesterWorkdayResponseDto[]>(
       {url: `/api/v1/harvester-workday/sync`, method: 'POST',
       headers: {'Content-Type': 'application/json', },
-      data: syncHarvesterWorkdayRequestDto
+      data: syncHarvesterWorkdayRequestDto, signal
     },
       );
     }
-  /**
+
+
+
+
+export const getHarvesterWorkdayControllerSyncMutationOptions = <TError = unknown,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof harvesterWorkdayControllerSync>>, TError,{data: SyncHarvesterWorkdayRequestDto}, TContext>, }
+): UseMutationOptions<Awaited<ReturnType<typeof harvesterWorkdayControllerSync>>, TError,{data: SyncHarvesterWorkdayRequestDto}, TContext> => {
+
+const mutationKey = ['harvesterWorkdayControllerSync'];
+const {mutation: mutationOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof harvesterWorkdayControllerSync>>, {data: SyncHarvesterWorkdayRequestDto}> = (props) => {
+          const {data} = props ?? {};
+
+          return  harvesterWorkdayControllerSync(data,)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type HarvesterWorkdayControllerSyncMutationResult = NonNullable<Awaited<ReturnType<typeof harvesterWorkdayControllerSync>>>
+    export type HarvesterWorkdayControllerSyncMutationBody = SyncHarvesterWorkdayRequestDto
+    export type HarvesterWorkdayControllerSyncMutationError = unknown
+
+    /**
+ * @summary Upload a batch of roster entries captured offline. Always returns 200 with a per-item result — rejection (workday not found/closed, harvester not found) is a business outcome, not an HTTP error.
+ */
+export const useHarvesterWorkdayControllerSync = <TError = unknown,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof harvesterWorkdayControllerSync>>, TError,{data: SyncHarvesterWorkdayRequestDto}, TContext>, }
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof harvesterWorkdayControllerSync>>,
+        TError,
+        {data: SyncHarvesterWorkdayRequestDto},
+        TContext
+      > => {
+      return useMutation(getHarvesterWorkdayControllerSyncMutationOptions(options));
+    }
+    /**
  * @summary List the roster for a workday
  */
-const harvesterWorkdayControllerFindAll = (
+export const harvesterWorkdayControllerFindAll = (
     params: HarvesterWorkdayControllerFindAllParams,
- ) => {
+ signal?: AbortSignal
+) => {
+
+
       return apiClient<FindHarvesterWorkdayResponseDto[]>(
       {url: `/api/v1/harvester-workday`, method: 'GET',
-        params
+        params, signal
     },
       );
     }
-  return {harvesterWorkdayControllerSync,harvesterWorkdayControllerFindAll}};
-export type HarvesterWorkdayControllerSyncResult = NonNullable<Awaited<ReturnType<ReturnType<typeof getHarvesterWorkday>['harvesterWorkdayControllerSync']>>>
-export type HarvesterWorkdayControllerFindAllResult = NonNullable<Awaited<ReturnType<ReturnType<typeof getHarvesterWorkday>['harvesterWorkdayControllerFindAll']>>>
+
+
+
+
+export const getHarvesterWorkdayControllerFindAllQueryKey = (params?: HarvesterWorkdayControllerFindAllParams,) => {
+    return [
+    `/api/v1/harvester-workday`, ...(params ? [params] : [])
+    ] as const;
+    }
+
+
+export const getHarvesterWorkdayControllerFindAllQueryOptions = <TData = Awaited<ReturnType<typeof harvesterWorkdayControllerFindAll>>, TError = unknown>(params: HarvesterWorkdayControllerFindAllParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof harvesterWorkdayControllerFindAll>>, TError, TData>, }
+) => {
+
+const {query: queryOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getHarvesterWorkdayControllerFindAllQueryKey(params);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof harvesterWorkdayControllerFindAll>>> = ({ signal }) => harvesterWorkdayControllerFindAll(params, signal);
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof harvesterWorkdayControllerFindAll>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type HarvesterWorkdayControllerFindAllQueryResult = NonNullable<Awaited<ReturnType<typeof harvesterWorkdayControllerFindAll>>>
+export type HarvesterWorkdayControllerFindAllQueryError = unknown
+
+
+/**
+ * @summary List the roster for a workday
+ */
+
+export function useHarvesterWorkdayControllerFindAll<TData = Awaited<ReturnType<typeof harvesterWorkdayControllerFindAll>>, TError = unknown>(
+ params: HarvesterWorkdayControllerFindAllParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof harvesterWorkdayControllerFindAll>>, TError, TData>, }
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getHarvesterWorkdayControllerFindAllQueryOptions(params,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+

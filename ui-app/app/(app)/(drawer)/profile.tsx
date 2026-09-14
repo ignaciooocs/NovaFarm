@@ -7,7 +7,10 @@ import {
   Text,
   TextInput,
 } from 'react-native-paper';
-import { getUsers } from '@/api/generated/users/users';
+import {
+  usersControllerFindMe,
+  usersControllerUpdateMe,
+} from '@/api/generated/users/users';
 import { Screen } from '@/components/Screen';
 import { strings } from '@/constants/strings';
 import { getErrorMessage } from '@/lib/errors';
@@ -33,7 +36,6 @@ export default function ProfileScreen() {
     async function load() {
       setLoading(true);
       try {
-        const { usersControllerFindMe } = getUsers();
         const user = await usersControllerFindMe();
         setEmail(user.email);
         setRoles(user.roles);
@@ -64,7 +66,6 @@ export default function ProfileScreen() {
     setSaved(false);
     setError(null);
     try {
-      const { usersControllerUpdateMe } = getUsers();
       await usersControllerUpdateMe({
         name: name.trim(),
         nationalId: nationalId.trim() || null,

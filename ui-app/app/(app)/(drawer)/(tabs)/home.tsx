@@ -9,7 +9,7 @@ import {
   Text,
   TouchableRipple,
 } from 'react-native-paper';
-import { getWorkdays } from '@/api/generated/workdays/workdays';
+import { workdaysControllerFindAll } from '@/api/generated/workdays/workdays';
 import { Screen } from '@/components/Screen';
 import { DEFAULT_PRODUCT_ICON } from '@/constants/productIcon';
 import { strings } from '@/constants/strings';
@@ -161,7 +161,6 @@ async function loadActiveTeammates(
     // real, encontrado en dispositivo: se veía bien recién la segunda vez
     // que se visitaba Home, una vez que el sync ya había terminado).
     await syncCatalogs();
-    const { workdaysControllerFindAll } = getWorkdays();
     const [openWorkdays, productRows] = await Promise.all([
       workdaysControllerFindAll({ status: 'OPEN' }),
       db.select().from(products),

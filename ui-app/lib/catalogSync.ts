@@ -1,7 +1,11 @@
 import { ne } from 'drizzle-orm';
-import { getProducts } from '@/api/generated/products/products';
-import { getHarvesters } from '@/api/generated/harvesters/harvesters';
-import { getMeasurementUnits } from '@/api/generated/measurement-units/measurement-units';
+import { productsControllerFindAll } from '@/api/generated/products/products';
+import {
+  harvestersControllerFindAll,
+} from '@/api/generated/harvesters/harvesters';
+import {
+  measurementUnitsControllerFindAll,
+} from '@/api/generated/measurement-units/measurement-units';
 import { db } from '@/db/client';
 import { harvesters, measurementUnits, products } from '@/db/schema';
 import { useAuthStore, useConnectivityStore } from '@/stores';
@@ -38,9 +42,6 @@ async function performSync(): Promise<void> {
   }
 
   try {
-    const { productsControllerFindAll } = getProducts();
-    const { harvestersControllerFindAll } = getHarvesters();
-    const { measurementUnitsControllerFindAll } = getMeasurementUnits();
 
     const [productsResult, harvestersResult, unitsResult] = await Promise.all([
       productsControllerFindAll(),

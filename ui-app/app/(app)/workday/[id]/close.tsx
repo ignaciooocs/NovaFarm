@@ -12,7 +12,7 @@ import {
   Text,
   TextInput,
 } from 'react-native-paper';
-import { getWorkdays } from '@/api/generated/workdays/workdays';
+import { workdaysControllerClose } from '@/api/generated/workdays/workdays';
 import { KeyboardAwareDialog } from '@/components/KeyboardAwareDialog';
 import { OptionSelector } from '@/components/OptionSelector';
 import { Screen } from '@/components/Screen';
@@ -213,7 +213,6 @@ export default function CloseWorkdayScreen() {
     setClosing(true);
     setError(null);
     try {
-      const { workdaysControllerClose } = getWorkdays();
       const result = await workdaysControllerClose(workday.serverId);
 
       await db

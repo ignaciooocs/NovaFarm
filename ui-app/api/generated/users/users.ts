@@ -5,6 +5,20 @@
  * API del backend de NovaFarm (server-app)
  * OpenAPI spec version: 1.0
  */
+import {
+  useMutation,
+  useQuery
+} from '@tanstack/react-query';
+import type {
+  MutationFunction,
+  QueryFunction,
+  QueryKey,
+  UseMutationOptions,
+  UseMutationResult,
+  UseQueryOptions,
+  UseQueryResult
+} from '@tanstack/react-query';
+
 import type {
   FindUserResponseDto,
   UpdateUserRequestDto,
@@ -17,59 +31,285 @@ import { apiClient } from '../../axios-instance';
 
 
 
-  export const getUsers = () => {
+
+const withQueryKey = <T extends object, K>(query: T, queryKey: K): T & { queryKey: K } => {
+  const result = { queryKey } as T & { queryKey: K };
+  for (const key of Object.keys(query)) {
+    // The explicit queryKey always wins, matching the previous
+    // `{ ...query, queryKey }` spread where it was set last.
+    if (key === 'queryKey') continue;
+    Object.defineProperty(result, key, {
+      enumerable: true,
+      configurable: true,
+      get: () => (query as Record<string, unknown>)[key],
+    });
+  }
+  return result;
+};
+
 /**
  * @summary List the caller farm's team (admin and supervisor — read-only for the latter)
  */
-const usersControllerFindAll = (
+export const usersControllerFindAll = (
     params?: UsersControllerFindAllParams,
- ) => {
+ signal?: AbortSignal
+) => {
+
+
       return apiClient<FindUserResponseDto[]>(
       {url: `/api/v1/users`, method: 'GET',
-        params
+        params, signal
     },
       );
     }
-  /**
+
+
+
+
+export const getUsersControllerFindAllQueryKey = (params?: UsersControllerFindAllParams,) => {
+    return [
+    `/api/v1/users`, ...(params ? [params] : [])
+    ] as const;
+    }
+
+
+export const getUsersControllerFindAllQueryOptions = <TData = Awaited<ReturnType<typeof usersControllerFindAll>>, TError = unknown>(params?: UsersControllerFindAllParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof usersControllerFindAll>>, TError, TData>, }
+) => {
+
+const {query: queryOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getUsersControllerFindAllQueryKey(params);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof usersControllerFindAll>>> = ({ signal }) => usersControllerFindAll(params, signal);
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof usersControllerFindAll>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type UsersControllerFindAllQueryResult = NonNullable<Awaited<ReturnType<typeof usersControllerFindAll>>>
+export type UsersControllerFindAllQueryError = unknown
+
+
+/**
+ * @summary List the caller farm's team (admin and supervisor — read-only for the latter)
+ */
+
+export function useUsersControllerFindAll<TData = Awaited<ReturnType<typeof usersControllerFindAll>>, TError = unknown>(
+ params?: UsersControllerFindAllParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof usersControllerFindAll>>, TError, TData>, }
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getUsersControllerFindAllQueryOptions(params,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+/**
  * @summary Get the caller's own user profile
  */
-const usersControllerFindMe = (
+export const usersControllerFindMe = (
 
- ) => {
+ signal?: AbortSignal
+) => {
+
+
       return apiClient<FindUserResponseDto>(
-      {url: `/api/v1/users/me`, method: 'GET'
+      {url: `/api/v1/users/me`, method: 'GET', signal
     },
       );
     }
-  /**
+
+
+
+
+export const getUsersControllerFindMeQueryKey = () => {
+    return [
+    `/api/v1/users/me`
+    ] as const;
+    }
+
+
+export const getUsersControllerFindMeQueryOptions = <TData = Awaited<ReturnType<typeof usersControllerFindMe>>, TError = unknown>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof usersControllerFindMe>>, TError, TData>, }
+) => {
+
+const {query: queryOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getUsersControllerFindMeQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof usersControllerFindMe>>> = ({ signal }) => usersControllerFindMe(signal);
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof usersControllerFindMe>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type UsersControllerFindMeQueryResult = NonNullable<Awaited<ReturnType<typeof usersControllerFindMe>>>
+export type UsersControllerFindMeQueryError = unknown
+
+
+/**
+ * @summary Get the caller's own user profile
+ */
+
+export function useUsersControllerFindMe<TData = Awaited<ReturnType<typeof usersControllerFindMe>>, TError = unknown>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof usersControllerFindMe>>, TError, TData>, }
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getUsersControllerFindMeQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+/**
  * @summary Update the caller's own user profile (name and/or nationalId only)
  */
-const usersControllerUpdateMe = (
+export const usersControllerUpdateMe = (
     updateUserRequestDto: UpdateUserRequestDto,
- ) => {
+ signal?: AbortSignal
+) => {
+
+
       return apiClient<UpdateUserResponseDto>(
       {url: `/api/v1/users/me`, method: 'PATCH',
       headers: {'Content-Type': 'application/json', },
-      data: updateUserRequestDto
+      data: updateUserRequestDto, signal
     },
       );
     }
-  /**
+
+
+
+
+export const getUsersControllerUpdateMeMutationOptions = <TError = unknown,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof usersControllerUpdateMe>>, TError,{data: UpdateUserRequestDto}, TContext>, }
+): UseMutationOptions<Awaited<ReturnType<typeof usersControllerUpdateMe>>, TError,{data: UpdateUserRequestDto}, TContext> => {
+
+const mutationKey = ['usersControllerUpdateMe'];
+const {mutation: mutationOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof usersControllerUpdateMe>>, {data: UpdateUserRequestDto}> = (props) => {
+          const {data} = props ?? {};
+
+          return  usersControllerUpdateMe(data,)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type UsersControllerUpdateMeMutationResult = NonNullable<Awaited<ReturnType<typeof usersControllerUpdateMe>>>
+    export type UsersControllerUpdateMeMutationBody = UpdateUserRequestDto
+    export type UsersControllerUpdateMeMutationError = unknown
+
+    /**
+ * @summary Update the caller's own user profile (name and/or nationalId only)
+ */
+export const useUsersControllerUpdateMe = <TError = unknown,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof usersControllerUpdateMe>>, TError,{data: UpdateUserRequestDto}, TContext>, }
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof usersControllerUpdateMe>>,
+        TError,
+        {data: UpdateUserRequestDto},
+        TContext
+      > => {
+      return useMutation(getUsersControllerUpdateMeMutationOptions(options));
+    }
+    /**
  * @summary Reassign a team member's recorder/supervisor roles (admin only). Never grants/revokes admin itself — if the target is already an admin, that role is preserved and this only adds/removes recorder/supervisor on top of it.
  */
-const usersControllerUpdateRoles = (
+export const usersControllerUpdateRoles = (
     id: string,
     updateUserRolesRequestDto: UpdateUserRolesRequestDto,
- ) => {
+ signal?: AbortSignal
+) => {
+
+
       return apiClient<UpdateUserResponseDto>(
       {url: `/api/v1/users/${id}/roles`, method: 'PATCH',
       headers: {'Content-Type': 'application/json', },
-      data: updateUserRolesRequestDto
+      data: updateUserRolesRequestDto, signal
     },
       );
     }
-  return {usersControllerFindAll,usersControllerFindMe,usersControllerUpdateMe,usersControllerUpdateRoles}};
-export type UsersControllerFindAllResult = NonNullable<Awaited<ReturnType<ReturnType<typeof getUsers>['usersControllerFindAll']>>>
-export type UsersControllerFindMeResult = NonNullable<Awaited<ReturnType<ReturnType<typeof getUsers>['usersControllerFindMe']>>>
-export type UsersControllerUpdateMeResult = NonNullable<Awaited<ReturnType<ReturnType<typeof getUsers>['usersControllerUpdateMe']>>>
-export type UsersControllerUpdateRolesResult = NonNullable<Awaited<ReturnType<ReturnType<typeof getUsers>['usersControllerUpdateRoles']>>>
+
+
+
+
+export const getUsersControllerUpdateRolesMutationOptions = <TError = unknown,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof usersControllerUpdateRoles>>, TError,{id: string;data: UpdateUserRolesRequestDto}, TContext>, }
+): UseMutationOptions<Awaited<ReturnType<typeof usersControllerUpdateRoles>>, TError,{id: string;data: UpdateUserRolesRequestDto}, TContext> => {
+
+const mutationKey = ['usersControllerUpdateRoles'];
+const {mutation: mutationOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof usersControllerUpdateRoles>>, {id: string;data: UpdateUserRolesRequestDto}> = (props) => {
+          const {id,data} = props ?? {};
+
+          return  usersControllerUpdateRoles(id,data,)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type UsersControllerUpdateRolesMutationResult = NonNullable<Awaited<ReturnType<typeof usersControllerUpdateRoles>>>
+    export type UsersControllerUpdateRolesMutationBody = UpdateUserRolesRequestDto
+    export type UsersControllerUpdateRolesMutationError = unknown
+
+    /**
+ * @summary Reassign a team member's recorder/supervisor roles (admin only). Never grants/revokes admin itself — if the target is already an admin, that role is preserved and this only adds/removes recorder/supervisor on top of it.
+ */
+export const useUsersControllerUpdateRoles = <TError = unknown,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof usersControllerUpdateRoles>>, TError,{id: string;data: UpdateUserRolesRequestDto}, TContext>, }
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof usersControllerUpdateRoles>>,
+        TError,
+        {id: string;data: UpdateUserRolesRequestDto},
+        TContext
+      > => {
+      return useMutation(getUsersControllerUpdateRolesMutationOptions(options));
+    }

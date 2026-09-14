@@ -5,6 +5,20 @@
  * API del backend de NovaFarm (server-app)
  * OpenAPI spec version: 1.0
  */
+import {
+  useMutation,
+  useQuery
+} from '@tanstack/react-query';
+import type {
+  MutationFunction,
+  QueryFunction,
+  QueryKey,
+  UseMutationOptions,
+  UseMutationResult,
+  UseQueryOptions,
+  UseQueryResult
+} from '@tanstack/react-query';
+
 import type {
   CreateProductRequestDto,
   CreateProductResponseDto,
@@ -18,59 +32,285 @@ import { apiClient } from '../../axios-instance';
 
 
 
-  export const getProducts = () => {
+
+const withQueryKey = <T extends object, K>(query: T, queryKey: K): T & { queryKey: K } => {
+  const result = { queryKey } as T & { queryKey: K };
+  for (const key of Object.keys(query)) {
+    // The explicit queryKey always wins, matching the previous
+    // `{ ...query, queryKey }` spread where it was set last.
+    if (key === 'queryKey') continue;
+    Object.defineProperty(result, key, {
+      enumerable: true,
+      configurable: true,
+      get: () => (query as Record<string, unknown>)[key],
+    });
+  }
+  return result;
+};
+
 /**
  * @summary Add a product to the caller farm catalog — either one that already exists (productId) or a new community one (name)
  */
-const productsControllerCreate = (
+export const productsControllerCreate = (
     createProductRequestDto: CreateProductRequestDto,
- ) => {
+ signal?: AbortSignal
+) => {
+
+
       return apiClient<CreateProductResponseDto>(
       {url: `/api/v1/products`, method: 'POST',
       headers: {'Content-Type': 'application/json', },
-      data: createProductRequestDto
+      data: createProductRequestDto, signal
     },
       );
     }
-  /**
+
+
+
+
+export const getProductsControllerCreateMutationOptions = <TError = unknown,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof productsControllerCreate>>, TError,{data: CreateProductRequestDto}, TContext>, }
+): UseMutationOptions<Awaited<ReturnType<typeof productsControllerCreate>>, TError,{data: CreateProductRequestDto}, TContext> => {
+
+const mutationKey = ['productsControllerCreate'];
+const {mutation: mutationOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof productsControllerCreate>>, {data: CreateProductRequestDto}> = (props) => {
+          const {data} = props ?? {};
+
+          return  productsControllerCreate(data,)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type ProductsControllerCreateMutationResult = NonNullable<Awaited<ReturnType<typeof productsControllerCreate>>>
+    export type ProductsControllerCreateMutationBody = CreateProductRequestDto
+    export type ProductsControllerCreateMutationError = unknown
+
+    /**
+ * @summary Add a product to the caller farm catalog — either one that already exists (productId) or a new community one (name)
+ */
+export const useProductsControllerCreate = <TError = unknown,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof productsControllerCreate>>, TError,{data: CreateProductRequestDto}, TContext>, }
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof productsControllerCreate>>,
+        TError,
+        {data: CreateProductRequestDto},
+        TContext
+      > => {
+      return useMutation(getProductsControllerCreateMutationOptions(options));
+    }
+    /**
  * @summary List the products in the caller farm catalog
  */
-const productsControllerFindAll = (
+export const productsControllerFindAll = (
     params?: ProductsControllerFindAllParams,
- ) => {
+ signal?: AbortSignal
+) => {
+
+
       return apiClient<FindProductResponseDto[]>(
       {url: `/api/v1/products`, method: 'GET',
-        params
+        params, signal
     },
       );
     }
-  /**
+
+
+
+
+export const getProductsControllerFindAllQueryKey = (params?: ProductsControllerFindAllParams,) => {
+    return [
+    `/api/v1/products`, ...(params ? [params] : [])
+    ] as const;
+    }
+
+
+export const getProductsControllerFindAllQueryOptions = <TData = Awaited<ReturnType<typeof productsControllerFindAll>>, TError = unknown>(params?: ProductsControllerFindAllParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof productsControllerFindAll>>, TError, TData>, }
+) => {
+
+const {query: queryOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getProductsControllerFindAllQueryKey(params);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof productsControllerFindAll>>> = ({ signal }) => productsControllerFindAll(params, signal);
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof productsControllerFindAll>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type ProductsControllerFindAllQueryResult = NonNullable<Awaited<ReturnType<typeof productsControllerFindAll>>>
+export type ProductsControllerFindAllQueryError = unknown
+
+
+/**
+ * @summary List the products in the caller farm catalog
+ */
+
+export function useProductsControllerFindAll<TData = Awaited<ReturnType<typeof productsControllerFindAll>>, TError = unknown>(
+ params?: ProductsControllerFindAllParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof productsControllerFindAll>>, TError, TData>, }
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getProductsControllerFindAllQueryOptions(params,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+/**
  * @summary List the products the caller farm could add — the app catalog plus its own community products, minus the ones already in its catalog
  */
-const productsControllerFindAvailable = (
+export const productsControllerFindAvailable = (
 
- ) => {
+ signal?: AbortSignal
+) => {
+
+
       return apiClient<FindProductResponseDto[]>(
-      {url: `/api/v1/products/available`, method: 'GET'
+      {url: `/api/v1/products/available`, method: 'GET', signal
     },
       );
     }
-  /**
+
+
+
+
+export const getProductsControllerFindAvailableQueryKey = () => {
+    return [
+    `/api/v1/products/available`
+    ] as const;
+    }
+
+
+export const getProductsControllerFindAvailableQueryOptions = <TData = Awaited<ReturnType<typeof productsControllerFindAvailable>>, TError = unknown>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof productsControllerFindAvailable>>, TError, TData>, }
+) => {
+
+const {query: queryOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getProductsControllerFindAvailableQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof productsControllerFindAvailable>>> = ({ signal }) => productsControllerFindAvailable(signal);
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof productsControllerFindAvailable>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type ProductsControllerFindAvailableQueryResult = NonNullable<Awaited<ReturnType<typeof productsControllerFindAvailable>>>
+export type ProductsControllerFindAvailableQueryError = unknown
+
+
+/**
+ * @summary List the products the caller farm could add — the app catalog plus its own community products, minus the ones already in its catalog
+ */
+
+export function useProductsControllerFindAvailable<TData = Awaited<ReturnType<typeof productsControllerFindAvailable>>, TError = unknown>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof productsControllerFindAvailable>>, TError, TData>, }
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getProductsControllerFindAvailableQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+/**
  * @summary Update a product in the caller farm catalog. `active` toggles this farm's own selection and is always allowed; renaming only works for a community product this farm created that no workday uses yet.
  */
-const productsControllerUpdate = (
+export const productsControllerUpdate = (
     productId: string,
     updateProductRequestDto: UpdateProductRequestDto,
- ) => {
+ signal?: AbortSignal
+) => {
+
+
       return apiClient<UpdateProductResponseDto>(
       {url: `/api/v1/products/${productId}`, method: 'PATCH',
       headers: {'Content-Type': 'application/json', },
-      data: updateProductRequestDto
+      data: updateProductRequestDto, signal
     },
       );
     }
-  return {productsControllerCreate,productsControllerFindAll,productsControllerFindAvailable,productsControllerUpdate}};
-export type ProductsControllerCreateResult = NonNullable<Awaited<ReturnType<ReturnType<typeof getProducts>['productsControllerCreate']>>>
-export type ProductsControllerFindAllResult = NonNullable<Awaited<ReturnType<ReturnType<typeof getProducts>['productsControllerFindAll']>>>
-export type ProductsControllerFindAvailableResult = NonNullable<Awaited<ReturnType<ReturnType<typeof getProducts>['productsControllerFindAvailable']>>>
-export type ProductsControllerUpdateResult = NonNullable<Awaited<ReturnType<ReturnType<typeof getProducts>['productsControllerUpdate']>>>
+
+
+
+
+export const getProductsControllerUpdateMutationOptions = <TError = unknown,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof productsControllerUpdate>>, TError,{productId: string;data: UpdateProductRequestDto}, TContext>, }
+): UseMutationOptions<Awaited<ReturnType<typeof productsControllerUpdate>>, TError,{productId: string;data: UpdateProductRequestDto}, TContext> => {
+
+const mutationKey = ['productsControllerUpdate'];
+const {mutation: mutationOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof productsControllerUpdate>>, {productId: string;data: UpdateProductRequestDto}> = (props) => {
+          const {productId,data} = props ?? {};
+
+          return  productsControllerUpdate(productId,data,)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type ProductsControllerUpdateMutationResult = NonNullable<Awaited<ReturnType<typeof productsControllerUpdate>>>
+    export type ProductsControllerUpdateMutationBody = UpdateProductRequestDto
+    export type ProductsControllerUpdateMutationError = unknown
+
+    /**
+ * @summary Update a product in the caller farm catalog. `active` toggles this farm's own selection and is always allowed; renaming only works for a community product this farm created that no workday uses yet.
+ */
+export const useProductsControllerUpdate = <TError = unknown,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof productsControllerUpdate>>, TError,{productId: string;data: UpdateProductRequestDto}, TContext>, }
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof productsControllerUpdate>>,
+        TError,
+        {productId: string;data: UpdateProductRequestDto},
+        TContext
+      > => {
+      return useMutation(getProductsControllerUpdateMutationOptions(options));
+    }

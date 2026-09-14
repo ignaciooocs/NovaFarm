@@ -5,6 +5,20 @@
  * API del backend de NovaFarm (server-app)
  * OpenAPI spec version: 1.0
  */
+import {
+  useMutation,
+  useQuery
+} from '@tanstack/react-query';
+import type {
+  MutationFunction,
+  QueryFunction,
+  QueryKey,
+  UseMutationOptions,
+  UseMutationResult,
+  UseQueryOptions,
+  UseQueryResult
+} from '@tanstack/react-query';
+
 import type {
   CreateHarvesterRequestDto,
   CreateHarvesterResponseDto,
@@ -20,61 +34,281 @@ import { apiClient } from '../../axios-instance';
 
 
 
-  export const getHarvesters = () => {
+
+const withQueryKey = <T extends object, K>(query: T, queryKey: K): T & { queryKey: K } => {
+  const result = { queryKey } as T & { queryKey: K };
+  for (const key of Object.keys(query)) {
+    // The explicit queryKey always wins, matching the previous
+    // `{ ...query, queryKey }` spread where it was set last.
+    if (key === 'queryKey') continue;
+    Object.defineProperty(result, key, {
+      enumerable: true,
+      configurable: true,
+      get: () => (query as Record<string, unknown>)[key],
+    });
+  }
+  return result;
+};
+
 /**
  * @summary Register a new harvester in the caller farm roster
  */
-const harvestersControllerCreate = (
+export const harvestersControllerCreate = (
     createHarvesterRequestDto: CreateHarvesterRequestDto,
- ) => {
+ signal?: AbortSignal
+) => {
+
+
       return apiClient<CreateHarvesterResponseDto>(
       {url: `/api/v1/harvesters`, method: 'POST',
       headers: {'Content-Type': 'application/json', },
-      data: createHarvesterRequestDto
+      data: createHarvesterRequestDto, signal
     },
       );
     }
-  /**
+
+
+
+
+export const getHarvestersControllerCreateMutationOptions = <TError = unknown,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof harvestersControllerCreate>>, TError,{data: CreateHarvesterRequestDto}, TContext>, }
+): UseMutationOptions<Awaited<ReturnType<typeof harvestersControllerCreate>>, TError,{data: CreateHarvesterRequestDto}, TContext> => {
+
+const mutationKey = ['harvestersControllerCreate'];
+const {mutation: mutationOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof harvestersControllerCreate>>, {data: CreateHarvesterRequestDto}> = (props) => {
+          const {data} = props ?? {};
+
+          return  harvestersControllerCreate(data,)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type HarvestersControllerCreateMutationResult = NonNullable<Awaited<ReturnType<typeof harvestersControllerCreate>>>
+    export type HarvestersControllerCreateMutationBody = CreateHarvesterRequestDto
+    export type HarvestersControllerCreateMutationError = unknown
+
+    /**
+ * @summary Register a new harvester in the caller farm roster
+ */
+export const useHarvestersControllerCreate = <TError = unknown,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof harvestersControllerCreate>>, TError,{data: CreateHarvesterRequestDto}, TContext>, }
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof harvestersControllerCreate>>,
+        TError,
+        {data: CreateHarvesterRequestDto},
+        TContext
+      > => {
+      return useMutation(getHarvestersControllerCreateMutationOptions(options));
+    }
+    /**
  * @summary List the harvesters in the caller farm roster
  */
-const harvestersControllerFindAll = (
+export const harvestersControllerFindAll = (
     params?: HarvestersControllerFindAllParams,
- ) => {
+ signal?: AbortSignal
+) => {
+
+
       return apiClient<FindHarvesterResponseDto[]>(
       {url: `/api/v1/harvesters`, method: 'GET',
-        params
+        params, signal
     },
       );
     }
-  /**
+
+
+
+
+export const getHarvestersControllerFindAllQueryKey = (params?: HarvestersControllerFindAllParams,) => {
+    return [
+    `/api/v1/harvesters`, ...(params ? [params] : [])
+    ] as const;
+    }
+
+
+export const getHarvestersControllerFindAllQueryOptions = <TData = Awaited<ReturnType<typeof harvestersControllerFindAll>>, TError = unknown>(params?: HarvestersControllerFindAllParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof harvestersControllerFindAll>>, TError, TData>, }
+) => {
+
+const {query: queryOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getHarvestersControllerFindAllQueryKey(params);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof harvestersControllerFindAll>>> = ({ signal }) => harvestersControllerFindAll(params, signal);
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof harvestersControllerFindAll>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type HarvestersControllerFindAllQueryResult = NonNullable<Awaited<ReturnType<typeof harvestersControllerFindAll>>>
+export type HarvestersControllerFindAllQueryError = unknown
+
+
+/**
+ * @summary List the harvesters in the caller farm roster
+ */
+
+export function useHarvestersControllerFindAll<TData = Awaited<ReturnType<typeof harvestersControllerFindAll>>, TError = unknown>(
+ params?: HarvestersControllerFindAllParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof harvestersControllerFindAll>>, TError, TData>, }
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getHarvestersControllerFindAllQueryOptions(params,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+/**
  * @summary Upload a batch of harvesters registered offline in the field. Always returns 200 with a per-item result.
  */
-const harvestersControllerSync = (
+export const harvestersControllerSync = (
     syncHarvesterRequestDto: SyncHarvesterRequestDto,
- ) => {
+ signal?: AbortSignal
+) => {
+
+
       return apiClient<SyncHarvesterResponseDto[]>(
       {url: `/api/v1/harvesters/sync`, method: 'POST',
       headers: {'Content-Type': 'application/json', },
-      data: syncHarvesterRequestDto
+      data: syncHarvesterRequestDto, signal
     },
       );
     }
-  /**
+
+
+
+
+export const getHarvestersControllerSyncMutationOptions = <TError = unknown,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof harvestersControllerSync>>, TError,{data: SyncHarvesterRequestDto}, TContext>, }
+): UseMutationOptions<Awaited<ReturnType<typeof harvestersControllerSync>>, TError,{data: SyncHarvesterRequestDto}, TContext> => {
+
+const mutationKey = ['harvestersControllerSync'];
+const {mutation: mutationOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof harvestersControllerSync>>, {data: SyncHarvesterRequestDto}> = (props) => {
+          const {data} = props ?? {};
+
+          return  harvestersControllerSync(data,)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type HarvestersControllerSyncMutationResult = NonNullable<Awaited<ReturnType<typeof harvestersControllerSync>>>
+    export type HarvestersControllerSyncMutationBody = SyncHarvesterRequestDto
+    export type HarvestersControllerSyncMutationError = unknown
+
+    /**
+ * @summary Upload a batch of harvesters registered offline in the field. Always returns 200 with a per-item result.
+ */
+export const useHarvestersControllerSync = <TError = unknown,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof harvestersControllerSync>>, TError,{data: SyncHarvesterRequestDto}, TContext>, }
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof harvestersControllerSync>>,
+        TError,
+        {data: SyncHarvesterRequestDto},
+        TContext
+      > => {
+      return useMutation(getHarvestersControllerSyncMutationOptions(options));
+    }
+    /**
  * @summary Partially update a harvester in the caller farm roster (edit and/or activate/deactivate)
  */
-const harvestersControllerUpdate = (
+export const harvestersControllerUpdate = (
     id: string,
     updateHarvesterRequestDto: UpdateHarvesterRequestDto,
- ) => {
+ signal?: AbortSignal
+) => {
+
+
       return apiClient<UpdateHarvesterResponseDto>(
       {url: `/api/v1/harvesters/${id}`, method: 'PATCH',
       headers: {'Content-Type': 'application/json', },
-      data: updateHarvesterRequestDto
+      data: updateHarvesterRequestDto, signal
     },
       );
     }
-  return {harvestersControllerCreate,harvestersControllerFindAll,harvestersControllerSync,harvestersControllerUpdate}};
-export type HarvestersControllerCreateResult = NonNullable<Awaited<ReturnType<ReturnType<typeof getHarvesters>['harvestersControllerCreate']>>>
-export type HarvestersControllerFindAllResult = NonNullable<Awaited<ReturnType<ReturnType<typeof getHarvesters>['harvestersControllerFindAll']>>>
-export type HarvestersControllerSyncResult = NonNullable<Awaited<ReturnType<ReturnType<typeof getHarvesters>['harvestersControllerSync']>>>
-export type HarvestersControllerUpdateResult = NonNullable<Awaited<ReturnType<ReturnType<typeof getHarvesters>['harvestersControllerUpdate']>>>
+
+
+
+
+export const getHarvestersControllerUpdateMutationOptions = <TError = unknown,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof harvestersControllerUpdate>>, TError,{id: string;data: UpdateHarvesterRequestDto}, TContext>, }
+): UseMutationOptions<Awaited<ReturnType<typeof harvestersControllerUpdate>>, TError,{id: string;data: UpdateHarvesterRequestDto}, TContext> => {
+
+const mutationKey = ['harvestersControllerUpdate'];
+const {mutation: mutationOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof harvestersControllerUpdate>>, {id: string;data: UpdateHarvesterRequestDto}> = (props) => {
+          const {id,data} = props ?? {};
+
+          return  harvestersControllerUpdate(id,data,)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type HarvestersControllerUpdateMutationResult = NonNullable<Awaited<ReturnType<typeof harvestersControllerUpdate>>>
+    export type HarvestersControllerUpdateMutationBody = UpdateHarvesterRequestDto
+    export type HarvestersControllerUpdateMutationError = unknown
+
+    /**
+ * @summary Partially update a harvester in the caller farm roster (edit and/or activate/deactivate)
+ */
+export const useHarvestersControllerUpdate = <TError = unknown,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof harvestersControllerUpdate>>, TError,{id: string;data: UpdateHarvesterRequestDto}, TContext>, }
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof harvestersControllerUpdate>>,
+        TError,
+        {id: string;data: UpdateHarvesterRequestDto},
+        TContext
+      > => {
+      return useMutation(getHarvestersControllerUpdateMutationOptions(options));
+    }

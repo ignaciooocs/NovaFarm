@@ -4,8 +4,12 @@ import { Stack, useFocusEffect } from 'expo-router';
 import { and, eq } from 'drizzle-orm';
 import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
 import { ActivityIndicator, Button, Text } from 'react-native-paper';
-import { getHarvestEntries } from '@/api/generated/harvest-entries/harvest-entries';
-import { getHarvesterWorkday } from '@/api/generated/harvester-workday/harvester-workday';
+import {
+  harvestEntriesControllerSync,
+} from '@/api/generated/harvest-entries/harvest-entries';
+import {
+  harvesterWorkdayControllerSync,
+} from '@/api/generated/harvester-workday/harvester-workday';
 import { Screen } from '@/components/Screen';
 import { strings } from '@/constants/strings';
 import { db } from '@/db/client';
@@ -262,7 +266,6 @@ export default function SyncScreen() {
       );
 
       if (syncableRosterRows.length > 0) {
-        const { harvesterWorkdayControllerSync } = getHarvesterWorkday();
         const results = await harvesterWorkdayControllerSync({
           workdayId: workdayServerId,
           entries: syncableRosterRows.map((row) => ({
@@ -289,7 +292,6 @@ export default function SyncScreen() {
       }
 
       if (syncableEntryRows.length > 0) {
-        const { harvestEntriesControllerSync } = getHarvestEntries();
         const chunks = Math.ceil(syncableEntryRows.length / ENTRY_SYNC_CHUNK);
         const entryResults: { status: string }[] = [];
 

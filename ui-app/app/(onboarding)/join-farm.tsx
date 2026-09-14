@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { StyleSheet } from 'react-native';
 import { Stack, useRouter } from 'expo-router';
 import { Button, HelperText, Text, TextInput } from 'react-native-paper';
-import { getAuth } from '@/api/generated/auth/auth';
+import { authControllerRegisterRecorder } from '@/api/generated/auth/auth';
 import { Screen } from '@/components/Screen';
 import { strings } from '@/constants/strings';
 import { getErrorMessage } from '@/lib/errors';
@@ -25,7 +25,6 @@ export default function JoinFarmScreen() {
     setError(null);
     setLoading(true);
     try {
-      const { authControllerRegisterRecorder } = getAuth();
       await authControllerRegisterRecorder({
         name: name.trim(),
         invitationCode: invitationCode.trim(),

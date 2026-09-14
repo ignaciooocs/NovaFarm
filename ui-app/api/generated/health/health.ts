@@ -5,25 +5,106 @@
  * API del backend de NovaFarm (server-app)
  * OpenAPI spec version: 1.0
  */
+import {
+  useQuery
+} from '@tanstack/react-query';
 import type {
-  HealthControllerCheck200
+  QueryFunction,
+  QueryKey,
+  UseQueryOptions,
+  UseQueryResult
+} from '@tanstack/react-query';
+
+import type {
+  HealthControllerCheck200,
+  HealthControllerCheck503
 } from '../novaFarmAPI.schemas';
 
 import { apiClient } from '../../axios-instance';
 
 
 
-  export const getHealth = () => {
+
+const withQueryKey = <T extends object, K>(query: T, queryKey: K): T & { queryKey: K } => {
+  const result = { queryKey } as T & { queryKey: K };
+  for (const key of Object.keys(query)) {
+    // The explicit queryKey always wins, matching the previous
+    // `{ ...query, queryKey }` spread where it was set last.
+    if (key === 'queryKey') continue;
+    Object.defineProperty(result, key, {
+      enumerable: true,
+      configurable: true,
+      get: () => (query as Record<string, unknown>)[key],
+    });
+  }
+  return result;
+};
+
 /**
  * @summary Liveness/readiness check (pings the Mongo connection)
  */
-const healthControllerCheck = (
+export const healthControllerCheck = (
 
- ) => {
+ signal?: AbortSignal
+) => {
+
+
       return apiClient<HealthControllerCheck200>(
-      {url: `/health`, method: 'GET'
+      {url: `/health`, method: 'GET', signal
     },
       );
     }
-  return {healthControllerCheck}};
-export type HealthControllerCheckResult = NonNullable<Awaited<ReturnType<ReturnType<typeof getHealth>['healthControllerCheck']>>>
+
+
+
+
+export const getHealthControllerCheckQueryKey = () => {
+    return [
+    `/health`
+    ] as const;
+    }
+
+
+export const getHealthControllerCheckQueryOptions = <TData = Awaited<ReturnType<typeof healthControllerCheck>>, TError = HealthControllerCheck503>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof healthControllerCheck>>, TError, TData>, }
+) => {
+
+const {query: queryOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getHealthControllerCheckQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof healthControllerCheck>>> = ({ signal }) => healthControllerCheck(signal);
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof healthControllerCheck>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type HealthControllerCheckQueryResult = NonNullable<Awaited<ReturnType<typeof healthControllerCheck>>>
+export type HealthControllerCheckQueryError = HealthControllerCheck503
+
+
+/**
+ * @summary Liveness/readiness check (pings the Mongo connection)
+ */
+
+export function useHealthControllerCheck<TData = Awaited<ReturnType<typeof healthControllerCheck>>, TError = HealthControllerCheck503>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof healthControllerCheck>>, TError, TData>, }
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getHealthControllerCheckQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+

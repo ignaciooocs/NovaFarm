@@ -1,7 +1,11 @@
-import { getHarvestEntries } from '@/api/generated/harvest-entries/harvest-entries';
-import { getHarvesterWorkday } from '@/api/generated/harvester-workday/harvester-workday';
-import { getUsers } from '@/api/generated/users/users';
-import { getWorkdays } from '@/api/generated/workdays/workdays';
+import {
+  harvestEntriesControllerFindAll,
+} from '@/api/generated/harvest-entries/harvest-entries';
+import {
+  harvesterWorkdayControllerFindAll,
+} from '@/api/generated/harvester-workday/harvester-workday';
+import { usersControllerFindMe } from '@/api/generated/users/users';
+import { workdaysControllerFindAll } from '@/api/generated/workdays/workdays';
 import { db } from '@/db/client';
 import { getActiveWorkday } from '@/db/queries';
 import { harvestEntries, harvesterWorkday, workdays } from '@/db/schema';
@@ -15,10 +19,8 @@ import { harvestEntries, harvesterWorkday, workdays } from '@/db/schema';
 // nunca se hubiera borrado — marcado `synced: true` porque, por definición,
 // si está en el server ya está sincronizado.
 async function recoverFromServer(uid: string): Promise<void> {
-  const { usersControllerFindMe } = getUsers();
   const me = await usersControllerFindMe();
 
-  const { workdaysControllerFindAll } = getWorkdays();
   const openWorkdays = await workdaysControllerFindAll({ status: 'OPEN' });
   const mine = openWorkdays.find((workday) => workday.recorderId === me._id);
   if (!mine) {
@@ -27,8 +29,6 @@ async function recoverFromServer(uid: string): Promise<void> {
 
   const localId = mine.clientEntryId;
 
-  const { harvesterWorkdayControllerFindAll } = getHarvesterWorkday();
-  const { harvestEntriesControllerFindAll } = getHarvestEntries();
   const [rosterRows, entryRows] = await Promise.all([
     harvesterWorkdayControllerFindAll({ workdayId: mine._id }),
     harvestEntriesControllerFindAll({ workdayId: mine._id }),

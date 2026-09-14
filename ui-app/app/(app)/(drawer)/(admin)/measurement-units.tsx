@@ -12,7 +12,11 @@ import {
   TextInput,
 } from 'react-native-paper';
 import type { FindMeasurementUnitResponseDto } from '@/api/generated/novaFarmAPI.schemas';
-import { getMeasurementUnits } from '@/api/generated/measurement-units/measurement-units';
+import {
+  measurementUnitsControllerCreate,
+  measurementUnitsControllerFindAll,
+  measurementUnitsControllerUpdate,
+} from '@/api/generated/measurement-units/measurement-units';
 import { KeyboardAwareDialog } from '@/components/KeyboardAwareDialog';
 import { OptionSelector } from '@/components/OptionSelector';
 import { Screen } from '@/components/Screen';
@@ -44,7 +48,6 @@ export default function MeasurementUnitsScreen() {
   async function loadUnits() {
     setLoading(true);
     try {
-      const { measurementUnitsControllerFindAll } = getMeasurementUnits();
       setUnits(await measurementUnitsControllerFindAll());
     } catch (err) {
       setError(getErrorMessage(err));
@@ -100,8 +103,6 @@ export default function MeasurementUnitsScreen() {
     setError(null);
     setSaving(true);
     try {
-      const { measurementUnitsControllerCreate, measurementUnitsControllerUpdate } =
-        getMeasurementUnits();
       const payload = {
         name: name.trim(),
         mode,
@@ -128,7 +129,6 @@ export default function MeasurementUnitsScreen() {
     setTogglingId(unit._id);
     setError(null);
     try {
-      const { measurementUnitsControllerUpdate } = getMeasurementUnits();
       await measurementUnitsControllerUpdate(unit._id, {
         active: !unit.active,
       });

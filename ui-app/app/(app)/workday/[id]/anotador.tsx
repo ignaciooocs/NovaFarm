@@ -39,6 +39,7 @@ import {
   sanitizeDecimalInput,
 } from '@/lib/format';
 import { generateLocalId } from '@/lib/id';
+import { isFromPreviousDay } from '@/lib/workdayDate';
 import { usePalette } from '@/stores';
 import { spacing, TOUCH_TARGET_MIN } from '@/theme';
 
@@ -118,6 +119,9 @@ export default function AnotadorScreen() {
   } | null>(null);
   const [measureInput, setMeasureInput] = useState('');
   const [savingMeasure, setSavingMeasure] = useState(false);
+  // Solo para el aviso de "esta jornada es de otro día" — el resto de la
+  // pantalla no necesita la fecha, por eso no estaba guardada.
+  const [workdayDate, setWorkdayDate] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -130,6 +134,7 @@ export default function AnotadorScreen() {
         setError(strings.errors.generic);
         return;
       }
+      setWorkdayDate(workdayRow.date);
 
       const [units, harvestersResult, rosterRows, entryRows] =
         await Promise.all([
@@ -444,6 +449,18 @@ export default function AnotadorScreen() {
   return (
     <Screen edges={['bottom', 'left', 'right']}>
       <Stack.Screen options={{ headerShown: true, title: strings.anotador.title }} />
+
+      {workdayDate && isFromPreviousDay(workdayDate) ? (
+        <Text style={styles.previousDayWarning}>
+          {strings.workday.unclosed.recordingOn(
+            new Date(workdayDate).toLocaleDateString('es-CL', {
+              weekday: 'long',
+              day: 'numeric',
+              month: 'long',
+            }),
+          )}
+        </Text>
+      ) : null}
 
       <View style={styles.summaryCard}>
         <Text style={styles.summaryLabel}>{strings.anotador.grandTotal}</Text>
@@ -782,6 +799,14 @@ function createStyles(colors: ReturnType<typeof usePalette>) {
     // invitación (Ajustes) y el total de Cerrar Jornada. Compacto a
     // propósito: acá abajo va el roster con los botones de anotar, que es
     // lo que de verdad necesita el espacio vertical.
+    // Una línea de texto ámbar, no un banner con fondo: el espacio vertical
+    // de esta pantalla es para el roster y los botones de anotar, y la
+    // jornada no está rota — solo es de otro día.
+    previousDayWarning: {
+      color: colors.warning,
+      fontWeight: '600',
+      marginBottom: spacing.sm,
+    },
     summaryCard: {
       backgroundColor: colors.primarySoft,
       borderRadius: 16,

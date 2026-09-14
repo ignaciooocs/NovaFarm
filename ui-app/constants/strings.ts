@@ -113,6 +113,24 @@ export const strings = {
       count === 1
         ? 'Tienes 1 registro sin sincronizar. Sincroniza antes de cerrar, o el total va a quedar incompleto.'
         : `Tienes ${count} registros sin sincronizar. Sincroniza antes de cerrar, o el total va a quedar incompleto.`,
+    // Una jornada que quedó abierta de un día anterior. Antes, tocar "Abrir
+    // Jornada" con una de ayer sin cerrar mandaba al Anotador de esa jornada
+    // sin decir nada — en terreno eso se lee como que la app se abrió en el
+    // día equivocado, y lo más probable es que se siga anotando ahí.
+    unclosed: {
+      eyebrow: 'Jornada sin cerrar',
+      title: 'Tienes una jornada sin cerrar',
+      openedYesterday: 'Quedó abierta desde ayer.',
+      openedOn: (dateLabel: string) => `Quedó abierta desde el ${dateLabel}.`,
+      help: 'Ciérrala para congelar su total. Recién después vas a poder abrir una nueva.',
+      goClose: 'Cerrar esa jornada',
+      goRecord: 'Seguir anotando en esa jornada',
+      // El Anotador no muestra la fecha en ninguna parte (no hace falta
+      // cuando es la de hoy), así que sin esta línea alguien puede anotar
+      // media mañana en la jornada de ayer sin una sola señal en pantalla.
+      recordingOn: (dateLabel: string) =>
+        `Estás anotando en la jornada del ${dateLabel}, que sigue sin cerrar.`,
+    },
   },
   // Pesaje de control (lib/weighing.ts): el peso real de una vuelta hecha
   // con un envase de peso fijo. Se compara contra lo que dice el envase,

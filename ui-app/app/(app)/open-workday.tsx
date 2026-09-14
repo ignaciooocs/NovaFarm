@@ -26,6 +26,7 @@ import { generateLocalId } from '@/lib/id';
 import { convertRate, type PayBasis } from '@/lib/pay';
 import { getErrorMessage } from '@/lib/errors';
 import { getActiveWorkdayWithRecovery } from '@/lib/recoverActiveWorkday';
+import { daysSinceLocalDay, isFromPreviousDay } from '@/lib/workdayDate';
 import { pushPendingWorkdays } from '@/lib/workdaySync';
 import {
   useActiveWorkdayStore,
@@ -37,6 +38,7 @@ import { colors, spacing } from '@/theme';
 
 type LocalProduct = typeof productsTable.$inferSelect;
 type LocalUnit = typeof measurementUnitsTable.$inferSelect;
+type LocalWorkday = typeof workdays.$inferSelect;
 
 export default function OpenWorkdayScreen() {
   const router = useRouter();
@@ -59,6 +61,9 @@ export default function OpenWorkdayScreen() {
   // dispositivo trabajando una jornada a la vez (modelo-datos.md); si ya
   // hay una, se redirige a esa en vez de dejar abrir una segunda.
   const [checkingActive, setCheckingActive] = useState(true);
+  // La jornada abierta, cuando quedó de un día anterior: ese caso no
+  // redirige, muestra un aviso (ver checkActive más abajo).
+  const [staleWorkday, setStaleWorkday] = useState<LocalWorkday | null>(null);
 
   const [products, setProducts] = useState<LocalProduct[]>([]);
   const [units, setUnits] = useState<LocalUnit[]>([]);
@@ -88,11 +93,20 @@ export default function OpenWorkdayScreen() {
     async function checkActive() {
       const activeWorkday = await getActiveWorkdayWithRecovery(uid!);
       if (activeWorkday) {
-        router.replace({
-          pathname: '/workday/[id]/anotador',
-          params: { id: activeWorkday.id },
-        });
-        return;
+        // Una jornada abierta *de hoy* es el caso normal: se tocó "Abrir
+        // Jornada" teniendo una en curso, y lo que la persona quiere es
+        // volver a anotar. Sigue derecho al Anotador, sin friccion extra.
+        if (!isFromPreviousDay(activeWorkday.date)) {
+          router.replace({
+            pathname: '/workday/[id]/anotador',
+            params: { id: activeWorkday.id },
+          });
+          return;
+        }
+        // De un día anterior: se le avisa en vez de redirigirlo en silencio
+        // (ver strings.workday.unclosed). Sigue sin poder abrir una segunda
+        // jornada — eso no cambió — pero ahora sabe por qué y qué hacer.
+        setStaleWorkday(activeWorkday);
       }
       setCheckingActive(false);
     }
@@ -101,7 +115,10 @@ export default function OpenWorkdayScreen() {
   }, [router, uid]);
 
   useEffect(() => {
-    if (checkingActive) {
+    // staleWorkday corta acá también: con una jornada de otro día sin
+    // cerrar no se va a mostrar el formulario, así que no hay catálogo que
+    // cargar.
+    if (checkingActive || staleWorkday) {
       return;
     }
 
@@ -145,7 +162,7 @@ export default function OpenWorkdayScreen() {
     }
 
     loadCatalogs();
-  }, [checkingActive]);
+  }, [checkingActive, staleWorkday]);
 
   const selectedUnit = useMemo(
     () => units.find((unit) => unit.id === unitId) ?? null,
@@ -277,6 +294,69 @@ export default function OpenWorkdayScreen() {
     } finally {
       setSaving(false);
     }
+  }
+
+  // Antes del spinner de catálogos a propósito: en cuanto se sabe que hay
+  // una jornada de otro día, no hay nada que esperar — este aviso no usa el
+  // catálogo, y hacerlo esperar solo retrasaría la única cosa que la persona
+  // tiene que leer acá.
+  if (staleWorkday) {
+    const daysAgo = daysSinceLocalDay(staleWorkday.date);
+    const dateLabel = new Date(staleWorkday.date).toLocaleDateString('es-CL', {
+      weekday: 'long',
+      day: 'numeric',
+      month: 'long',
+    });
+
+    return (
+      <Screen edges={['bottom', 'left', 'right']}>
+        <Stack.Screen
+          options={{ headerShown: true, title: strings.workday.openTitle }}
+        />
+        <View style={styles.emptyState}>
+          <Text style={styles.emptyEmoji}>📋</Text>
+          <Text variant="titleMedium" style={styles.emptyTitle}>
+            {strings.workday.unclosed.title}
+          </Text>
+          <Text style={styles.emptyHelper}>
+            {daysAgo === 1
+              ? strings.workday.unclosed.openedYesterday
+              : strings.workday.unclosed.openedOn(dateLabel)}{' '}
+            {strings.workday.unclosed.help}
+          </Text>
+          <Button
+            mode="contained"
+            onPress={() =>
+              router.replace({
+                pathname: '/workday/[id]/close',
+                params: { id: staleWorkday.id },
+              })
+            }
+            buttonColor={palette.primary}
+            contentStyle={styles.buttonContent}
+            style={styles.button}
+          >
+            {strings.workday.unclosed.goClose}
+          </Button>
+          {/* Secundario y no un segundo botón contained: cerrar es lo que
+              desbloquea abrir una nueva, pero volver al Anotador sigue
+              siendo legítimo (corregir una entrega antes de cerrar, o un
+              turno que de verdad cruzó la medianoche). */}
+          <Button
+            mode="text"
+            onPress={() =>
+              router.replace({
+                pathname: '/workday/[id]/anotador',
+                params: { id: staleWorkday.id },
+              })
+            }
+            textColor={palette.primary}
+          >
+            {strings.workday.unclosed.goRecord}
+          </Button>
+        </View>
+      </Screen>
+    );
   }
 
   if (checkingActive || loadingCatalogs) {

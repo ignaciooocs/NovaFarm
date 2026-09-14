@@ -22,10 +22,12 @@ import {
   workdays,
 } from '@/db/schema';
 import { syncCatalogs } from '@/lib/catalogSync';
+import { syncClaims } from '@/lib/claimsSync';
 import { syncFarmSettings } from '@/lib/farmSettings';
 import { formatKg } from '@/lib/format';
 import { useCapabilities } from '@/lib/permissions';
 import { getActiveWorkdayWithRecovery } from '@/lib/recoverActiveWorkday';
+import { isFromPreviousDay } from '@/lib/workdayDate';
 import { useActiveWorkdayStore, useAuthStore, usePalette } from '@/stores';
 import { spacing } from '@/theme';
 
@@ -210,6 +212,10 @@ export default function HomeScreen() {
   const [preview, setPreview] = useState<ActiveWorkdayPreview | null>(null);
   const [teammates, setTeammates] = useState<ActiveTeammateRow[]>([]);
   const [loading, setLoading] = useState(true);
+  // Una jornada que quedó abierta de un día anterior: Inicio es la pantalla
+  // donde la persona aterriza al abrir la app, así que es acá donde se tiene
+  // que enterar — sin esto, el preview de ayer se lee igual que el de hoy.
+  const isUnclosed = preview ? isFromPreviousDay(preview.date) : false;
 
   // useFocusEffect: al volver de cerrar/abrir una jornada (u otra pantalla)
   // Home sigue montado en el stack, hay que revisar de nuevo cada vez que
@@ -222,6 +228,10 @@ export default function HomeScreen() {
 
       syncCatalogs();
       syncFarmSettings();
+      // Si un admin le cambió los roles, el token de este dispositivo sigue
+      // siendo el viejo hasta que Firebase lo refresque solo (~1h). Acá se
+      // detecta y se fuerza el refresco — ver lib/claimsSync.ts.
+      syncClaims();
 
       let cancelled = false;
 
@@ -279,17 +289,30 @@ export default function HomeScreen() {
           >
             {preview ? (
               <View>
-                <Text style={styles.eyebrow}>{strings.home.activeWorkday}</Text>
+                <Text
+                  style={[styles.eyebrow, isUnclosed ? styles.eyebrowWarning : null]}
+                >
+                  {isUnclosed
+                    ? strings.workday.unclosed.eyebrow
+                    : strings.home.activeWorkday}
+                </Text>
                 <Text variant="titleLarge" style={styles.productName}>
                   {preview.productIcon} {preview.productName}
                 </Text>
-                <Text style={styles.dateText}>
+                <Text
+                  style={[styles.dateText, isUnclosed ? styles.dateTextTight : null]}
+                >
                   {new Date(preview.date).toLocaleDateString('es-CL', {
                     weekday: 'long',
                     day: 'numeric',
                     month: 'long',
                   })}
                 </Text>
+                {isUnclosed ? (
+                  <Text style={styles.unclosedHelp}>
+                    {strings.workday.unclosed.help}
+                  </Text>
+                ) : null}
 
                 <Text style={styles.totalLabel}>{strings.workday.totalKg}</Text>
                 <Text style={styles.totalValue}>
@@ -398,17 +421,49 @@ export default function HomeScreen() {
           </ScrollView>
 
           {preview ? (
-            <Button
-              mode="contained"
-              onPress={() =>
-                router.push({
-                  pathname: '/workday/[id]/anotador',
-                  params: { id: preview.id },
-                })
-              }
-            >
-              {strings.home.goToAnotador}
-            </Button>
+            // Con una jornada sin cerrar de otro día, la acción principal
+            // pasa a ser cerrarla (es lo que desbloquea abrir la de hoy),
+            // pero el Anotador queda igual de alcanzable en un toque: puede
+            // faltarle corregir una entrega antes de congelar el total.
+            isUnclosed ? (
+              <>
+                <Button
+                  mode="contained"
+                  onPress={() =>
+                    router.push({
+                      pathname: '/workday/[id]/close',
+                      params: { id: preview.id },
+                    })
+                  }
+                >
+                  {strings.workday.close}
+                </Button>
+                <Button
+                  mode="text"
+                  onPress={() =>
+                    router.push({
+                      pathname: '/workday/[id]/anotador',
+                      params: { id: preview.id },
+                    })
+                  }
+                  textColor={palette.primary}
+                >
+                  {strings.home.goToAnotador}
+                </Button>
+              </>
+            ) : (
+              <Button
+                mode="contained"
+                onPress={() =>
+                  router.push({
+                    pathname: '/workday/[id]/anotador',
+                    params: { id: preview.id },
+                  })
+                }
+              >
+                {strings.home.goToAnotador}
+              </Button>
+            )
           ) : null}
         </>
       )}
@@ -442,10 +497,20 @@ function createStyles(colors: ReturnType<typeof usePalette>) {
     marginBottom: spacing.xs,
   },
   productName: { fontWeight: '700' },
+  // El ámbar de warning, no el rojo de error: la jornada de ayer no está
+  // rota ni se perdió nada, solo falta cerrarla.
+  eyebrowWarning: { color: colors.warning },
   dateText: {
     color: colors.textSecondary,
     marginBottom: spacing.lg,
     textTransform: 'capitalize',
+  },
+  // Cuando abajo viene la explicación de por qué está sin cerrar, la fecha
+  // no lleva el aire de siempre — las dos líneas son una sola idea.
+  dateTextTight: { marginBottom: spacing.xs },
+  unclosedHelp: {
+    color: colors.textSecondary,
+    marginBottom: spacing.lg,
   },
   totalLabel: { color: colors.textSecondary, fontSize: 13 },
   totalValue: {

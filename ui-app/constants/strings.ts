@@ -289,6 +289,9 @@ export const strings = {
     manageRolesTitle: (name: string) => `Roles de ${name}`,
     manageRolesEmpty: 'Selecciona al menos un rol.',
     manageRolesAdminNote: 'Además de administrador, ¿qué otros roles tiene?',
+    // Secciones del detalle de una persona del equipo (team/[id].tsx).
+    memberRolesSection: 'Roles',
+    memberWorkdaySection: 'Jornada',
     productIconLabel: 'Ícono',
     productCustomIcon: 'Otro ícono',
     productCustomIconLabel: 'Escribe o pega un emoji',

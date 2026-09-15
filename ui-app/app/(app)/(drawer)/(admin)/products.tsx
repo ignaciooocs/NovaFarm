@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 import { FlatList, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
 import {
@@ -15,18 +15,23 @@ import {
   TextInput,
   TouchableRipple,
 } from 'react-native-paper';
+import { useQueryClient } from '@tanstack/react-query';
 import type { FindProductResponseDto } from '@/api/generated/novaFarmAPI.schemas';
 import {
-  productsControllerCreate,
-  productsControllerFindAll,
-  productsControllerFindAvailable,
-  productsControllerUpdate,
+  getProductsControllerFindAllQueryKey,
+  getProductsControllerFindAvailableQueryKey,
+  useProductsControllerCreate,
+  useProductsControllerFindAll,
+  useProductsControllerFindAvailable,
+  useProductsControllerUpdate,
 } from '@/api/generated/products/products';
 import { KeyboardAwareDialog } from '@/components/KeyboardAwareDialog';
 import { Screen } from '@/components/Screen';
 import { PRODUCT_ICON_OPTIONS } from '@/constants/productIcon';
 import { strings } from '@/constants/strings';
+import { syncCatalogs } from '@/lib/catalogSync';
 import { getErrorMessage } from '@/lib/errors';
+import { useRefreshOnFocus } from '@/lib/useRefreshOnFocus';
 import { usePalette } from '@/stores';
 import { spacing } from '@/theme';
 
@@ -44,8 +49,44 @@ import { spacing } from '@/theme';
 export default function ProductsScreen() {
   const palette = usePalette();
   const styles = useMemo(() => createStyles(palette), [palette]);
-  const [products, setProducts] = useState<FindProductResponseDto[]>([]);
-  const [loading, setLoading] = useState(true);
+  const queryClient = useQueryClient();
+
+  // Antes se pedía solo al montar, y como las pantallas del drawer quedan
+  // montadas, volver acá mostraba el catálogo como estaba la primera vez.
+  // Ahora se refresca en cada foco, con lo último visible mientras tanto.
+  const productsQuery = useProductsControllerFindAll();
+  // Lo que esta farm podría sumar: el catálogo de la app más lo que ella
+  // misma creó, menos lo que ya tiene. Lo arma el server (ver
+  // ProductsService.findAvailable) — acá no se filtra nada.
+  const availableQuery = useProductsControllerFindAvailable();
+  useRefreshOnFocus([productsQuery.queryKey, availableQuery.queryKey]);
+  const products = useMemo(() => productsQuery.data ?? [], [productsQuery.data]);
+  const available = availableQuery.data ?? [];
+
+  // Las dos listas cambian juntas: sumar un cultivo lo saca de "disponibles"
+  // y lo pone en la grilla.
+  function invalidateProducts() {
+    queryClient.invalidateQueries({
+      queryKey: getProductsControllerFindAllQueryKey(),
+    });
+    queryClient.invalidateQueries({
+      queryKey: getProductsControllerFindAvailableQueryKey(),
+    });
+    // Y la caché local: Abrir Jornada lee los cultivos de SQLite antes de que
+    // termine su propio sync, así que un cultivo recién creado o reactivado
+    // acá no aparecía ahí la primera vez. Dedupeada y nunca lanza.
+    syncCatalogs();
+  }
+
+  // Una mutación por flujo y no una compartida: cada una lleva su propio
+  // "guardando" y su propio error. Con una sola, tocar el ojo de un cultivo
+  // haría girar el botón Guardar del formulario, y el error de uno aparecería
+  // en el otro.
+  const createProduct = useProductsControllerCreate();
+  const updateProduct = useProductsControllerUpdate();
+  const toggleProduct = useProductsControllerUpdate();
+  const addSuggestion = useProductsControllerCreate();
+
   const [dialogOpen, setDialogOpen] = useState(false);
   // null = creando un cultivo nuevo; con valor = editando ese (mismo diálogo
   // para ambos casos, ver openCreateDialog/openEditDialog).
@@ -55,21 +96,23 @@ export default function ProductsScreen() {
   // Si el campo de emoji libre está desplegado. Se abre solo al editar un
   // cultivo cuyo emoji no está en el set (ver hasCustomIcon).
   const [customIconOpen, setCustomIconOpen] = useState(false);
-  const [saving, setSaving] = useState(false);
-  const [togglingId, setTogglingId] = useState<string | null>(null);
-  const [addingSuggestion, setAddingSuggestion] = useState<string | null>(null);
   // Confirmar antes de agregar — un chip es fácil de tocar sin querer al lado
   // de la grilla real.
   const [confirmingSuggestion, setConfirmingSuggestion] =
     useState<FindProductResponseDto | null>(null);
-  // Lo que esta farm podría sumar: el catálogo de la app más lo que ella
-  // misma creó, menos lo que ya tiene. Lo arma el server (ver
-  // ProductsService.findAvailable) — acá no se filtra nada.
-  const [available, setAvailable] = useState<FindProductResponseDto[]>([]);
   // Por qué un cultivo no se puede editar, cuando se toca uno bloqueado.
   const [lockedProduct, setLockedProduct] =
     useState<FindProductResponseDto | null>(null);
-  const [error, setError] = useState<string | null>(null);
+
+  const saving = createProduct.isPending || updateProduct.isPending;
+  // El del formulario va debajo del nombre (casi siempre es el de nombre
+  // duplicado); el resto, arriba de la grilla.
+  const dialogError = createProduct.error ?? updateProduct.error;
+  const screenError =
+    productsQuery.error ??
+    availableQuery.error ??
+    toggleProduct.error ??
+    addSuggestion.error;
 
   // FlatList con numColumns=2 + columnWrapperStyle "space-around": cuando la
   // última fila tiene un solo ítem (cantidad impar), ese ítem queda
@@ -88,28 +131,21 @@ export default function ProductsScreen() {
   const hasCustomIcon =
     icon.trim().length > 0 && !PRODUCT_ICON_OPTIONS.includes(icon.trim());
 
-  async function loadProducts() {
-    setLoading(true);
-    try {
-      const [own, addable] = await Promise.all([
-        productsControllerFindAll(),
-        productsControllerFindAvailable(),
-      ]);
-      setProducts(own);
-      setAvailable(addable);
-    } catch (err) {
-      setError(getErrorMessage(err));
-    } finally {
-      setLoading(false);
+  // El error de un intento anterior no tiene por qué aparecer al abrir el
+  // formulario de nuevo, ni quedarse mientras se corrige el nombre. Solo se
+  // limpia la que falló: reset() sobre una mutación en curso la desengancha,
+  // y su onSuccess (cerrar el formulario, refrescar la grilla) no correría.
+  function resetDialogErrors() {
+    if (createProduct.isError) {
+      createProduct.reset();
+    }
+    if (updateProduct.isError) {
+      updateProduct.reset();
     }
   }
 
-  useEffect(() => {
-    loadProducts();
-  }, []);
-
   function openCreateDialog() {
-    setError(null);
+    resetDialogErrors();
     setEditingId(null);
     setName('');
     // Sin ícono preseleccionado: la vista previa muestra un marcador neutro
@@ -120,7 +156,7 @@ export default function ProductsScreen() {
   }
 
   function openEditDialog(product: FindProductResponseDto) {
-    setError(null);
+    resetDialogErrors();
     setEditingId(product._id);
     setName(product.name);
     setIcon(product.icon);
@@ -130,33 +166,33 @@ export default function ProductsScreen() {
     setDialogOpen(true);
   }
 
-  async function handleSubmit() {
-    setError(null);
-    setSaving(true);
-    try {
-      // Emoji en blanco = dejarlo como estaba al editar, o dejar que el
-      // server aplique su propio default al crear — nunca se manda un string
-      // vacío (el server lo rechaza con @IsNotEmpty igual que name).
-      const trimmedIcon = icon.trim() || undefined;
-      if (editingId) {
-        await productsControllerUpdate(editingId, {
-          name: name.trim(),
-          icon: trimmedIcon,
-        });
-      } else {
-        // Sin `productId`: nace como cultivo de la comunidad, visible solo
-        // para esta farm hasta que se lo promueva al catálogo de la app.
-        await productsControllerCreate({
-          name: name.trim(),
-          icon: trimmedIcon,
-        });
-      }
+  // Al guardar, el formulario se cierra y la grilla se refresca por detrás —
+  // antes volvía a pedir todo con el spinner, que tapaba la grilla un
+  // instante después de cada guardado.
+  function handleSubmit() {
+    // Emoji en blanco = dejarlo como estaba al editar, o dejar que el
+    // server aplique su propio default al crear — nunca se manda un string
+    // vacío (el server lo rechaza con @IsNotEmpty igual que name).
+    const trimmedIcon = icon.trim() || undefined;
+    const onSuccess = () => {
       setDialogOpen(false);
-      await loadProducts();
-    } catch (err) {
-      setError(getErrorMessage(err));
-    } finally {
-      setSaving(false);
+      invalidateProducts();
+    };
+    if (editingId) {
+      updateProduct.mutate(
+        {
+          productId: editingId,
+          data: { name: name.trim(), icon: trimmedIcon },
+        },
+        { onSuccess },
+      );
+    } else {
+      // Sin `productId`: nace como cultivo de la comunidad, visible solo
+      // para esta farm hasta que se lo promueva al catálogo de la app.
+      createProduct.mutate(
+        { data: { name: name.trim(), icon: trimmedIcon } },
+        { onSuccess },
+      );
     }
   }
 
@@ -164,49 +200,44 @@ export default function ProductsScreen() {
   // producto global — es como una farm deja de cosechar algo sin afectar a
   // nadie más ni perder sus jornadas pasadas. Reversible, así que va sin
   // diálogo de confirmación.
-  async function handleToggleActive(product: FindProductResponseDto) {
-    setTogglingId(product._id);
-    setError(null);
-    try {
-      await productsControllerUpdate(product._id, {
-        active: !(product.active ?? true),
-      });
-      await loadProducts();
-    } catch (err) {
-      setError(getErrorMessage(err));
-    } finally {
-      setTogglingId(null);
-    }
+  function handleToggleActive(product: FindProductResponseDto) {
+    toggleProduct.mutate(
+      {
+        productId: product._id,
+        data: { active: !(product.active ?? true) },
+      },
+      { onSuccess: invalidateProducts },
+    );
   }
 
   // Tocar un chip solo abre la confirmación — el alta real pasa acá, y no
   // abre el formulario de nombre+emoji: el cultivo ya existe en el catálogo,
   // sumarlo es un solo paso.
-  async function handleConfirmAddSuggestion() {
+  function handleConfirmAddSuggestion() {
     if (!confirmingSuggestion) {
       return;
     }
-    const suggestion = confirmingSuggestion;
-    setAddingSuggestion(suggestion.name);
-    setError(null);
-    try {
-      // Solo el id: el nombre y el emoji los pone el server desde el producto
-      // global, así dos farms que suman el mismo cultivo quedan comparables.
-      await productsControllerCreate({ productId: suggestion._id });
-      setConfirmingSuggestion(null);
-      await loadProducts();
-    } catch (err) {
-      setError(getErrorMessage(err));
-    } finally {
-      setAddingSuggestion(null);
-    }
+    // Solo el id: el nombre y el emoji los pone el server desde el producto
+    // global, así dos farms que suman el mismo cultivo quedan comparables.
+    addSuggestion.mutate(
+      { data: { productId: confirmingSuggestion._id } },
+      {
+        onSuccess: () => {
+          setConfirmingSuggestion(null);
+          invalidateProducts();
+        },
+      },
+    );
   }
 
   return (
     <Screen edges={['bottom', 'left', 'right']}>
-      {error ? <HelperText type="error">{error}</HelperText> : null}
+      {screenError ? (
+        <HelperText type="error">{getErrorMessage(screenError)}</HelperText>
+      ) : null}
 
-      {loading ? (
+      {/* Solo la primera vez: después la grilla en caché se ve al tiro. */}
+      {productsQuery.isPending || availableQuery.isPending ? (
         <ActivityIndicator />
       ) : (
         <FlatList
@@ -283,7 +314,8 @@ export default function ProductsScreen() {
                   </View>
                 </Pressable>
 
-                {togglingId === item._id ? (
+                {toggleProduct.isPending &&
+                toggleProduct.variables?.productId === item._id ? (
                   <ActivityIndicator size="small" style={styles.tileToggle} />
                 ) : (
                   <IconButton
@@ -363,15 +395,19 @@ export default function ProductsScreen() {
                 // corrige el nombre hace parecer que sigue mal.
                 onChangeText={(text) => {
                   setName(text);
-                  setError(null);
+                  resetDialogErrors();
                 }}
-                error={error !== null}
+                error={dialogError != null}
                 style={styles.nameInput}
               />
               {/* Debajo del nombre y no al final del formulario: el error que
                   llega acá es casi siempre el de nombre duplicado, y al final
                   del área scrolleable se lo podía perder de vista. */}
-              {error ? <HelperText type="error">{error}</HelperText> : null}
+              {dialogError ? (
+                <HelperText type="error">
+                  {getErrorMessage(dialogError)}
+                </HelperText>
+              ) : null}
 
               <Text style={styles.sectionLabel}>
                 {strings.admin.productIconLabel}
@@ -475,7 +511,7 @@ export default function ProductsScreen() {
             </Button>
             <Button
               onPress={handleConfirmAddSuggestion}
-              loading={addingSuggestion !== null}
+              loading={addSuggestion.isPending}
             >
               {strings.common.add}
             </Button>

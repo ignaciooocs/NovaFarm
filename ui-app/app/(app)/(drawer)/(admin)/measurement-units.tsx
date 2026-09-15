@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useRef, useState } from 'react';
 import { FlatList, ScrollView, StyleSheet, View } from 'react-native';
 import {
   ActivityIndicator,
@@ -11,25 +11,52 @@ import {
   Text,
   TextInput,
 } from 'react-native-paper';
+import { useQueryClient } from '@tanstack/react-query';
 import type { FindMeasurementUnitResponseDto } from '@/api/generated/novaFarmAPI.schemas';
 import {
-  measurementUnitsControllerCreate,
-  measurementUnitsControllerFindAll,
-  measurementUnitsControllerUpdate,
+  getMeasurementUnitsControllerFindAllQueryKey,
+  useMeasurementUnitsControllerCreate,
+  useMeasurementUnitsControllerFindAll,
+  useMeasurementUnitsControllerUpdate,
 } from '@/api/generated/measurement-units/measurement-units';
 import { KeyboardAwareDialog } from '@/components/KeyboardAwareDialog';
 import { OptionSelector } from '@/components/OptionSelector';
 import { Screen } from '@/components/Screen';
 import { strings } from '@/constants/strings';
+import { syncCatalogs } from '@/lib/catalogSync';
 import { getErrorMessage } from '@/lib/errors';
 import { parseDecimalInput, sanitizeDecimalInput } from '@/lib/format';
+import { useRefreshOnFocus } from '@/lib/useRefreshOnFocus';
 import { colors, spacing } from '@/theme';
 
 type UnitMode = 'COUNT' | 'WEIGHT';
 
 export default function MeasurementUnitsScreen() {
-  const [units, setUnits] = useState<FindMeasurementUnitResponseDto[]>([]);
-  const [loading, setLoading] = useState(true);
+  const queryClient = useQueryClient();
+
+  // Antes se pedía solo al montar, y como las pantallas del drawer quedan
+  // montadas, volver acá mostraba la lista como estaba la primera vez. Ahora
+  // se refresca en cada foco, con lo último visible mientras tanto.
+  const unitsQuery = useMeasurementUnitsControllerFindAll();
+  useRefreshOnFocus([unitsQuery.queryKey]);
+  const units = unitsQuery.data ?? [];
+
+  // Una mutación por flujo: cada una con su propio "guardando" y su propio
+  // error — con una sola, tocar el ojo haría girar el Guardar del formulario.
+  const createUnit = useMeasurementUnitsControllerCreate();
+  const updateUnit = useMeasurementUnitsControllerUpdate();
+  const toggleUnit = useMeasurementUnitsControllerUpdate();
+
+  function onCatalogChanged() {
+    queryClient.invalidateQueries({
+      queryKey: getMeasurementUnitsControllerFindAllQueryKey(),
+    });
+    // Y la caché local: Abrir Jornada lee las unidades de SQLite antes de que
+    // termine su propio sync, así que una unidad recién creada o reactivada
+    // acá no aparecía ahí la primera vez. Dedupeada y nunca lanza.
+    syncCatalogs();
+  }
+
   const [dialogOpen, setDialogOpen] = useState(false);
   // null = creando una unidad nueva; con valor = editando esa unidad (mismo
   // diálogo para ambos casos, ver openCreateDialog/openEditDialog).
@@ -40,28 +67,27 @@ export default function MeasurementUnitsScreen() {
   // nada antes de empezar a escribir el nombre.
   const [mode, setMode] = useState<UnitMode>('COUNT');
   const [kgFactor, setKgFactor] = useState('');
-  const [saving, setSaving] = useState(false);
-  const [togglingId, setTogglingId] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
   const formScrollRef = useRef<ScrollView>(null);
 
-  async function loadUnits() {
-    setLoading(true);
-    try {
-      setUnits(await measurementUnitsControllerFindAll());
-    } catch (err) {
-      setError(getErrorMessage(err));
-    } finally {
-      setLoading(false);
+  const saving = createUnit.isPending || updateUnit.isPending;
+  const dialogError = createUnit.error ?? updateUnit.error;
+  // Antes el error solo se pintaba dentro del formulario: si fallaba el ojo
+  // (sin señal) o la carga de la lista, no aparecía nada en pantalla.
+  const screenError = unitsQuery.error ?? toggleUnit.error;
+
+  // Solo la que falló: reset() sobre una mutación en curso la desengancha, y
+  // su onSuccess (cerrar el formulario, refrescar) no correría.
+  function resetDialogErrors() {
+    if (createUnit.isError) {
+      createUnit.reset();
+    }
+    if (updateUnit.isError) {
+      updateUnit.reset();
     }
   }
 
-  useEffect(() => {
-    loadUnits();
-  }, []);
-
   function openCreateDialog() {
-    setError(null);
+    resetDialogErrors();
     setEditingId(null);
     setName('');
     setMode('COUNT');
@@ -70,7 +96,7 @@ export default function MeasurementUnitsScreen() {
   }
 
   function openEditDialog(unit: FindMeasurementUnitResponseDto) {
-    setError(null);
+    resetDialogErrors();
     setEditingId(unit._id);
     setName(unit.name);
     setMode(unit.mode);
@@ -99,45 +125,31 @@ export default function MeasurementUnitsScreen() {
     (mode === 'WEIGHT' || parsedKgFactor > 0) &&
     !saving;
 
-  async function handleSubmit() {
-    setError(null);
-    setSaving(true);
-    try {
-      const payload = {
-        name: name.trim(),
-        mode,
-        ...(mode === 'COUNT' ? { kgFactor: parsedKgFactor } : {}),
-      };
-      if (editingId) {
-        await measurementUnitsControllerUpdate(editingId, payload);
-      } else {
-        await measurementUnitsControllerCreate(payload);
-      }
+  function handleSubmit() {
+    const payload = {
+      name: name.trim(),
+      mode,
+      ...(mode === 'COUNT' ? { kgFactor: parsedKgFactor } : {}),
+    };
+    const onSuccess = () => {
       setDialogOpen(false);
-      await loadUnits();
-    } catch (err) {
-      setError(getErrorMessage(err));
-    } finally {
-      setSaving(false);
+      onCatalogChanged();
+    };
+    if (editingId) {
+      updateUnit.mutate({ id: editingId, data: payload }, { onSuccess });
+    } else {
+      createUnit.mutate({ data: payload }, { onSuccess });
     }
   }
 
   // Desactivar/reactivar es reversible y no afecta jornadas ya abiertas
   // (esas quedan referenciando el id igual, ver findActiveById en
   // server-app) — así que es un toggle directo, sin diálogo de confirmación.
-  async function handleToggleActive(unit: FindMeasurementUnitResponseDto) {
-    setTogglingId(unit._id);
-    setError(null);
-    try {
-      await measurementUnitsControllerUpdate(unit._id, {
-        active: !unit.active,
-      });
-      await loadUnits();
-    } catch (err) {
-      setError(getErrorMessage(err));
-    } finally {
-      setTogglingId(null);
-    }
+  function handleToggleActive(unit: FindMeasurementUnitResponseDto) {
+    toggleUnit.mutate(
+      { id: unit._id, data: { active: !unit.active } },
+      { onSuccess: onCatalogChanged },
+    );
   }
 
   return (
@@ -146,7 +158,11 @@ export default function MeasurementUnitsScreen() {
         {strings.admin.measurementUnitsTitle}
       </Text>
 
-      {loading ? (
+      {screenError ? (
+        <HelperText type="error">{getErrorMessage(screenError)}</HelperText>
+      ) : null}
+
+      {unitsQuery.isPending ? (
         <ActivityIndicator />
       ) : (
         <FlatList
@@ -166,7 +182,7 @@ export default function MeasurementUnitsScreen() {
                   {!item.active ? ` · ${strings.common.inactive}` : ''}
                 </Text>
               </View>
-              {togglingId === item._id ? (
+              {toggleUnit.isPending && toggleUnit.variables?.id === item._id ? (
                 <ActivityIndicator size="small" style={styles.rowActivity} />
               ) : (
                 <View style={styles.rowActions}>
@@ -263,7 +279,11 @@ export default function MeasurementUnitsScreen() {
                   keyboardType="decimal-pad"
                 />
               ) : null}
-              {error ? <HelperText type="error">{error}</HelperText> : null}
+              {dialogError ? (
+                <HelperText type="error">
+                  {getErrorMessage(dialogError)}
+                </HelperText>
+              ) : null}
             </ScrollView>
           </Dialog.ScrollArea>
           <Dialog.Actions>

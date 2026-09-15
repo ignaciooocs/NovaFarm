@@ -13,19 +13,23 @@ import {
   Text,
   TextInput,
 } from 'react-native-paper';
+import { useQueryClient } from '@tanstack/react-query';
 import type { FindHarvesterResponseDto } from '@/api/generated/novaFarmAPI.schemas';
 import {
-  harvestersControllerCreate,
-  harvestersControllerFindAll,
-  harvestersControllerUpdate,
+  getHarvestersControllerFindAllQueryKey,
+  useHarvestersControllerCreate,
+  useHarvestersControllerFindAll,
+  useHarvestersControllerUpdate,
 } from '@/api/generated/harvesters/harvesters';
 import { KeyboardAwareDialog } from '@/components/KeyboardAwareDialog';
 import { Screen } from '@/components/Screen';
 import { strings } from '@/constants/strings';
 import { db } from '@/db/client';
 import { harvestEntries } from '@/db/schema';
+import { syncCatalogs } from '@/lib/catalogSync';
 import { getErrorMessage } from '@/lib/errors';
 import { formatKg } from '@/lib/format';
+import { useRefreshOnFocus } from '@/lib/useRefreshOnFocus';
 import { useActiveWorkdayStore, usePalette } from '@/stores';
 import { colors, spacing } from '@/theme';
 
@@ -37,7 +41,30 @@ interface TodayTotal {
 export default function HarvestersScreen() {
   const palette = usePalette();
   const activeWorkdayId = useActiveWorkdayStore((state) => state.workdayId);
-  const [harvesters, setHarvesters] = useState<FindHarvesterResponseDto[]>([]);
+  const queryClient = useQueryClient();
+
+  // El catálogo del server, refrescado en cada foco. Antes cada foco prendía
+  // el spinner y la lista pestañeaba al volver (mismo problema que tenía el
+  // Anotador); ahora lo último se ve mientras se refresca.
+  const harvestersQuery = useHarvestersControllerFindAll();
+  useRefreshOnFocus([harvestersQuery.queryKey]);
+  const harvesters = harvestersQuery.data ?? [];
+
+  // Una mutación por flujo: cada una con su propio "guardando" y su propio
+  // error — con una sola, tocar el ojo haría girar el Guardar del formulario.
+  const createHarvester = useHarvestersControllerCreate();
+  const updateHarvester = useHarvestersControllerUpdate();
+  const toggleHarvester = useHarvestersControllerUpdate();
+
+  function onCatalogChanged() {
+    queryClient.invalidateQueries({
+      queryKey: getHarvestersControllerFindAllQueryKey(),
+    });
+    // Y la caché local: "Agregar cosechador" en el Anotador lee de SQLite, y
+    // sin esto un cosechador recién creado acá no aparecería ahí hasta la
+    // próxima visita a Inicio. Dedupeada y nunca lanza.
+    syncCatalogs();
+  }
   // Cuánto lleva cada cosechador en la jornada activa DE ESTE DISPOSITIVO
   // (si hay una) — se pide siempre de SQLite local, nunca del server, mismo
   // criterio que el Anotador: es la captura de este dispositivo, no un
@@ -47,7 +74,6 @@ export default function HarvestersScreen() {
   const [todayTotalsByHarvester, setTodayTotalsByHarvester] = useState<
     Record<string, TodayTotal>
   >({});
-  const [loading, setLoading] = useState(true);
   const [dialogOpen, setDialogOpen] = useState(false);
   // null = creando un cosechador nuevo; con valor = editando ese cosechador
   // (mismo diálogo para ambos casos, ver openCreateDialog/openEditDialog).
@@ -55,29 +81,20 @@ export default function HarvestersScreen() {
   const [firstName, setFirstName] = useState('');
   const [lastName, setLastName] = useState('');
   const [nickname, setNickname] = useState('');
-  const [saving, setSaving] = useState(false);
-  const [togglingId, setTogglingId] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
 
-  async function loadHarvesters() {
-    setLoading(true);
-    try {
-      setHarvesters(await harvestersControllerFindAll());
-    } catch (err) {
-      setError(getErrorMessage(err));
-    } finally {
-      setLoading(false);
-    }
-  }
+  const saving = createHarvester.isPending || updateHarvester.isPending;
+  const dialogError = createHarvester.error ?? updateHarvester.error;
+  // Antes el error solo se pintaba dentro del formulario: si fallaba el ojo
+  // (sin señal) o la carga de la lista, no aparecía nada en pantalla.
+  const screenError = harvestersQuery.error ?? toggleHarvester.error;
 
   // useFocusEffect (no un simple useEffect): al volver del Anotador después
   // de anotar entregas, esta pantalla sigue montada en el drawer — hay que
   // refrescar los totales de hoy cada vez que recupera foco, no solo al
-  // montarse la primera vez.
+  // montarse la primera vez. (La lista del server se refresca aparte, con
+  // useRefreshOnFocus.)
   useFocusEffect(
     useCallback(() => {
-      loadHarvesters();
-
       if (!activeWorkdayId) {
         setTodayTotalsByHarvester({});
         return;
@@ -105,8 +122,19 @@ export default function HarvestersScreen() {
     }, [activeWorkdayId]),
   );
 
+  // Solo la que falló: reset() sobre una mutación en curso la desengancha, y
+  // su onSuccess (cerrar el formulario, refrescar) no correría.
+  function resetDialogErrors() {
+    if (createHarvester.isError) {
+      createHarvester.reset();
+    }
+    if (updateHarvester.isError) {
+      updateHarvester.reset();
+    }
+  }
+
   function openCreateDialog() {
-    setError(null);
+    resetDialogErrors();
     setEditingId(null);
     setFirstName('');
     setLastName('');
@@ -115,7 +143,7 @@ export default function HarvestersScreen() {
   }
 
   function openEditDialog(harvester: FindHarvesterResponseDto) {
-    setError(null);
+    resetDialogErrors();
     setEditingId(harvester._id);
     setFirstName(harvester.firstName);
     setLastName(harvester.lastName);
@@ -126,50 +154,47 @@ export default function HarvestersScreen() {
   const canSubmit =
     firstName.trim().length > 0 && lastName.trim().length > 0 && !saving;
 
-  async function handleSubmit() {
-    setError(null);
-    setSaving(true);
-    try {
-      if (editingId) {
-        // null explícito (no undefined) borra un apodo existente si el
-        // campo quedó vacío — ver el comentario en harvesters.service.ts.
-        await harvestersControllerUpdate(editingId, {
-          firstName: firstName.trim(),
-          lastName: lastName.trim(),
-          nickname: nickname.trim() || null,
-        });
-      } else {
-        await harvestersControllerCreate({
-          firstName: firstName.trim(),
-          lastName: lastName.trim(),
-          nickname: nickname.trim() || undefined,
-        });
-      }
+  function handleSubmit() {
+    const onSuccess = () => {
       setDialogOpen(false);
-      await loadHarvesters();
-    } catch (err) {
-      setError(getErrorMessage(err));
-    } finally {
-      setSaving(false);
+      onCatalogChanged();
+    };
+    if (editingId) {
+      // null explícito (no undefined) borra un apodo existente si el
+      // campo quedó vacío — ver el comentario en harvesters.service.ts.
+      updateHarvester.mutate(
+        {
+          id: editingId,
+          data: {
+            firstName: firstName.trim(),
+            lastName: lastName.trim(),
+            nickname: nickname.trim() || null,
+          },
+        },
+        { onSuccess },
+      );
+    } else {
+      createHarvester.mutate(
+        {
+          data: {
+            firstName: firstName.trim(),
+            lastName: lastName.trim(),
+            nickname: nickname.trim() || undefined,
+          },
+        },
+        { onSuccess },
+      );
     }
   }
 
   // Desactivar/reactivar es reversible y no afecta jornadas ya abiertas
   // (esas quedan referenciando el id igual, ver findActiveById en
   // server-app) — así que es un toggle directo, sin diálogo de confirmación.
-  async function handleToggleActive(harvester: FindHarvesterResponseDto) {
-    setTogglingId(harvester._id);
-    setError(null);
-    try {
-      await harvestersControllerUpdate(harvester._id, {
-        active: !harvester.active,
-      });
-      await loadHarvesters();
-    } catch (err) {
-      setError(getErrorMessage(err));
-    } finally {
-      setTogglingId(null);
-    }
+  function handleToggleActive(harvester: FindHarvesterResponseDto) {
+    toggleHarvester.mutate(
+      { id: harvester._id, data: { active: !harvester.active } },
+      { onSuccess: onCatalogChanged },
+    );
   }
 
   return (
@@ -178,7 +203,11 @@ export default function HarvestersScreen() {
         {strings.admin.harvestersTitle}
       </Text>
 
-      {loading ? (
+      {screenError ? (
+        <HelperText type="error">{getErrorMessage(screenError)}</HelperText>
+      ) : null}
+
+      {harvestersQuery.isPending ? (
         <ActivityIndicator />
       ) : (
         <FlatList
@@ -210,7 +239,8 @@ export default function HarvestersScreen() {
                     </Text>
                   ) : null}
                 </View>
-                {togglingId === item._id ? (
+                {toggleHarvester.isPending &&
+                toggleHarvester.variables?.id === item._id ? (
                   <ActivityIndicator
                     size="small"
                     style={styles.rowActivity}
@@ -269,7 +299,9 @@ export default function HarvestersScreen() {
               value={nickname}
               onChangeText={setNickname}
             />
-            {error ? <HelperText type="error">{error}</HelperText> : null}
+            {dialogError ? (
+              <HelperText type="error">{getErrorMessage(dialogError)}</HelperText>
+            ) : null}
           </Dialog.Content>
           <Dialog.Actions>
             <Button onPress={() => setDialogOpen(false)}>

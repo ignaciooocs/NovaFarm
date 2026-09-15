@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useMemo, useState } from 'react';
 import { FlatList, StyleSheet, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
@@ -14,17 +14,23 @@ import {
   TouchableRipple,
 } from 'react-native-paper';
 import type { FindUserResponseDto } from '@/api/generated/novaFarmAPI.schemas';
+import { useQueryClient } from '@tanstack/react-query';
 import {
-  usersControllerFindAll,
-  usersControllerUpdateRoles,
+  getUsersControllerFindAllQueryKey,
+  getUsersControllerFindMeQueryKey,
+  useUsersControllerFindAll,
+  useUsersControllerUpdateRoles,
 } from '@/api/generated/users/users';
-import { workdaysControllerFindAll } from '@/api/generated/workdays/workdays';
+import { useWorkdaysControllerFindAll } from '@/api/generated/workdays/workdays';
 import { Screen } from '@/components/Screen';
 import { strings } from '@/constants/strings';
 import { getErrorMessage } from '@/lib/errors';
 import { useCapabilities } from '@/lib/permissions';
+import { useRefreshOnFocus } from '@/lib/useRefreshOnFocus';
 import { usePalette } from '@/stores';
 import { colors, spacing } from '@/theme';
+
+const OPEN_WORKDAYS = { status: 'OPEN' } as const;
 
 type AssignableRole = 'recorder' | 'supervisor';
 const ASSIGNABLE_ROLES: AssignableRole[] = ['recorder', 'supervisor'];
@@ -57,19 +63,32 @@ export default function TeamScreen() {
   const router = useRouter();
   const palette = usePalette();
   const canManageTeamRoles = useCapabilities().canManageTeamRoles;
-  const [users, setUsers] = useState<FindUserResponseDto[]>([]);
+  const queryClient = useQueryClient();
+
+  // Antes se pedía solo al montar, y como las pantallas del drawer quedan
+  // montadas, volver acá mostraba datos viejos (ej. sin el "Jornada activa"
+  // de alguien que acababa de abrir). Ahora se refresca en cada foco, con lo
+  // último visible mientras tanto.
+  const usersQuery = useUsersControllerFindAll();
+  const openWorkdaysQuery = useWorkdaysControllerFindAll(OPEN_WORKDAYS);
+  useRefreshOnFocus([usersQuery.queryKey, openWorkdaysQuery.queryKey]);
+
   // _id de la jornada abierta de cada recorder, si tiene una ahora mismo —
   // resuelto vía GET /workdays?status=OPEN (mismo endpoint que usa Home,
-  // solo que acá se pide para toda la farm en vez de por cuenta) en vez de
-  // agregar un campo nuevo a /users. El id sirve para poder tocar la fila y
-  // ver esa jornada (history/[id].tsx, que ya sabe mostrar tanto jornadas
-  // cerradas como abiertas). Jornadas en modo invitado (recorderId null) no
-  // marcan a nadie, a propósito — no hay a quién atribuírselas.
-  const [activeWorkdayByRecorder, setActiveWorkdayByRecorder] = useState<
-    Map<string, string>
-  >(new Map());
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  // y con la misma query key, así que comparten caché) en vez de agregar un
+  // campo nuevo a /users. El id sirve para poder tocar la fila y ver esa
+  // jornada (history/[id].tsx, que ya sabe mostrar tanto jornadas cerradas
+  // como abiertas). Jornadas en modo invitado (recorderId null) no marcan a
+  // nadie, a propósito — no hay a quién atribuírselas.
+  const activeWorkdayByRecorder = useMemo(
+    () =>
+      new Map(
+        (openWorkdaysQuery.data ?? [])
+          .filter((workday) => workday.recorderId)
+          .map((workday) => [workday.recorderId as string, workday._id]),
+      ),
+    [openWorkdaysQuery.data],
+  );
 
   // Reemplazo completo del array de roles (el admin manda el set final
   // deseado) — checkboxes en vez del toggle binario recorder<->supervisor
@@ -77,33 +96,25 @@ export default function TeamScreen() {
   const [rolesEditTarget, setRolesEditTarget] =
     useState<FindUserResponseDto | null>(null);
   const [editRoles, setEditRoles] = useState<Set<AssignableRole>>(new Set());
-  const [savingRoles, setSavingRoles] = useState(false);
 
-  async function load() {
-    setLoading(true);
-    try {
-      const [usersResult, openWorkdays] = await Promise.all([
-        usersControllerFindAll(),
-        workdaysControllerFindAll({ status: 'OPEN' }),
-      ]);
-      setUsers(usersResult);
-      setActiveWorkdayByRecorder(
-        new Map(
-          openWorkdays
-            .filter((workday) => workday.recorderId)
-            .map((workday) => [workday.recorderId as string, workday._id]),
-        ),
-      );
-    } catch (err) {
-      setError(getErrorMessage(err));
-    } finally {
-      setLoading(false);
-    }
-  }
+  const updateRoles = useUsersControllerUpdateRoles({
+    mutation: {
+      onSuccess: () => {
+        setRolesEditTarget(null);
+        // Las dos: /users es esta lista, y /users/me cambia si el admin se
+        // editó a sí mismo (caso "admin que también anota"). No comparten
+        // prefijo — las keys se comparan por elemento, no como texto.
+        queryClient.invalidateQueries({
+          queryKey: getUsersControllerFindAllQueryKey(),
+        });
+        queryClient.invalidateQueries({
+          queryKey: getUsersControllerFindMeQueryKey(),
+        });
+      },
+    },
+  });
 
-  useEffect(() => {
-    load();
-  }, []);
+  const error = updateRoles.error ?? usersQuery.error ?? openWorkdaysQuery.error;
 
   function openRolesEditor(user: FindUserResponseDto) {
     setRolesEditTarget(user);
@@ -128,7 +139,7 @@ export default function TeamScreen() {
     });
   }
 
-  async function handleConfirmRoles() {
+  function handleConfirmRoles() {
     if (!rolesEditTarget) {
       return;
     }
@@ -136,19 +147,10 @@ export default function TeamScreen() {
     if (!isAdminTarget && editRoles.size === 0) {
       return;
     }
-    setSavingRoles(true);
-    setError(null);
-    try {
-      await usersControllerUpdateRoles(rolesEditTarget._id, {
-        roles: Array.from(editRoles),
-      });
-      setRolesEditTarget(null);
-      await load();
-    } catch (err) {
-      setError(getErrorMessage(err));
-    } finally {
-      setSavingRoles(false);
-    }
+    updateRoles.mutate({
+      id: rolesEditTarget._id,
+      data: { roles: Array.from(editRoles) },
+    });
   }
 
   return (
@@ -157,13 +159,18 @@ export default function TeamScreen() {
         {strings.admin.teamTitle}
       </Text>
 
-      {error ? <HelperText type="error">{error}</HelperText> : null}
+      {error ? (
+        <HelperText type="error">{getErrorMessage(error)}</HelperText>
+      ) : null}
 
-      {loading ? (
+      {/* Espera las dos, igual que antes: sin la de jornadas, la lista
+          aparecería y las marcas de "Jornada activa" saltarían un instante
+          después. Solo la primera vez — después hay caché. */}
+      {usersQuery.isPending || openWorkdaysQuery.isPending ? (
         <ActivityIndicator />
       ) : (
         <FlatList
-          data={users}
+          data={usersQuery.data ?? []}
           keyExtractor={(item) => item._id}
           ListEmptyComponent={<Text>{strings.admin.emptyList}</Text>}
           renderItem={({ item }) => {
@@ -274,7 +281,7 @@ export default function TeamScreen() {
             </Button>
             <Button
               onPress={handleConfirmRoles}
-              loading={savingRoles}
+              loading={updateRoles.isPending}
               disabled={
                 editRoles.size === 0 &&
                 !rolesEditTarget?.roles.includes('admin')

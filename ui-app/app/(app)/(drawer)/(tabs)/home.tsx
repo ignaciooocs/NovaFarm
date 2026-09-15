@@ -9,7 +9,12 @@ import {
   Text,
   TouchableRipple,
 } from 'react-native-paper';
-import { workdaysControllerFindAll } from '@/api/generated/workdays/workdays';
+import type { FindWorkdayResponseDto } from '@/api/generated/novaFarmAPI.schemas';
+import {
+  getUsersControllerFindMeQueryKey,
+  useUsersControllerFindMe,
+} from '@/api/generated/users/users';
+import { useWorkdaysControllerFindAll } from '@/api/generated/workdays/workdays';
 import { Screen } from '@/components/Screen';
 import { DEFAULT_PRODUCT_ICON } from '@/constants/productIcon';
 import { strings } from '@/constants/strings';
@@ -25,8 +30,10 @@ import { syncCatalogs } from '@/lib/catalogSync';
 import { syncClaims } from '@/lib/claimsSync';
 import { syncFarmSettings } from '@/lib/farmSettings';
 import { formatKg } from '@/lib/format';
+import { readProductsById, type ProductInfo } from '@/lib/localCatalogNames';
 import { useCapabilities } from '@/lib/permissions';
 import { getActiveWorkdayWithRecovery } from '@/lib/recoverActiveWorkday';
+import { useRefreshOnFocus } from '@/lib/useRefreshOnFocus';
 import { isFromPreviousDay } from '@/lib/workdayDate';
 import { useActiveWorkdayStore, useAuthStore, usePalette } from '@/stores';
 import { spacing } from '@/theme';
@@ -145,55 +152,37 @@ async function loadActiveWorkdayPreview(
 // no necesitó cambios: `GET /workdays?status=OPEN` ya lo puede llamar
 // cualquier miembro de la farm (FarmScopeGuard, no RolesGuard), y
 // `recorderName` ya viene resuelto en la respuesta (se agregó para el
-// Historial). Si falla (sin conexión, etc.) se resuelve a lista vacía en
-// vez de tirar error — es una sección secundaria, no bloquea el resto de
-// Home.
-async function loadActiveTeammates(
-  currentUid: string,
-): Promise<ActiveTeammateRow[]> {
-  try {
-    // Espera el mismo syncCatalogs() que Home ya dispara al entrar en foco
-    // (dedupeado por su propio guard `inFlight`, así que esto no dispara un
-    // segundo fetch) — sin esto, esta función podía leer la caché local de
-    // products *antes* de que el sync la terminara de escribir, mostrando el
-    // fallback genérico (🍎 + el _id crudo como "nombre") para una fruta de
-    // un compañero que este dispositivo todavía no había sincronizado (bug
-    // real, encontrado en dispositivo: se veía bien recién la segunda vez
-    // que se visitaba Home, una vez que el sync ya había terminado).
-    await syncCatalogs();
-    const [openWorkdays, productRows] = await Promise.all([
-      workdaysControllerFindAll({ status: 'OPEN' }),
-      db.select().from(products),
-    ]);
-
-    const productsById: Record<string, { name: string; icon: string }> = {};
-    productRows.forEach((product) => {
-      productsById[product.id] = {
-        name: product.name,
-        icon: product.icon ?? DEFAULT_PRODUCT_ICON,
+// Historial). Si falla (sin conexión, etc.) la sección simplemente no se
+// muestra — es secundaria, no bloquea el resto de Home.
+//
+// Excluye las jornadas propias comparando `recorderId` contra el `_id` de
+// Mongo de la cuenta (GET /users/me). Antes lo comparaba contra el uid de
+// Firebase, que nunca coincide — `recorderId` es una referencia a `users` —,
+// así que la propia jornada aparecía en "quién más está en terreno".
+function buildActiveTeammates(
+  openWorkdays: FindWorkdayResponseDto[],
+  myUserId: string,
+  productsById: Record<string, ProductInfo>,
+): ActiveTeammateRow[] {
+  return openWorkdays
+    .filter(
+      (workday) =>
+        workday.recorderId &&
+        workday.recorderId !== myUserId &&
+        workday.recorderName,
+    )
+    .map((workday) => {
+      const product = productsById[workday.productId];
+      return {
+        workdayServerId: workday._id,
+        recorderName: workday.recorderName!,
+        productName: product?.name ?? workday.productId,
+        productIcon: product?.icon ?? DEFAULT_PRODUCT_ICON,
       };
     });
-
-    return openWorkdays
-      .filter(
-        (workday) =>
-          workday.recorderId &&
-          workday.recorderId !== currentUid &&
-          workday.recorderName,
-      )
-      .map((workday) => {
-        const product = productsById[workday.productId];
-        return {
-          workdayServerId: workday._id,
-          recorderName: workday.recorderName!,
-          productName: product?.name ?? workday.productId,
-          productIcon: product?.icon ?? DEFAULT_PRODUCT_ICON,
-        };
-      });
-  } catch {
-    return [];
-  }
 }
+
+const OPEN_WORKDAYS = { status: 'OPEN' } as const;
 
 export default function HomeScreen() {
   const router = useRouter();
@@ -209,12 +198,42 @@ export default function HomeScreen() {
   const palette = usePalette();
   const styles = useMemo(() => createStyles(palette), [palette]);
   const [preview, setPreview] = useState<ActiveWorkdayPreview | null>(null);
-  const [teammates, setTeammates] = useState<ActiveTeammateRow[]>([]);
+  // Solo cubre la primera carga del preview (local). Las recargas al volver a
+  // Home actualizan sin prender el spinner — mismo arreglo que el Anotador:
+  // si no, la pantalla entera pestañea cada vez que se vuelve a ella.
   const [loading, setLoading] = useState(true);
   // Una jornada que quedó abierta de un día anterior: Inicio es la pantalla
   // donde la persona aterriza al abrir la app, así que es acá donde se tiene
   // que enterar — sin esto, el preview de ayer se lee igual que el de hoy.
   const isUnclosed = preview ? isFromPreviousDay(preview.date) : false;
+
+  // "Equipo activo ahora", separado del preview a propósito: antes Home
+  // entera esperaba esta petición antes de mostrar la jornada propia, que es
+  // local — con señal mala, hasta 15s de spinner para algo que SQLite tiene
+  // al instante. Ahora el preview sale primero y esta sección aparece cuando
+  // responde la red. Comparte caché con Mi equipo (misma query key).
+  const openWorkdaysQuery = useWorkdaysControllerFindAll(OPEN_WORKDAYS);
+  useRefreshOnFocus([openWorkdaysQuery.queryKey]);
+  // Solo se usa el _id, que no cambia nunca: staleTime infinito para que
+  // este observador no la vuelva a pedir cada vez que la app vuelve al
+  // frente. (Perfil usa la misma key con su propio staleTime.)
+  const meQuery = useUsersControllerFindMe({
+    // Los tipos de orval piden la key cuando se pasan opciones; es la misma
+    // que el hook usaría solo.
+    query: { queryKey: getUsersControllerFindMeQueryKey(), staleTime: Infinity },
+  });
+  const [productsById, setProductsById] = useState(readProductsById);
+  const teammates = useMemo(
+    () =>
+      openWorkdaysQuery.data && meQuery.data
+        ? buildActiveTeammates(
+            openWorkdaysQuery.data,
+            meQuery.data._id,
+            productsById,
+          )
+        : [],
+    [openWorkdaysQuery.data, meQuery.data, productsById],
+  );
 
   // useFocusEffect: al volver de cerrar/abrir una jornada (u otra pantalla)
   // Home sigue montado en el stack, hay que revisar de nuevo cada vez que
@@ -225,17 +244,26 @@ export default function HomeScreen() {
         return;
       }
 
-      syncCatalogs();
+      let cancelled = false;
+
+      // Los nombres de cultivo se releen recién cuando termina el sync de
+      // catálogos (dedupeado por su propio guard `inFlight`): si se leyeran
+      // antes, un cultivo de un compañero que este dispositivo todavía no
+      // tenía se mostraría con el fallback genérico (🍎 + el _id crudo) — bug
+      // real, encontrado en dispositivo, se veía bien recién la segunda vez
+      // que se visitaba Home.
+      syncCatalogs().then(() => {
+        if (!cancelled) {
+          setProductsById(readProductsById());
+        }
+      });
       syncFarmSettings();
       // Si un admin le cambió los roles, el token de este dispositivo sigue
       // siendo el viejo hasta que Firebase lo refresque solo (~1h). Acá se
       // detecta y se fuerza el refresco — ver lib/claimsSync.ts.
       syncClaims();
 
-      let cancelled = false;
-
       (async () => {
-        setLoading(true);
         try {
           const workday = await getActiveWorkdayWithRecovery(uid);
           if (cancelled) {
@@ -243,23 +271,16 @@ export default function HomeScreen() {
           }
           setActiveWorkdayId(workday?.id ?? null);
 
-          // Ninguna de las dos debe poder dejar la pantalla pegada en el
-          // spinner para siempre si falla — loadActiveTeammates ya se
-          // resuelve a [] sola por dentro, pero loadActiveWorkdayPreview no
-          // tenía ese resguardo (bug real, encontrado en dispositivo:
-          // cualquier error acá dejaba `loading` en true para siempre, sin
-          // ningún try/catch/finally que lo bajara).
-          const [loadedPreview, loadedTeammates] = await Promise.all([
-            workday
-              ? loadActiveWorkdayPreview(workday.id).catch(() => null)
-              : Promise.resolve(null),
-            loadActiveTeammates(uid),
-          ]);
+          // El .catch() no es decorativo: cualquier error acá sin él dejaba
+          // `loading` en true para siempre (bug real, encontrado en
+          // dispositivo).
+          const loadedPreview = workday
+            ? await loadActiveWorkdayPreview(workday.id).catch(() => null)
+            : null;
           if (cancelled) {
             return;
           }
           setPreview(loadedPreview);
-          setTeammates(loadedTeammates);
         } finally {
           if (!cancelled) {
             setLoading(false);

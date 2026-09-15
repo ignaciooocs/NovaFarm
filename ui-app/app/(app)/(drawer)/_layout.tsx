@@ -11,7 +11,11 @@ import type { DrawerContentComponentProps } from 'expo-router/drawer';
 import { signOut } from 'firebase/auth';
 import { Button, Dialog, Portal, Text } from 'react-native-paper';
 import { strings } from '@/constants/strings';
-import { clearLocalData, hasUnsyncedData } from '@/db/queries';
+import {
+  clearLocalData,
+  describeUnsyncedData,
+  hasUnsyncedData,
+} from '@/db/queries';
 import { auth } from '@/lib/firebase';
 import { useCapabilities } from '@/lib/permissions';
 import { useAuthStore, useFarmSettingsStore, usePalette } from '@/stores';
@@ -47,6 +51,10 @@ function DrawerContent(props: DrawerContentComponentProps) {
 
   async function handleLogoutPress() {
     const blocked = await hasUnsyncedData();
+    if (__DEV__ && blocked) {
+      // Qué quedó pendiente y de qué jornada — ver describeUnsyncedData().
+      console.log(`[logout] bloqueado · ${await describeUnsyncedData()}`);
+    }
     setLogoutDialog(blocked ? 'blocked-unsynced' : 'confirm');
   }
 

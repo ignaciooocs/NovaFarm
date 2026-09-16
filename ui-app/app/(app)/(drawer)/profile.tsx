@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { StyleSheet } from 'react-native';
 import {
   ActivityIndicator,
@@ -7,13 +7,18 @@ import {
   Text,
   TextInput,
 } from 'react-native-paper';
+import { useQueryClient } from '@tanstack/react-query';
 import {
-  usersControllerFindMe,
-  usersControllerUpdateMe,
+  getUsersControllerFindAllQueryKey,
+  getUsersControllerFindMeQueryKey,
+  useUsersControllerFindMe,
+  useUsersControllerUpdateMe,
 } from '@/api/generated/users/users';
 import { Screen } from '@/components/Screen';
 import { strings } from '@/constants/strings';
 import { getErrorMessage } from '@/lib/errors';
+import { rolesLabelFor } from '@/lib/teamRoles';
+import { useRefreshOnFocus } from '@/lib/useRefreshOnFocus';
 import { spacing } from '@/theme';
 
 // Solo perfil propio — editar los roles o desactivar la propia cuenta no
@@ -21,64 +26,44 @@ import { spacing } from '@/theme';
 // server: los roles tienen casos límite sin resolver, y active es una
 // acción de un admin sobre otra cuenta, no algo que uno se hace a sí mismo).
 export default function ProfileScreen() {
-  const [email, setEmail] = useState('');
-  const [roles, setRoles] = useState<Array<'admin' | 'recorder' | 'supervisor'>>(
-    [],
-  );
-  const [name, setName] = useState('');
-  const [nationalId, setNationalId] = useState('');
-  const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
-  const [saved, setSaved] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const queryClient = useQueryClient();
+  const meQuery = useUsersControllerFindMe();
+  useRefreshOnFocus([meQuery.queryKey]);
 
-  useEffect(() => {
-    async function load() {
-      setLoading(true);
-      try {
-        const user = await usersControllerFindMe();
-        setEmail(user.email);
-        setRoles(user.roles);
-        setName(user.name);
-        setNationalId(user.nationalId ?? '');
-      } catch (err) {
-        setError(getErrorMessage(err));
-      } finally {
-        setLoading(false);
-      }
-    }
+  // Lo que la persona escribió, o null si todavía no tocó ese campo. Mientras
+  // es null, el campo muestra lo del server y sigue sus refrescos; apenas
+  // escribe, manda lo escrito y un refresco ya no se lo pisa.
+  const [nameDraft, setNameDraft] = useState<string | null>(null);
+  const [nationalIdDraft, setNationalIdDraft] = useState<string | null>(null);
 
-    load();
-  }, []);
+  const updateMe = useUsersControllerUpdateMe({
+    mutation: {
+      onSuccess: () => {
+        // /users/me alimenta esta pantalla, y /users a Mi equipo, donde
+        // también sale el nombre.
+        queryClient.invalidateQueries({
+          queryKey: getUsersControllerFindMeQueryKey(),
+        });
+        queryClient.invalidateQueries({
+          queryKey: getUsersControllerFindAllQueryKey(),
+        });
+      },
+    },
+  });
 
-  function handleFieldChange(setter: (value: string) => void) {
+  function handleFieldChange(setDraft: (value: string) => void) {
     return (value: string) => {
-      setter(value);
-      setSaved(false);
+      setDraft(value);
+      // Volver a escribir apaga el "Guardado" y el error del intento
+      // anterior. Nunca sobre un guardado en curso: reset() lo desengancha y
+      // su onSuccess no correría.
+      if (updateMe.isSuccess || updateMe.isError) {
+        updateMe.reset();
+      }
     };
   }
 
-  // nationalId vacío se manda como null explícito (no undefined) para
-  // borrar uno que ya estaba guardado — ver el comentario en
-  // users.service.ts (updateMe) para el motivo ($unset vs $set).
-  async function handleSave() {
-    setSaving(true);
-    setSaved(false);
-    setError(null);
-    try {
-      await usersControllerUpdateMe({
-        name: name.trim(),
-        nationalId: nationalId.trim() || null,
-      });
-      setSaved(true);
-    } catch (err) {
-      setError(getErrorMessage(err));
-    } finally {
-      setSaving(false);
-    }
-  }
-
-  if (loading) {
+  if (meQuery.isPending) {
     return (
       <Screen edges={['bottom', 'left', 'right']}>
         <ActivityIndicator />
@@ -86,15 +71,34 @@ export default function ProfileScreen() {
     );
   }
 
-  const rolesLabel = roles
-    .map((role) =>
-      role === 'admin'
-        ? strings.admin.roleAdmin
-        : role === 'supervisor'
-          ? strings.admin.roleSupervisor
-          : strings.admin.roleRecorder,
-    )
-    .join(', ');
+  const me = meQuery.data;
+
+  // Sin datos no hay formulario. Antes se mostraba vacío con el error, y
+  // escribir un nombre y guardar mandaba el RUT vacío como null: borraba el
+  // que estaba guardado. La query se vuelve a pedir sola al reconectar o al
+  // volver a la pantalla.
+  if (!me) {
+    return (
+      <Screen edges={['bottom', 'left', 'right']}>
+        <Text variant="headlineMedium" style={styles.title}>
+          {strings.profile.title}
+        </Text>
+        <HelperText type="error">{getErrorMessage(meQuery.error)}</HelperText>
+      </Screen>
+    );
+  }
+
+  const name = nameDraft ?? me.name;
+  const nationalId = nationalIdDraft ?? me.nationalId ?? '';
+
+  // nationalId vacío se manda como null explícito (no undefined) para
+  // borrar uno que ya estaba guardado — ver el comentario en
+  // users.service.ts (updateMe) para el motivo ($unset vs $set).
+  function handleSave() {
+    updateMe.mutate({
+      data: { name: name.trim(), nationalId: nationalId.trim() || null },
+    });
+  }
 
   return (
     <Screen edges={['bottom', 'left', 'right']}>
@@ -102,30 +106,40 @@ export default function ProfileScreen() {
         {strings.profile.title}
       </Text>
 
-      <Text style={styles.readOnlyRow}>{email}</Text>
-      <Text style={styles.readOnlyRow}>{rolesLabel}</Text>
+      <Text style={styles.readOnlyRow}>{me.email}</Text>
+      <Text style={styles.readOnlyRow}>{rolesLabelFor(me.roles)}</Text>
+
+      {/* Un refresco que falla con datos en caché: el aviso va arriba, sin
+          tapar el formulario ni confundirse con un guardado fallido. */}
+      {meQuery.error ? (
+        <HelperText type="error">{getErrorMessage(meQuery.error)}</HelperText>
+      ) : null}
 
       <TextInput
         label={strings.common.name}
         value={name}
-        onChangeText={handleFieldChange(setName)}
+        onChangeText={handleFieldChange(setNameDraft)}
         style={styles.input}
       />
       <TextInput
         label={strings.profile.nationalIdLabel}
         value={nationalId}
-        onChangeText={handleFieldChange(setNationalId)}
+        onChangeText={handleFieldChange(setNationalIdDraft)}
         style={styles.input}
       />
 
-      {error ? <HelperText type="error">{error}</HelperText> : null}
-      {saved ? <HelperText type="info">{strings.profile.saved}</HelperText> : null}
+      {updateMe.error ? (
+        <HelperText type="error">{getErrorMessage(updateMe.error)}</HelperText>
+      ) : null}
+      {updateMe.isSuccess ? (
+        <HelperText type="info">{strings.profile.saved}</HelperText>
+      ) : null}
 
       <Button
         mode="contained"
         onPress={handleSave}
-        loading={saving}
-        disabled={!name.trim() || saving}
+        loading={updateMe.isPending}
+        disabled={!name.trim() || updateMe.isPending}
       >
         {strings.common.save}
       </Button>

@@ -12,9 +12,10 @@ import {
   Text,
   TextInput,
 } from 'react-native-paper';
+import { useQueryClient } from '@tanstack/react-query';
 import {
   getWorkdaysControllerFindAllQueryKey,
-  workdaysControllerClose,
+  useWorkdaysControllerClose,
 } from '@/api/generated/workdays/workdays';
 import { KeyboardAwareDialog } from '@/components/KeyboardAwareDialog';
 import { OptionSelector } from '@/components/OptionSelector';
@@ -40,7 +41,6 @@ import {
   type PayBasis,
 } from '@/lib/pay';
 import { summarizeWeighing, type WeighingSummary } from '@/lib/weighing';
-import { queryClient } from '@/lib/queryClient';
 import { pushPendingWorkdays } from '@/lib/workdaySync';
 import { usePalette } from '@/stores';
 import { colors, spacing } from '@/theme';
@@ -69,6 +69,7 @@ export default function CloseWorkdayScreen() {
   const router = useRouter();
   const palette = usePalette();
   const { id: workdayId } = useLocalSearchParams<{ id: string }>();
+  const queryClient = useQueryClient();
 
   const [workday, setWorkday] = useState<WorkdayRow | null>(null);
   const [productName, setProductName] = useState('');
@@ -83,7 +84,7 @@ export default function CloseWorkdayScreen() {
   const [pendingCount, setPendingCount] = useState(0);
   const [localTotalKg, setLocalTotalKg] = useState(0);
   const [loading, setLoading] = useState(true);
-  const [closing, setClosing] = useState(false);
+  // Solo el error de la tarifa: el del cierre es closeWorkday.error.
   const [error, setError] = useState<string | null>(null);
 
   const [payDialogOpen, setPayDialogOpen] = useState(false);
@@ -210,37 +211,42 @@ export default function CloseWorkdayScreen() {
     load();
   }, [load]);
 
-  async function handleClose() {
+  // Todo lo que sigue al cierre va en el onSuccess del hook y no en el de
+  // mutate(): el del hook corre aunque la pantalla ya no esté (si se volvió
+  // atrás mientras cerraba), y la jornada no puede quedar cerrada en el
+  // server y abierta en SQLite. Además, isPending sigue prendido hasta que
+  // termina, y si la escritura local falla la mutación queda en error —
+  // reintentar es seguro, el cierre del server es idempotente.
+  const closeWorkday = useWorkdaysControllerClose({
+    mutation: {
+      onSuccess: async (result) => {
+        await db
+          .update(workdays)
+          .set({
+            status: 'CLOSED',
+            finalTotalKg: result.finalTotalKg ?? null,
+          })
+          .where(eq(workdays.id, workdayId));
+
+        // Sin parámetros la key es el prefijo de todas las listas de
+        // jornadas (cerradas del Historial, abiertas de Inicio/Mi equipo,
+        // todas del detalle): la recién cerrada cambia de una a otra, y así
+        // ninguna pantalla la muestra en el lugar viejo mientras se refresca.
+        queryClient.invalidateQueries({
+          queryKey: getWorkdaysControllerFindAllQueryKey(),
+        });
+
+        router.replace('/home');
+      },
+    },
+  });
+
+  function handleClose() {
     if (!workday?.serverId) {
       return;
     }
-    setClosing(true);
     setError(null);
-    try {
-      const result = await workdaysControllerClose(workday.serverId);
-
-      await db
-        .update(workdays)
-        .set({
-          status: 'CLOSED',
-          finalTotalKg: result.finalTotalKg ?? null,
-        })
-        .where(eq(workdays.id, workdayId));
-
-      // Sin parámetros la key es el prefijo de todas las listas de jornadas
-      // (cerradas del Historial, abiertas de Inicio/Mi equipo, todas del
-      // detalle): la recién cerrada cambia de una a otra, y así ninguna
-      // pantalla la muestra en el lugar viejo mientras se refresca.
-      queryClient.invalidateQueries({
-        queryKey: getWorkdaysControllerFindAllQueryKey(),
-      });
-
-      router.replace('/home');
-    } catch (err) {
-      setError(getErrorMessage(err));
-    } finally {
-      setClosing(false);
-    }
+    closeWorkday.mutate({ id: workday.serverId });
   }
 
   function openPayDialog() {
@@ -259,6 +265,11 @@ export default function CloseWorkdayScreen() {
   async function savePay(payRate: number | null) {
     setSavingPay(true);
     setError(null);
+    // Un solo aviso a la vez, el del último intento (como antes). Nunca
+    // resetear un cierre en curso: se desengancharía su onSuccess.
+    if (closeWorkday.isError) {
+      closeWorkday.reset();
+    }
     try {
       const payBasis =
         payRate == null
@@ -294,6 +305,9 @@ export default function CloseWorkdayScreen() {
   const payDefined = hasPay(pay);
   const totalPay = sumPay(pay, roster);
   const dialogRate = payAmountInput ? Number(payAmountInput) : null;
+  const errorMessage = closeWorkday.error
+    ? getErrorMessage(closeWorkday.error)
+    : error;
 
   return (
     <Screen edges={['bottom', 'left', 'right']}>
@@ -426,7 +440,9 @@ export default function CloseWorkdayScreen() {
               <Text style={styles.blockedText}>
                 {strings.workday.pendingBeforeClose(pendingCount)}
               </Text>
-              {error ? <HelperText type="error">{error}</HelperText> : null}
+              {errorMessage ? (
+                <HelperText type="error">{errorMessage}</HelperText>
+              ) : null}
               <Button
                 mode="contained"
                 onPress={() => router.push('/sync')}
@@ -440,12 +456,14 @@ export default function CloseWorkdayScreen() {
               <Text style={styles.confirmText}>
                 {strings.workday.closeConfirm}
               </Text>
-              {error ? <HelperText type="error">{error}</HelperText> : null}
+              {errorMessage ? (
+                <HelperText type="error">{errorMessage}</HelperText>
+              ) : null}
               <Button
                 mode="contained"
                 onPress={handleClose}
-                loading={closing}
-                disabled={closing}
+                loading={closeWorkday.isPending}
+                disabled={closeWorkday.isPending}
                 style={styles.button}
               >
                 {strings.workday.close}

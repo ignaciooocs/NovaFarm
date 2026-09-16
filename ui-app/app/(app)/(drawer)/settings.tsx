@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { Pressable, Share, StyleSheet, View } from 'react-native';
 import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
 import * as Clipboard from 'expo-clipboard';
@@ -10,15 +10,18 @@ import {
   Switch,
   Text,
 } from 'react-native-paper';
+import { useQueryClient } from '@tanstack/react-query';
 import {
-  farmsControllerFindMe,
-  farmsControllerUpdateMe,
+  getFarmsControllerFindMeQueryKey,
+  useFarmsControllerFindMe,
+  useFarmsControllerUpdateMe,
 } from '@/api/generated/farms/farms';
 import { Screen } from '@/components/Screen';
 import { strings } from '@/constants/strings';
 import { getErrorMessage } from '@/lib/errors';
 import { useCapabilities } from '@/lib/permissions';
-import { usePalette, useThemeStore } from '@/stores';
+import { useRefreshOnFocus } from '@/lib/useRefreshOnFocus';
+import { useFarmSettingsStore, usePalette, useThemeStore } from '@/stores';
 import { colors, palettes, spacing, type PaletteName } from '@/theme';
 
 const PALETTE_NAMES = Object.keys(palettes) as PaletteName[];
@@ -28,60 +31,51 @@ export default function SettingsScreen() {
   const activePalette = useThemeStore((state) => state.palette);
   const setPalette = useThemeStore((state) => state.setPalette);
   const palette = usePalette();
+  const queryClient = useQueryClient();
 
-  const [farmName, setFarmName] = useState('');
-  const [invitationCode, setInvitationCode] = useState('');
-  const [recordersCanManageCatalog, setRecordersCanManageCatalog] =
-    useState(true);
-  const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const farmQuery = useFarmsControllerFindMe();
+  useRefreshOnFocus([farmQuery.queryKey]);
+  const farm = farmQuery.data;
   const [copied, setCopied] = useState(false);
 
-  useEffect(() => {
-    async function load() {
-      setLoading(true);
-      try {
-        const farm = await farmsControllerFindMe();
-        setFarmName(farm.name);
-        setInvitationCode(farm.invitationCode);
-        setRecordersCanManageCatalog(farm.recordersCanManageCatalog);
-      } catch (err) {
-        setError(getErrorMessage(err));
-      } finally {
-        setLoading(false);
-      }
-    }
-
-    load();
-  }, []);
-
-  // Optimista: cambia el switch al tiro, revierte si el server rechaza.
-  // Solo quien puede administrar la farm ve este control (ver el render de
+  // Solo quien puede administrar la farm ve el switch (ver el render de
   // abajo) — server-app igual lo vuelve a exigir vía RolesGuard en
   // PATCH /farms/me.
-  async function handleToggle(value: boolean) {
-    const previous = recordersCanManageCatalog;
-    setRecordersCanManageCatalog(value);
-    setSaving(true);
-    setError(null);
-    try {
-      await farmsControllerUpdateMe({ recordersCanManageCatalog: value });
-    } catch (err) {
-      setRecordersCanManageCatalog(previous);
-      setError(getErrorMessage(err));
-    } finally {
-      setSaving(false);
-    }
+  const updateFarm = useFarmsControllerUpdateMe({
+    mutation: {
+      // Un refresco que ya iba en camino podría llegar después del guardado
+      // con el valor viejo y devolver el switch atrás.
+      onMutate: () =>
+        queryClient.cancelQueries({
+          queryKey: getFarmsControllerFindMeQueryKey(),
+        }),
+      onSuccess: (updated) => {
+        // La respuesta ya es la farm actualizada: se escribe directo en la
+        // caché en vez de invalidar. Invalidando, al terminar el guardado el
+        // switch volvería un instante al valor viejo hasta que llegue el
+        // refresco.
+        queryClient.setQueryData(getFarmsControllerFindMeQueryKey(), updated);
+        // Y en la copia local que decide si el menú muestra los catálogos
+        // (lib/farmSettings.ts): antes quedaba vieja hasta pasar por Inicio,
+        // y se notaba al cambiar de modo a Anotador.
+        useFarmSettingsStore.setState({
+          recordersCanManageCatalog: updated.recordersCanManageCatalog,
+        });
+      },
+    },
+  });
+
+  function handleToggle(value: boolean) {
+    updateFarm.mutate({ data: { recordersCanManageCatalog: value } });
   }
 
-  async function handleCopyCode() {
+  async function handleCopyCode(invitationCode: string) {
     await Clipboard.setStringAsync(invitationCode);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
   }
 
-  async function handleShareCode() {
+  async function handleShareCode(invitationCode: string) {
     try {
       await Share.share({
         message: strings.onboarding.shareMessage(invitationCode),
@@ -90,14 +84,6 @@ export default function SettingsScreen() {
       // Usuario canceló el share sheet — no es un error real, mismo
       // criterio que invite-code.tsx.
     }
-  }
-
-  if (loading) {
-    return (
-      <Screen edges={['bottom', 'left', 'right']}>
-        <ActivityIndicator />
-      </Screen>
-    );
   }
 
   return (
@@ -109,52 +95,88 @@ export default function SettingsScreen() {
       <Text variant="titleMedium" style={styles.sectionTitle}>
         {strings.settings.farmInfo}
       </Text>
-      <Text style={styles.row}>{farmName}</Text>
 
-      <View
-        style={[styles.codeCard, { backgroundColor: palette.primarySoft }]}
-      >
-        <View style={styles.codeTextWrap}>
-          <Text style={styles.codeLabel}>
-            {strings.onboarding.invitationCodeLabel}
-          </Text>
-          <Text
-            variant="titleLarge"
-            style={[styles.codeValue, { color: palette.primary }]}
-          >
-            {invitationCode}
-          </Text>
-        </View>
-        <IconButton
-          icon={copied ? 'check' : 'content-copy'}
-          onPress={handleCopyCode}
-          accessibilityLabel={strings.common.copy}
-        />
-        <IconButton
-          icon="share-variant"
-          onPress={handleShareCode}
-          accessibilityLabel={strings.onboarding.shareButton}
-        />
-      </View>
-
-      {canManageFarmSettings ? (
+      {/* Solo la sección de la farm espera a la red: el tema es de este
+          dispositivo y se puede cambiar sin señal. Sin datos no se muestra el
+          switch — antes salía en su valor por defecto (prendido) aunque la
+          farm lo tuviera apagado. */}
+      {!farm ? (
+        farmQuery.isPending ? (
+          <ActivityIndicator style={styles.loading} />
+        ) : (
+          <HelperText type="error">{getErrorMessage(farmQuery.error)}</HelperText>
+        )
+      ) : (
         <>
-          <Divider style={styles.divider} />
-          <View style={styles.switchRow}>
-            <Text variant="titleMedium" style={styles.switchLabel}>
-              {strings.settings.recordersCanManageCatalog}
-            </Text>
-            <Switch
-              value={recordersCanManageCatalog}
-              onValueChange={handleToggle}
-              disabled={saving}
+          {/* Un refresco que falla con datos en caché: el aviso va arriba,
+              sin tapar lo que ya se tenía. */}
+          {farmQuery.error ? (
+            <HelperText type="error">
+              {getErrorMessage(farmQuery.error)}
+            </HelperText>
+          ) : null}
+          <Text style={styles.row}>{farm.name}</Text>
+
+          <View
+            style={[styles.codeCard, { backgroundColor: palette.primarySoft }]}
+          >
+            <View style={styles.codeTextWrap}>
+              <Text style={styles.codeLabel}>
+                {strings.onboarding.invitationCodeLabel}
+              </Text>
+              <Text
+                variant="titleLarge"
+                style={[styles.codeValue, { color: palette.primary }]}
+              >
+                {farm.invitationCode}
+              </Text>
+            </View>
+            <IconButton
+              icon={copied ? 'check' : 'content-copy'}
+              onPress={() => handleCopyCode(farm.invitationCode)}
+              accessibilityLabel={strings.common.copy}
+            />
+            <IconButton
+              icon="share-variant"
+              onPress={() => handleShareCode(farm.invitationCode)}
+              accessibilityLabel={strings.onboarding.shareButton}
             />
           </View>
-          <Text variant="bodySmall" style={styles.switchHelp}>
-            {strings.settings.recordersCanManageCatalogHelp}
-          </Text>
+
+          {canManageFarmSettings ? (
+            <>
+              <Divider style={styles.divider} />
+              <View style={styles.switchRow}>
+                <Text variant="titleMedium" style={styles.switchLabel}>
+                  {strings.settings.recordersCanManageCatalog}
+                </Text>
+                {/* Optimista sin estado propio: mientras guarda muestra lo
+                    pedido; al terminar, lo de la caché — que onSuccess ya
+                    actualizó, o que sigue con el valor anterior si falló, así
+                    que revierte solo. */}
+                <Switch
+                  value={
+                    updateFarm.isPending
+                      ? (updateFarm.variables.data.recordersCanManageCatalog ??
+                        farm.recordersCanManageCatalog)
+                      : farm.recordersCanManageCatalog
+                  }
+                  onValueChange={handleToggle}
+                  disabled={updateFarm.isPending}
+                />
+              </View>
+              <Text variant="bodySmall" style={styles.switchHelp}>
+                {strings.settings.recordersCanManageCatalogHelp}
+              </Text>
+              {updateFarm.error ? (
+                <HelperText type="error">
+                  {getErrorMessage(updateFarm.error)}
+                </HelperText>
+              ) : null}
+            </>
+          ) : null}
         </>
-      ) : null}
+      )}
 
       <Divider style={styles.divider} />
       <Text variant="titleMedium" style={styles.sectionTitle}>
@@ -194,8 +216,6 @@ export default function SettingsScreen() {
           );
         })}
       </View>
-
-      {error ? <HelperText type="error">{error}</HelperText> : null}
     </Screen>
   );
 }
@@ -203,6 +223,7 @@ export default function SettingsScreen() {
 const styles = StyleSheet.create({
   title: { marginBottom: spacing.lg },
   sectionTitle: { marginBottom: spacing.sm },
+  loading: { alignSelf: 'flex-start', marginVertical: spacing.sm },
   row: { marginBottom: spacing.xs },
   codeCard: {
     flexDirection: 'row',

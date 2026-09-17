@@ -1,5 +1,20 @@
-import { useCallback, useMemo, useState } from 'react';
-import { FlatList, ScrollView, StyleSheet, View } from 'react-native';
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type PropsWithChildren,
+} from 'react';
+import {
+  Animated,
+  FlatList,
+  ScrollView,
+  StyleSheet,
+  View,
+  type StyleProp,
+  type ViewStyle,
+} from 'react-native';
 import {
   Stack,
   useFocusEffect,
@@ -7,6 +22,7 @@ import {
   useRouter,
 } from 'expo-router';
 import { eq } from 'drizzle-orm';
+import * as Haptics from 'expo-haptics';
 import {
   ActivityIndicator,
   Button,
@@ -16,10 +32,12 @@ import {
   IconButton,
   Portal,
   SegmentedButtons,
+  Snackbar,
   Text,
   TextInput,
   TouchableRipple,
 } from 'react-native-paper';
+import { HoldToRecordButton } from '@/components/HoldToRecordButton';
 import { KeyboardAwareDialog } from '@/components/KeyboardAwareDialog';
 import { Screen } from '@/components/Screen';
 import { strings } from '@/constants/strings';
@@ -41,7 +59,7 @@ import {
 import { generateLocalId } from '@/lib/id';
 import { isFromPreviousDay } from '@/lib/workdayDate';
 import { usePalette } from '@/stores';
-import { spacing, TOUCH_TARGET_MIN } from '@/theme';
+import { spacing } from '@/theme';
 
 type LocalHarvester = typeof harvestersTable.$inferSelect;
 
@@ -63,6 +81,28 @@ interface RoundEntry {
   measuredKg: number | null;
   recordedAt: string;
 }
+
+// Una anotación recién hecha, lo que necesita Deshacer.
+interface RecordedEntry {
+  harvesterId: string;
+  entry: RoundEntry;
+  // Resuelve true cuando la escritura en SQLite terminó bien, false si falló
+  // (y en ese caso la pantalla ya se revirtió sola).
+  saved: Promise<boolean>;
+}
+
+interface Toast {
+  // Distinto en cada aviso: el Snackbar se remonta con esta key. Montado el
+  // mismo, un aviso nuevo heredaba el tiempo que le quedaba al anterior
+  // (Paper solo arranca el temporizador al pasar a visible).
+  id: string;
+  message: string;
+  duration: number;
+  recorded?: RecordedEntry;
+}
+
+const RECORDED_TOAST_MS = 4000;
+const HINT_TOAST_MS = 2500;
 
 // Roster + registro real (RF-02): tocar +1/+2/+5/-1 escribe local al tiro
 // (RNF-01, sin esperar la base ni la red — el estado se actualiza primero,
@@ -122,6 +162,21 @@ export default function AnotadorScreen() {
   // Solo para el aviso de "esta jornada es de otro día" — el resto de la
   // pantalla no necesita la fecha, por eso no estaba guardada.
   const [workdayDate, setWorkdayDate] = useState<string | null>(null);
+
+  // El aviso de abajo: la confirmación de cada anotación (con Deshacer) o
+  // el "mantén apretado" de un toque rápido. `toast` sigue guardado después
+  // de ocultarse para que el Snackbar se desvanezca con su texto.
+  const [toast, setToast] = useState<Toast | null>(null);
+  const [toastVisible, setToastVisible] = useState(false);
+  // El aviso vigente también en una ref: el catch de una escritura corre más
+  // tarde y tiene que ver el aviso de ese momento, no el de su render.
+  const toastRef = useRef<Toast | null>(null);
+
+  function showToast(next: Toast) {
+    toastRef.current = next;
+    setToast(next);
+    setToastVisible(true);
+  }
 
   // Sin setLoading(true) acá, a propósito: `loading` nace en true y solo
   // cubre la primera carga. Esta función corre también cada vez que la
@@ -228,9 +283,14 @@ export default function AnotadorScreen() {
 
   // useFocusEffect: al volver de add-harvester esta pantalla sigue montada
   // en el stack, hay que refrescar al recuperar foco, no solo al montar.
+  //
+  // Al perder el foco se oculta el aviso: Deshacer borra la anotación de
+  // SQLite, y eso solo es seguro mientras no se haya sincronizado — que
+  // pasa en otra pantalla. Así nunca se puede deshacer una ya subida.
   useFocusEffect(
     useCallback(() => {
       load();
+      return () => setToastVisible(false);
     }, [load]),
   );
 
@@ -252,75 +312,138 @@ export default function AnotadorScreen() {
     if (kgPerContainer === undefined || kgPerContainer === null) {
       return;
     }
-    const totalKgDelta = roundToOneDecimal(unitCount * kgPerContainer);
-    const entryId = generateLocalId();
-    const recordedAt = new Date().toISOString();
+    const entry: RoundEntry = {
+      id: generateLocalId(),
+      unitCount,
+      totalKg: roundToOneDecimal(unitCount * kgPerContainer),
+      measuredKg: null,
+      recordedAt: new Date().toISOString(),
+    };
 
     // Actualiza la UI al tiro (RNF-01) — la escritura a SQLite sigue en
-    // paralelo, sin bloquear el próximo toque. Actualiza tanto el total
-    // como la lista de vueltas, para que el diálogo (!) quede al día sin
-    // tener que recargar.
+    // paralelo, sin bloquear el próximo toque.
+    addEntryToState(harvesterId, entry);
+
+    const saved = db
+      .insert(harvestEntries)
+      .values({
+        id: entry.id,
+        workdayId,
+        harvesterId,
+        measurementUnitId: defaultUnit.id,
+        unitCount,
+        totalKg: entry.totalKg,
+        recordedAt: entry.recordedAt,
+        synced: false,
+      })
+      .then(
+        () => true,
+        (err) => {
+          // Rara vez falla una escritura local, pero si pasa hay que revertir
+          // lo optimista — no dejar la UI mostrando algo que no quedó
+          // guardado, ni un "Anotado" encima.
+          removeEntryFromState(harvesterId, entry);
+          if (toastRef.current?.recorded?.entry.id === entry.id) {
+            setToastVisible(false);
+          }
+          setError(getErrorMessage(err));
+          return false;
+        },
+      );
+
+    // La confirmación de que sí anotó (docs/issues.md): vibración distinta
+    // para sumar y descontar, el total del cosechador da un salto (ver
+    // BounceOnChange) y el aviso de abajo dice qué y a quién, con Deshacer.
+    void Haptics.notificationAsync(
+      unitCount > 0
+        ? Haptics.NotificationFeedbackType.Success
+        : Haptics.NotificationFeedbackType.Warning,
+    );
+
+    const harvester = harvestersById[harvesterId];
+    const name = harvester
+      ? `${harvester.firstName} ${harvester.lastName}`
+      : '...';
+    const amount =
+      defaultUnit.mode === 'WEIGHT'
+        ? `${formatKg(Math.abs(entry.totalKg))} ${strings.anotador.kg}`
+        : strings.anotador.containers(Math.abs(unitCount));
+    showToast({
+      id: entry.id,
+      message:
+        unitCount > 0
+          ? strings.anotador.recorded(amount, name)
+          : strings.anotador.discounted(amount, name),
+      duration: RECORDED_TOAST_MS,
+      recorded: { harvesterId, entry, saved },
+    });
+  }
+
+  function showHoldHint() {
+    showToast({
+      id: `hint-${Date.now()}`,
+      message: strings.anotador.holdToRecordHint,
+      duration: HINT_TOAST_MS,
+    });
+  }
+
+  function undoRecord({ harvesterId, entry, saved }: RecordedEntry) {
+    setToastVisible(false);
+    // Espera a que termine la escritura: si el borrado corriera antes que el
+    // insert, no borraría nada y la anotación quedaría guardada aunque la
+    // pantalla ya no la mostrara. Son milisegundos.
+    saved.then(async (ok) => {
+      if (!ok) {
+        return;
+      }
+      removeEntryFromState(harvesterId, entry);
+      try {
+        await db.delete(harvestEntries).where(eq(harvestEntries.id, entry.id));
+      } catch (err) {
+        setError(getErrorMessage(err));
+        // La pantalla ya la sacó y la base la conserva: se relee la base,
+        // que es la verdad, en vez de adivinar.
+        load();
+      }
+    });
+  }
+
+  // Suma una vuelta al total y a la lista del cosechador, para que el
+  // diálogo (!) quede al día sin tener que recargar.
+  function addEntryToState(harvesterId: string, entry: RoundEntry) {
     setTotalsByHarvester((prev) => {
       const current = prev[harvesterId] ?? { unitCount: 0, totalKg: 0 };
       return {
         ...prev,
         [harvesterId]: {
-          unitCount: current.unitCount + unitCount,
-          totalKg: current.totalKg + totalKgDelta,
+          unitCount: current.unitCount + entry.unitCount,
+          totalKg: current.totalKg + entry.totalKg,
         },
       };
     });
-    setEntriesByHarvester((prev) => {
-      const current = prev[harvesterId] ?? [];
+    setEntriesByHarvester((prev) => ({
+      ...prev,
+      [harvesterId]: [...(prev[harvesterId] ?? []), entry],
+    }));
+  }
+
+  function removeEntryFromState(harvesterId: string, entry: RoundEntry) {
+    setTotalsByHarvester((prev) => {
+      const current = prev[harvesterId] ?? { unitCount: 0, totalKg: 0 };
       return {
         ...prev,
-        [harvesterId]: [
-          ...current,
-          {
-            id: entryId,
-            unitCount,
-            totalKg: totalKgDelta,
-            measuredKg: null,
-            recordedAt,
-          },
-        ],
+        [harvesterId]: {
+          unitCount: current.unitCount - entry.unitCount,
+          totalKg: current.totalKg - entry.totalKg,
+        },
       };
     });
-
-    db.insert(harvestEntries)
-      .values({
-        id: entryId,
-        workdayId,
-        harvesterId,
-        measurementUnitId: defaultUnit.id,
-        unitCount,
-        totalKg: totalKgDelta,
-        recordedAt,
-        synced: false,
-      })
-      .catch((err) => {
-        // Rara vez falla una escritura local, pero si pasa hay que revertir
-        // el total optimista y la vuelta que se agregó — no dejar la UI
-        // mostrando algo que no quedó guardado.
-        setTotalsByHarvester((prev) => {
-          const current = prev[harvesterId] ?? { unitCount: 0, totalKg: 0 };
-          return {
-            ...prev,
-            [harvesterId]: {
-              unitCount: current.unitCount - unitCount,
-              totalKg: current.totalKg - totalKgDelta,
-            },
-          };
-        });
-        setEntriesByHarvester((prev) => {
-          const current = prev[harvesterId] ?? [];
-          return {
-            ...prev,
-            [harvesterId]: current.filter((entry) => entry.id !== entryId),
-          };
-        });
-        setError(getErrorMessage(err));
-      });
+    setEntriesByHarvester((prev) => ({
+      ...prev,
+      [harvesterId]: (prev[harvesterId] ?? []).filter(
+        (candidate) => candidate.id !== entry.id,
+      ),
+    }));
   }
 
   function openWeightDialog(harvesterId: string) {
@@ -529,10 +652,15 @@ export default function AnotadorScreen() {
                 <Text style={styles.rowNumber}>{item.workdayNumber}</Text>
                 <View style={styles.rowHeaderText}>
                   <Text variant="titleMedium">{name}</Text>
-                  <Text variant="bodyMedium" style={styles.rowSubtitle}>
-                    {strings.anotador.containers(totals.unitCount)} ·{' '}
-                    {formatKg(totals.totalKg)} {strings.anotador.kg}
-                  </Text>
+                  <BounceOnChange
+                    value={entriesByHarvester[item.harvesterId]?.length ?? 0}
+                    style={styles.rowSubtitleWrap}
+                  >
+                    <Text variant="bodyMedium" style={styles.rowSubtitle}>
+                      {strings.anotador.containers(totals.unitCount)} ·{' '}
+                      {formatKg(totals.totalKg)} {strings.anotador.kg}
+                    </Text>
+                  </BounceOnChange>
                 </View>
                 <IconButton
                   icon="information-outline"
@@ -551,35 +679,35 @@ export default function AnotadorScreen() {
                   {strings.anotador.recordWeight}
                 </Button>
               ) : (
+                // Los cuatro se mantienen apretados, no solo el -1: con
+                // cualquiera, un toque que no se sabe si anotó puede terminar
+                // en apretar de nuevo y sumar de más (decisión del usuario).
                 <View style={styles.buttonRow}>
-                  <Button
-                    mode="outlined"
-                    onPress={() => recordDelivery(item.harvesterId, -1)}
-                    style={styles.smallButton}
-                  >
-                    -1
-                  </Button>
-                  <Button
-                    mode="contained"
-                    onPress={() => recordDelivery(item.harvesterId, 1)}
+                  <HoldToRecordButton
+                    label="-1"
+                    variant="outlined"
+                    onComplete={() => recordDelivery(item.harvesterId, -1)}
+                    onReleasedEarly={showHoldHint}
+                  />
+                  <HoldToRecordButton
+                    label="+1"
+                    variant="contained"
+                    onComplete={() => recordDelivery(item.harvesterId, 1)}
+                    onReleasedEarly={showHoldHint}
                     style={styles.mainButton}
-                  >
-                    +1
-                  </Button>
-                  <Button
-                    mode="outlined"
-                    onPress={() => recordDelivery(item.harvesterId, 2)}
-                    style={styles.smallButton}
-                  >
-                    +2
-                  </Button>
-                  <Button
-                    mode="outlined"
-                    onPress={() => recordDelivery(item.harvesterId, 5)}
-                    style={styles.smallButton}
-                  >
-                    +5
-                  </Button>
+                  />
+                  <HoldToRecordButton
+                    label="+2"
+                    variant="outlined"
+                    onComplete={() => recordDelivery(item.harvesterId, 2)}
+                    onReleasedEarly={showHoldHint}
+                  />
+                  <HoldToRecordButton
+                    label="+5"
+                    variant="outlined"
+                    onComplete={() => recordDelivery(item.harvesterId, 5)}
+                    onReleasedEarly={showHoldHint}
+                  />
                 </View>
               )}
             </View>
@@ -597,6 +725,29 @@ export default function AnotadorScreen() {
           })
         }
       />
+
+      {toast ? (
+        <Snackbar
+          key={toast.id}
+          visible={toastVisible}
+          onDismiss={() => setToastVisible(false)}
+          duration={toast.duration}
+          action={
+            toast.recorded
+              ? {
+                  label: strings.anotador.undo,
+                  onPress: () => {
+                    if (toast.recorded) {
+                      undoRecord(toast.recorded);
+                    }
+                  },
+                }
+              : undefined
+          }
+        >
+          {toast.message}
+        </Snackbar>
+      ) : null}
 
       <Portal>
         {/* KeyboardAwareDialog: tiene el campo de peso adentro y en iOS el
@@ -797,6 +948,45 @@ export default function AnotadorScreen() {
   );
 }
 
+// Da un salto cada vez que `value` cambia (no al montar): el "sí anotó" que
+// se ve en la fila del cosechador, junto con la vibración y el aviso. Sube
+// y vuelve con un resorte, en el hilo nativo.
+function BounceOnChange({
+  value,
+  style,
+  children,
+}: PropsWithChildren<{ value: number; style?: StyleProp<ViewStyle> }>) {
+  const scale = useRef(new Animated.Value(1)).current;
+  const previousRef = useRef(value);
+
+  useEffect(() => {
+    if (previousRef.current === value) {
+      return;
+    }
+    previousRef.current = value;
+    scale.stopAnimation();
+    scale.setValue(1);
+    Animated.sequence([
+      Animated.timing(scale, {
+        toValue: 1.2,
+        duration: 90,
+        useNativeDriver: true,
+      }),
+      Animated.spring(scale, {
+        toValue: 1,
+        friction: 4,
+        useNativeDriver: true,
+      }),
+    ]).start();
+  }, [value, scale]);
+
+  return (
+    <Animated.View style={[style, { transform: [{ scale }] }]}>
+      {children}
+    </Animated.View>
+  );
+}
+
 // Función en vez de StyleSheet.create() estático: rowNumber usa el primary
 // del tema activo (usePalette), así que los estilos deben recalcularse
 // cuando el usuario cambia de tema en Ajustes.
@@ -868,14 +1058,14 @@ function createStyles(colors: ReturnType<typeof usePalette>) {
       fontWeight: '700',
     },
     rowHeaderText: { flex: 1, marginLeft: spacing.sm },
+    // El salto crece desde la izquierda y solo del ancho del texto, para que
+    // no se corra hacia el centro de la fila.
+    rowSubtitleWrap: { alignSelf: 'flex-start', transformOrigin: 'left' },
     rowSubtitle: { color: colors.textSecondary, marginTop: 2 },
+    // Alto y ancho mínimos de los botones de anotar: ver HoldToRecordButton
+    // (TOUCH_TARGET_MIN, la acción más repetida de la app).
     buttonRow: { flexDirection: 'row', gap: spacing.sm },
-    mainButton: {
-      flex: 1,
-      minHeight: TOUCH_TARGET_MIN,
-      justifyContent: 'center',
-    },
-    smallButton: { minHeight: TOUCH_TARGET_MIN, justifyContent: 'center' },
+    mainButton: { flex: 1 },
     // A diferencia de -1/+1/+2/+5 (la acción más repetida de toda la app,
     // RNF-02, por eso TOUCH_TARGET_MIN), pesar es una acción más deliberada
     // que abre un diálogo — no necesita el mismo tamaño gigante, y

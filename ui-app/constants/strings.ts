@@ -246,6 +246,15 @@ export const strings = {
     measureRemove: 'Quitar peso',
     round: (n: number) => `Vuelta ${n}`,
     noRoundsYet: 'Todavía no tiene vueltas anotadas.',
+    // Anotar se mantiene apretado (ver HoldToRecordButton). Este aviso sale
+    // si se suelta antes, para que un toque rápido no quede en silencio.
+    holdToRecordHint: 'Mantén apretado para anotar',
+    // La confirmación de cada anotación, con Deshacer. `amount` va sin signo:
+    // el verbo ya dice si sumó o descontó.
+    recorded: (amount: string, name: string) => `Anotado ${amount} · ${name}`,
+    discounted: (amount: string, name: string) =>
+      `Descontado ${amount} · ${name}`,
+    undo: 'Deshacer',
   },
   sync: {
     title: 'Sincronizar',

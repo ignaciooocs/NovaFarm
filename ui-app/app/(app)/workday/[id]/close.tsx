@@ -1,6 +1,11 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useState } from 'react';
 import { ScrollView, StyleSheet, View } from 'react-native';
-import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
+import {
+  Stack,
+  useFocusEffect,
+  useLocalSearchParams,
+  useRouter,
+} from 'expo-router';
 import { and, eq } from 'drizzle-orm';
 import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
 import {
@@ -92,8 +97,11 @@ export default function CloseWorkdayScreen() {
   const [payBasisInput, setPayBasisInput] = useState<PayBasis>('PER_UNIT');
   const [savingPay, setSavingPay] = useState(false);
 
+  // Sin setLoading(true) acá, a propósito (mismo arreglo que el Anotador):
+  // `loading` nace en true y solo cubre la primera carga. Esta función corre
+  // también al volver a la pantalla y después de guardar la tarifa, y
+  // prender el spinner reemplazaría la pantalla entera por un instante.
   const load = useCallback(async () => {
-    setLoading(true);
     try {
       const [row] = await db
         .select()
@@ -207,9 +215,15 @@ export default function CloseWorkdayScreen() {
     }
   }, [workdayId]);
 
-  useEffect(() => {
-    load();
-  }, [load]);
+  // Al foco y no solo al montar: "Sincronizar" se abre encima de esta
+  // pantalla, que sigue montada abajo. Con useEffect, al volver con todo ya
+  // sincronizado seguía contando lo pendiente de antes y mostrando
+  // "Sincronizar" en vez de "Cerrar jornada", hasta salir y volver a entrar.
+  useFocusEffect(
+    useCallback(() => {
+      load();
+    }, [load]),
+  );
 
   // Todo lo que sigue al cierre va en el onSuccess del hook y no en el de
   // mutate(): el del hook corre aunque la pantalla ya no esté (si se volvió

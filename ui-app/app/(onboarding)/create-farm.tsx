@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { StyleSheet } from 'react-native';
 import { Stack, useRouter } from 'expo-router';
 import { Button, HelperText, Text, TextInput } from 'react-native-paper';
-import { authControllerRegisterAdmin } from '@/api/generated/auth/auth';
+import { useAuthControllerRegisterAdmin } from '@/api/generated/auth/auth';
 import { OptionSelector } from '@/components/OptionSelector';
 import { Screen } from '@/components/Screen';
 import { strings } from '@/constants/strings';
@@ -19,41 +19,41 @@ export default function CreateFarmScreen() {
   const [name, setName] = useState('');
   const [farmName, setFarmName] = useState('');
   const [farmType, setFarmType] = useState<FarmType>('organization');
-  const [error, setError] = useState<string | null>(null);
-  const [loading, setLoading] = useState(false);
+
+  // Lo que sigue al registro va en el onSuccess del hook y no en el de
+  // mutate(): la farm ya quedó creada en el server, así que el refresco del
+  // token tiene que correr aunque se haya vuelto atrás mientras registraba
+  // (mismo motivo que en workday/[id]/close.tsx).
+  const registerAdmin = useAuthControllerRegisterAdmin({
+    mutation: {
+      onSuccess: async (result, { data }) => {
+        // Los custom claims (farmId/role) recién quedaron seteados en
+        // Firebase — el ID token que tenemos en memoria es anterior a eso.
+        // Sin este refresh, tanto el redirect de app/index.tsx como
+        // FarmScopeGuard del lado del server seguirían viendo el token viejo.
+        await auth.currentUser?.getIdToken(true);
+
+        if (data.farmType === 'organization') {
+          router.replace({
+            pathname: '/invite-code',
+            params: { code: result.farm.invitationCode },
+          });
+        } else {
+          router.replace('/starter-products');
+        }
+      },
+    },
+  });
 
   const canSubmit =
-    name.trim().length > 0 && farmName.trim().length > 0 && !loading;
+    name.trim().length > 0 &&
+    farmName.trim().length > 0 &&
+    !registerAdmin.isPending;
 
-  async function handleSubmit() {
-    setError(null);
-    setLoading(true);
-    try {
-      const result = await authControllerRegisterAdmin({
-        name: name.trim(),
-        farmName: farmName.trim(),
-        farmType,
-      });
-
-      // Los custom claims (farmId/role) recién quedaron seteados en
-      // Firebase — el ID token que tenemos en memoria es anterior a eso.
-      // Sin este refresh, tanto el redirect de app/index.tsx como
-      // FarmScopeGuard del lado del server seguirían viendo el token viejo.
-      await auth.currentUser?.getIdToken(true);
-
-      if (farmType === 'organization') {
-        router.replace({
-          pathname: '/invite-code',
-          params: { code: result.farm.invitationCode },
-        });
-      } else {
-        router.replace('/starter-products');
-      }
-    } catch (err) {
-      setError(getErrorMessage(err));
-    } finally {
-      setLoading(false);
-    }
+  function handleSubmit() {
+    registerAdmin.mutate({
+      data: { name: name.trim(), farmName: farmName.trim(), farmType },
+    });
   }
 
   return (
@@ -109,12 +109,16 @@ export default function CreateFarmScreen() {
         ]}
       />
 
-      {error ? <HelperText type="error">{error}</HelperText> : null}
+      {registerAdmin.error ? (
+        <HelperText type="error">
+          {getErrorMessage(registerAdmin.error)}
+        </HelperText>
+      ) : null}
 
       <Button
         mode="contained"
         onPress={handleSubmit}
-        loading={loading}
+        loading={registerAdmin.isPending}
         disabled={!canSubmit}
         buttonColor={palette.primary}
         contentStyle={styles.buttonContent}

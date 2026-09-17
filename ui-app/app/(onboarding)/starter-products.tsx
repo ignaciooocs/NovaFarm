@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 import { ScrollView, StyleSheet, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
@@ -9,10 +9,11 @@ import {
   Text,
   TouchableRipple,
 } from 'react-native-paper';
-import type { FindProductResponseDto } from '@/api/generated/novaFarmAPI.schemas';
+import { useMutation } from '@tanstack/react-query';
+import { isAxiosError } from 'axios';
 import {
   productsControllerCreate,
-  productsControllerFindAvailable,
+  useProductsControllerFindAvailable,
 } from '@/api/generated/products/products';
 import { Screen } from '@/components/Screen';
 import { strings } from '@/constants/strings';
@@ -44,23 +45,24 @@ export default function StarterProductsScreen() {
   // Los ids elegidos: el producto es global, así que su _id es la identidad
   // compartida entre todas las farms.
   const [selected, setSelected] = useState<Set<string>>(new Set());
-  const [featured, setFeatured] = useState<FindProductResponseDto[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
-  const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
-    (async () => {
-      try {
-        const catalog = await productsControllerFindAvailable();
-        setFeatured(catalog.filter((product) => product.featured));
-      } catch (err) {
-        setError(getErrorMessage(err));
-      } finally {
-        setLoading(false);
-      }
-    })();
-  }, []);
+  // Sin useRefreshOnFocus: nada vuelve a esta pantalla (se sale con replace).
+  // Si llega sin señal, la grilla se llena sola al reconectar — antes quedaba
+  // vacía y solo quedaba Saltar.
+  const availableQuery = useProductsControllerFindAvailable();
+  const featured =
+    availableQuery.data?.filter((product) => product.featured) ?? [];
+
+  // Un POST por cultivo elegido, así que no calza con el hook generado (una
+  // petición por mutación): useMutation propio sobre la función suelta, con
+  // los mismos defaults de lib/queryClient.ts (sin reintentos, falla al tiro
+  // sin señal).
+  const addProducts = useMutation({
+    mutationFn: (productIds: string[]) =>
+      Promise.all(productIds.map(addProduct)),
+    onSuccess: () => router.replace('/home'),
+  });
+  const error = addProducts.error ?? availableQuery.error;
 
   function toggle(key: string) {
     setSelected((prev) => {
@@ -74,21 +76,8 @@ export default function StarterProductsScreen() {
     });
   }
 
-  async function handleContinue() {
-    setError(null);
-    setSaving(true);
-    try {
-      await Promise.all(
-        [...selected].map((productId) =>
-          productsControllerCreate({ productId }),
-        ),
-      );
-      router.replace('/home');
-    } catch (err) {
-      setError(getErrorMessage(err));
-    } finally {
-      setSaving(false);
-    }
+  function handleContinue() {
+    addProducts.mutate([...selected]);
   }
 
   return (
@@ -100,7 +89,7 @@ export default function StarterProductsScreen() {
         {strings.onboarding.starterProductsSubtitle}
       </Text>
 
-      {loading ? <ActivityIndicator /> : null}
+      {availableQuery.isPending ? <ActivityIndicator /> : null}
 
       <ScrollView
         style={styles.productsScroll}
@@ -134,13 +123,15 @@ export default function StarterProductsScreen() {
         })}
       </ScrollView>
 
-      {error ? <HelperText type="error">{error}</HelperText> : null}
+      {error ? (
+        <HelperText type="error">{getErrorMessage(error)}</HelperText>
+      ) : null}
 
       <Button
         mode="contained"
         onPress={handleContinue}
-        loading={saving}
-        disabled={selected.size === 0 || saving}
+        loading={addProducts.isPending}
+        disabled={selected.size === 0 || addProducts.isPending}
         buttonColor={palette.primary}
         contentStyle={styles.buttonContent}
         style={styles.button}
@@ -150,13 +141,37 @@ export default function StarterProductsScreen() {
       <Button
         mode="text"
         onPress={() => router.replace('/home')}
-        disabled={saving}
+        disabled={addProducts.isPending}
         textColor={colors.textSecondary}
       >
         {strings.common.skip}
       </Button>
     </Screen>
   );
+}
+
+// Si un intento anterior alcanzó a sumar algunos y falló en otro (la señal
+// se corta a la mitad), reintentar vuelve a mandar todos y el server responde
+// 409 por los que ya están. Eso es justo lo que se pedía, no un error: sin
+// esto el reintento fallaba siempre y solo quedaba Saltar. Se matchea también
+// el mensaje, no solo el 409 (mismo criterio que lib/errors.ts).
+async function addProduct(productId: string): Promise<void> {
+  try {
+    await productsControllerCreate({ productId });
+  } catch (err) {
+    const message = isAxiosError(err)
+      ? (err.response?.data as { message?: unknown } | undefined)?.message
+      : undefined;
+    const alreadyInCatalog =
+      isAxiosError(err) &&
+      err.response?.status === 409 &&
+      typeof message === 'string' &&
+      /already in the farm catalog/i.test(message);
+
+    if (!alreadyInCatalog) {
+      throw err;
+    }
+  }
 }
 
 function createStyles(palette: ReturnType<typeof usePalette>) {

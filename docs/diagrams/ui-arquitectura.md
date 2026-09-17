@@ -69,7 +69,7 @@ Cola de sync: toda fila con `synced=false` en `workdays`/`harvesters`/`harvester
 
 `api/generated/` (cliente tipado, generado por `orval` desde el OpenAPI de `server-app`) + `api/axios-instance.ts`. El interceptor de request en `AXIOS_INSTANCE` adjunta el ID token de Firebase (`auth.currentUser?.getIdToken()`) como Bearer en cada llamada — ningún call site arma ese header a mano. `pnpm generate:api` necesita `server-app` corriendo local; hay que re-correrlo después de cualquier cambio de DTO/controller ahí.
 
-### React Query (migración empezada 2026-09-14)
+### React Query (migración 2026-09-14 → 2026-09-16, completa)
 
 Pedido del usuario: usar TanStack Query (`@tanstack/react-query`) para las peticiones. **El criterio no es GET contra POST, es dónde vive el dato**, y se definió así antes de escribir código:
 
@@ -134,7 +134,21 @@ Pedido del usuario: usar TanStack Query (`@tanstack/react-query`) para las petic
 - La tarifa **no** se migra: se guarda en SQLite y sube con `pushPendingWorkdays()` (sync). El aviso de error sigue siendo uno solo, el del último intento: guardar la tarifa hace `reset()` del cierre si quedó en error.
 - **Observado al probar, no reproducido**: una vez, cerrando justo después de quitar el modo avión, el botón giró ~15s antes de cerrar bien; los cierres siguientes (con y sin pasar por modo avión) fueron inmediatos. Consistente con que el sistema reporte conexión antes de que la red sirva y la conexión TCP entre en un reintento dentro del timeout de 15s de `axios-instance.ts`. No lo introduce la migración: la mutación sale al tiro igual que la llamada suelta de antes (`networkMode: 'always'`). Si se repite en terreno, mirar ahí.
 
-**Pendiente del paso 3**: onboarding.
+**Onboarding migrado (2026-09-16, probado en dispositivo con cuentas nuevas: farm independiente → Cultivos iniciales, farm organización → código, unirse con código malo y bueno).**
+- **Crear farm / Unirse**: `useAuthControllerRegisterAdmin` / `useAuthControllerRegisterRecorder`. `getIdToken(true)` y la navegación van en el `onSuccess` del hook (mismo motivo que Cerrar Jornada: la farm ya existe en el server, el token se tiene que refrescar aunque la pantalla se desmonte). Crear farm decide a dónde ir con `variables.data.farmType`, lo que de verdad se mandó.
+- **Cultivos iniciales**: la grilla sale de `useProductsControllerFindAvailable` (misma key que Cultivos). Sin `useRefreshOnFocus`: nada vuelve a esta pantalla. **Cambio a favor**: si llega sin señal, la grilla se llena sola al reconectar; antes quedaba vacía y solo quedaba Saltar.
+- Agregar manda **un POST por cultivo** (no hay bulk), así que no calza con el hook generado: `useMutation` propio sobre `productsControllerCreate`, que hereda los defaults de `lib/queryClient.ts`.
+- **Bug arreglado de pasada, no probado a mano (difícil de provocar)**: si la señal se cortaba a mitad del lote, unos quedaban agregados y otros no; reintentar mandaba todos y el server respondía 409 (`already in the farm catalog`) por los que ya estaban, así que el reintento fallaba siempre. Ese 409 ahora cuenta como éxito (se matchea status **y** mensaje, criterio de `lib/errors.ts`).
+- **Gap preexistente, sin tocar**: si el registro sale bien pero `getIdToken(true)` falla (señal que se corta justo ahí), se ve el error, y reintentar da 409 "already completed onboarding" — la cuenta queda sin poder avanzar hasta que Firebase refresque el token solo (hasta ~1h), y ahí el guard de `(onboarding)/_layout.tsx` la manda a Inicio saltándose el código/Cultivos iniciales.
+
+**Estado final.** Todas las pantallas que muestran datos del server usan hooks. Las únicas llamadas sueltas que quedan en `app/` son a propósito: las dos del sync en `sync.tsx` y `productsControllerCreate` dentro del `useMutation` de Cultivos iniciales (más las de `lib/`, que alimentan SQLite). **Para una pantalla nueva**, los patrones que salieron de la migración:
+- `useRefreshOnFocus([keys de esta pantalla])` si algo puede volver a ella; spinner con `isPending` (no hay nada en caché), nunca con "está pidiendo".
+- Error de pantalla (query) y error de formulario/acción (mutación) separados; con datos en caché, el error de refresco va arriba sin tapar lo que ya se tenía. Sin datos, no mostrar un formulario que pueda guardar valores por defecto encima de los reales (Perfil, Ajustes).
+- Una mutación por flujo, no compartida. `reset()` solo si terminó (`isError`/`isSuccess`), nunca en curso: se desengancha su `onSuccess`.
+- Lo que **tiene** que pasar después de una escritura en el server (SQLite, token, navegación) va en el `onSuccess` del hook, no en el de `mutate()`.
+- Invalidar las keys que cambian; pero si la pantalla muestra un valor optimista sacado de `variables`, `setQueryData` con la respuesta (invalidar hace volver al valor viejo un instante — Ajustes).
+- Formularios sobre datos del server: borrador `null` hasta que se escribe, sin `useEffect` que copie la respuesta (Perfil).
+- Pasarle opciones a un hook de orval exige `queryKey` (la misma generada). Guardar en un catálogo llama `syncCatalogs()`.
 
 **"Cerré la jornada y no me deja cerrar sesión" — diagnosticado el 2026-09-14, no era un bug de sync.** Cerrar Jornada solo cuenta lo pendiente de *esa* jornada; cerrar sesión (`hasUnsyncedData()`) cuenta **todo el dispositivo** — cualquier jornada de cualquier cuenta, más los cosechadores registrados offline. Sin forma de ver qué era, se agregó `describeUnsyncedData()` (`db/queries.ts`): al bloquearse, `(drawer)/_layout.tsx` imprime bajo `__DEV__` una línea `[logout] bloqueado · jornada <id corto> (<status> <fecha>, en server|sin server): N roster, N entregas · N cosechadores sin subir` — ids cortos y conteos, sin nombres. En este caso salió `jornada mtt4d4 (OPEN 2026-09-08, en server): 5 roster`, y consultando la base (solo lectura) no existía: **era de antes de que el usuario borrara la base el 2026-09-08** (todo lo que hay en Mongo empieza el 9 a las 00:00 UTC). Su `serverId` apunta a una jornada que ya no existe, el server rechaza ese roster con "Workday not found" en cada sync, y el cierre de sesión queda bloqueado para siempre. Nada real en riesgo — era lo único pendiente del dispositivo —; se sale borrando los datos de Expo Go.
 

@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { StyleSheet } from 'react-native';
 import { Stack, useRouter } from 'expo-router';
 import { Button, HelperText, Text, TextInput } from 'react-native-paper';
-import { authControllerRegisterRecorder } from '@/api/generated/auth/auth';
+import { useAuthControllerRegisterRecorder } from '@/api/generated/auth/auth';
 import { Screen } from '@/components/Screen';
 import { strings } from '@/constants/strings';
 import { getErrorMessage } from '@/lib/errors';
@@ -15,31 +15,30 @@ export default function JoinFarmScreen() {
   const palette = usePalette();
   const [name, setName] = useState('');
   const [invitationCode, setInvitationCode] = useState('');
-  const [error, setError] = useState<string | null>(null);
-  const [loading, setLoading] = useState(false);
+
+  // Lo que sigue al registro va en el onSuccess del hook y no en el de
+  // mutate() (ver create-farm.tsx).
+  const registerRecorder = useAuthControllerRegisterRecorder({
+    mutation: {
+      onSuccess: async () => {
+        // Mismo motivo que en create-farm.tsx: forzar el refresh para que el
+        // farmId/role recién asignados se reflejen en el token en memoria.
+        await auth.currentUser?.getIdToken(true);
+
+        router.replace('/home');
+      },
+    },
+  });
 
   const canSubmit =
-    name.trim().length > 0 && invitationCode.trim().length > 0 && !loading;
+    name.trim().length > 0 &&
+    invitationCode.trim().length > 0 &&
+    !registerRecorder.isPending;
 
-  async function handleSubmit() {
-    setError(null);
-    setLoading(true);
-    try {
-      await authControllerRegisterRecorder({
-        name: name.trim(),
-        invitationCode: invitationCode.trim(),
-      });
-
-      // Mismo motivo que en create-farm.tsx: forzar el refresh para que el
-      // farmId/role recién asignados se reflejen en el token en memoria.
-      await auth.currentUser?.getIdToken(true);
-
-      router.replace('/home');
-    } catch (err) {
-      setError(getErrorMessage(err));
-    } finally {
-      setLoading(false);
-    }
+  function handleSubmit() {
+    registerRecorder.mutate({
+      data: { name: name.trim(), invitationCode: invitationCode.trim() },
+    });
   }
 
   return (
@@ -72,12 +71,16 @@ export default function JoinFarmScreen() {
         style={styles.input}
       />
 
-      {error ? <HelperText type="error">{error}</HelperText> : null}
+      {registerRecorder.error ? (
+        <HelperText type="error">
+          {getErrorMessage(registerRecorder.error)}
+        </HelperText>
+      ) : null}
 
       <Button
         mode="contained"
         onPress={handleSubmit}
-        loading={loading}
+        loading={registerRecorder.isPending}
         disabled={!canSubmit}
         buttonColor={palette.primary}
         contentStyle={styles.buttonContent}

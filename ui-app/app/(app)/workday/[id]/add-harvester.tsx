@@ -19,6 +19,7 @@ import { db } from '@/db/client';
 import { harvesters as harvestersTable, harvesterWorkday } from '@/db/schema';
 import { getErrorMessage } from '@/lib/errors';
 import { generateLocalId } from '@/lib/id';
+import { useKeyboardHeight } from '@/lib/useKeyboardHeight';
 import { useAuthStore, usePalette } from '@/stores';
 import { spacing } from '@/theme';
 
@@ -56,6 +57,7 @@ export default function AddHarvesterScreen() {
   // conformar acá, solo se necesita `.focus()`.
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const searchInputRef = useRef<any>(null);
+  const keyboardHeight = useKeyboardHeight();
 
   const [harvesters, setHarvesters] = useState<LocalHarvester[]>([]);
   const [existingIds, setExistingIds] = useState<Set<string>>(new Set());
@@ -210,7 +212,16 @@ export default function AddHarvesterScreen() {
       <Stack.Screen
         options={{ headerShown: true, title: strings.anotador.addHarvester }}
       />
-      <ScrollView keyboardShouldPersistTaps="handled">
+      {/* El teclado se dibuja encima de la app sin achicar la ventana (ver
+          useKeyboardHeight), así que los últimos cosechadores —y "registrar
+          nuevo", que va al final— quedaban debajo del teclado por más que se
+          hiciera scroll. El espacio de abajo le deja a la lista subir por
+          encima del teclado. Uno solo para las dos plataformas en vez de
+          automaticallyAdjustKeyboardInsets, que es solo de iOS. */}
+      <ScrollView
+        keyboardShouldPersistTaps="handled"
+        contentContainerStyle={{ paddingBottom: keyboardHeight }}
+      >
         <TextInput
           ref={searchInputRef}
           label={strings.anotador.searchHarvester}

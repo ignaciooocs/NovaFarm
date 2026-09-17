@@ -22,11 +22,11 @@ type KeyboardAwareDialogProps = ComponentProps<typeof Dialog>;
  * puro texto y botones (confirmar, avisar) el `Dialog` pelado está bien,
  * porque ahí nunca sube el teclado.
  *
- * **Por qué hace falta**: en Android la ventana se achica sola cuando sube el
- * teclado (`softwareKeyboardLayoutMode` "resize", el default de Expo) y todo
- * lo que está centrado se reacomoda. iOS no cambia el tamaño de la ventana —
- * dibuja el teclado encima — así que el diálogo sigue centrado en la pantalla
- * completa y su mitad de abajo, botones incluidos, queda debajo del teclado.
+ * **Por qué hace falta**: ni iOS ni Android (con edge-to-edge, ver
+ * `useKeyboardHeight`) cambian el tamaño de la ventana cuando sube el
+ * teclado — lo dibujan encima — así que el diálogo sigue centrado en la
+ * pantalla completa y su mitad de abajo, botones incluidos, queda debajo del
+ * teclado.
  *
  * **Cómo lo resuelve**: dos cosas, y las dos van al `style` del `Dialog`, que
  * Paper aplica al `Surface` (la tarjeta) dentro de un wrapper con

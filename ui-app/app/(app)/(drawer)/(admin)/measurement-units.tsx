@@ -224,11 +224,11 @@ export default function MeasurementUnitsScreen() {
               ? strings.admin.editMeasurementUnit
               : strings.admin.newMeasurementUnit}
           </Dialog.Title>
-          {/* ScrollArea y no Content: con el teclado abierto la ventana se
-              achica (softwareKeyboardLayoutMode "resize", el default de
-              Expo), y el campo de kilos —que es el último y solo existe en
-              modo COUNT— quedaba tapado sin ninguna forma de llegar a él.
-              Mismo recurso que el diálogo de vueltas del Anotador. */}
+          {/* ScrollArea y no Content: con el teclado abierto al diálogo le
+              queda menos alto (KeyboardAwareDialog le pone techo), y el campo
+              de kilos —que es el último y solo existe en modo COUNT— quedaba
+              tapado sin ninguna forma de llegar a él. Mismo recurso que el
+              diálogo de vueltas del Anotador. */}
           <Dialog.ScrollArea>
             <ScrollView
               ref={formScrollRef}

@@ -12,9 +12,12 @@ import { strings } from '@/constants/strings';
 import { usePalette } from '@/stores';
 import { spacing, TOUCH_TARGET_MIN } from '@/theme';
 
-// Cuánto hay que mantener apretado para anotar. El usuario pidió "1 segundo
-// o más"; si en terreno se siente lento o apurado, se ajusta acá.
-export const HOLD_TO_RECORD_MS = 1000;
+// Cuánto hay que mantener apretado para anotar. Empezó en 1 segundo (lo que
+// pidió el usuario) y probándolo se sintió largo para la acción más repetida
+// del día: pasó a 0,75 s y el usuario lo dejó en 0,4 s (2026-09-16). Sigue
+// siendo claramente más que un toque. Si en terreno se siente lento o
+// apurado, se ajusta acá.
+export const HOLD_TO_RECORD_MS = 400;
 
 interface HoldToRecordButtonProps {
   label: string;
@@ -90,6 +93,8 @@ export function HoldToRecordButton({
 
   const contained = variant === 'contained';
 
+  // Sin crecer al mantener: se probó (5%, 2026-09-16) y al usuario no le
+  // gustó. La barra sola alcanza.
   return (
     <Pressable
       onPressIn={handlePressIn}

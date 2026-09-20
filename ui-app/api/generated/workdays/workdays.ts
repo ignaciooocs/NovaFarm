@@ -10,9 +10,14 @@ import {
   useQuery
 } from '@tanstack/react-query';
 import type {
+  DataTag,
+  DefinedInitialDataOptions,
+  DefinedUseQueryResult,
   MutationFunction,
+  QueryClient,
   QueryFunction,
   QueryKey,
+  UndefinedInitialDataOptions,
   UseMutationOptions,
   UseMutationResult,
   UseQueryOptions,
@@ -105,13 +110,13 @@ const {mutation: mutationOptions} = options ?
  */
 export const useWorkdaysControllerCreate = <TError = unknown,
     TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof workdaysControllerCreate>>, TError,{data: CreateWorkdayRequestDto}, TContext>, }
- ): UseMutationResult<
+ , queryClient?: QueryClient): UseMutationResult<
         Awaited<ReturnType<typeof workdaysControllerCreate>>,
         TError,
         {data: CreateWorkdayRequestDto},
         TContext
       > => {
-      return useMutation(getWorkdaysControllerCreateMutationOptions(options));
+      return useMutation(getWorkdaysControllerCreateMutationOptions(options), queryClient);
     }
     /**
  * @summary List the workdays for the caller farm
@@ -139,7 +144,7 @@ export const getWorkdaysControllerFindAllQueryKey = (params?: WorkdaysController
     }
 
 
-export const getWorkdaysControllerFindAllQueryOptions = <TData = Awaited<ReturnType<typeof workdaysControllerFindAll>>, TError = unknown>(params?: WorkdaysControllerFindAllParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof workdaysControllerFindAll>>, TError, TData>, }
+export const getWorkdaysControllerFindAllQueryOptions = <TData = Awaited<ReturnType<typeof workdaysControllerFindAll>>, TError = unknown>(params?: WorkdaysControllerFindAllParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof workdaysControllerFindAll>>, TError, TData>>, }
 ) => {
 
 const {query: queryOptions} = options ?? {};
@@ -154,25 +159,49 @@ const {query: queryOptions} = options ?? {};
 
 
 
-   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof workdaysControllerFindAll>>, TError, TData> & { queryKey: QueryKey }
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof workdaysControllerFindAll>>, TError, TData> & { queryKey: DataTag<QueryKey, TData, TError> }
 }
 
 export type WorkdaysControllerFindAllQueryResult = NonNullable<Awaited<ReturnType<typeof workdaysControllerFindAll>>>
 export type WorkdaysControllerFindAllQueryError = unknown
 
 
+export function useWorkdaysControllerFindAll<TData = Awaited<ReturnType<typeof workdaysControllerFindAll>>, TError = unknown>(
+ params: undefined |  WorkdaysControllerFindAllParams, options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof workdaysControllerFindAll>>, TError, TData>> & Pick<
+        DefinedInitialDataOptions<
+          Awaited<ReturnType<typeof workdaysControllerFindAll>>,
+          TError,
+          Awaited<ReturnType<typeof workdaysControllerFindAll>>
+        > , 'initialData'
+      >, }
+ , queryClient?: QueryClient
+  ):  DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useWorkdaysControllerFindAll<TData = Awaited<ReturnType<typeof workdaysControllerFindAll>>, TError = unknown>(
+ params?: WorkdaysControllerFindAllParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof workdaysControllerFindAll>>, TError, TData>> & Pick<
+        UndefinedInitialDataOptions<
+          Awaited<ReturnType<typeof workdaysControllerFindAll>>,
+          TError,
+          Awaited<ReturnType<typeof workdaysControllerFindAll>>
+        > , 'initialData'
+      >, }
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useWorkdaysControllerFindAll<TData = Awaited<ReturnType<typeof workdaysControllerFindAll>>, TError = unknown>(
+ params?: WorkdaysControllerFindAllParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof workdaysControllerFindAll>>, TError, TData>>, }
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
 /**
  * @summary List the workdays for the caller farm
  */
 
 export function useWorkdaysControllerFindAll<TData = Awaited<ReturnType<typeof workdaysControllerFindAll>>, TError = unknown>(
- params?: WorkdaysControllerFindAllParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof workdaysControllerFindAll>>, TError, TData>, }
-
- ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+ params?: WorkdaysControllerFindAllParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof workdaysControllerFindAll>>, TError, TData>>, }
+ , queryClient?: QueryClient
+ ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
 
   const queryOptions = getWorkdaysControllerFindAllQueryOptions(params,options)
 
-  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+  const query = useQuery(queryOptions, queryClient) as  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
 
   return withQueryKey(query, queryOptions.queryKey);
 }
@@ -239,13 +268,13 @@ const {mutation: mutationOptions} = options ?
  */
 export const useWorkdaysControllerUpdatePay = <TError = unknown,
     TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof workdaysControllerUpdatePay>>, TError,{id: string;data: UpdateWorkdayPayRequestDto}, TContext>, }
- ): UseMutationResult<
+ , queryClient?: QueryClient): UseMutationResult<
         Awaited<ReturnType<typeof workdaysControllerUpdatePay>>,
         TError,
         {id: string;data: UpdateWorkdayPayRequestDto},
         TContext
       > => {
-      return useMutation(getWorkdaysControllerUpdatePayMutationOptions(options));
+      return useMutation(getWorkdaysControllerUpdatePayMutationOptions(options), queryClient);
     }
     /**
  * @summary Close a workday, freezing its aggregate total in kilos (RF-01.2)
@@ -301,11 +330,11 @@ const {mutation: mutationOptions} = options ?
  */
 export const useWorkdaysControllerClose = <TError = unknown,
     TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof workdaysControllerClose>>, TError,{id: string}, TContext>, }
- ): UseMutationResult<
+ , queryClient?: QueryClient): UseMutationResult<
         Awaited<ReturnType<typeof workdaysControllerClose>>,
         TError,
         {id: string},
         TContext
       > => {
-      return useMutation(getWorkdaysControllerCloseMutationOptions(options));
+      return useMutation(getWorkdaysControllerCloseMutationOptions(options), queryClient);
     }

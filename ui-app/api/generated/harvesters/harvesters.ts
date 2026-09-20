@@ -10,9 +10,14 @@ import {
   useQuery
 } from '@tanstack/react-query';
 import type {
+  DataTag,
+  DefinedInitialDataOptions,
+  DefinedUseQueryResult,
   MutationFunction,
+  QueryClient,
   QueryFunction,
   QueryKey,
+  UndefinedInitialDataOptions,
   UseMutationOptions,
   UseMutationResult,
   UseQueryOptions,
@@ -106,13 +111,13 @@ const {mutation: mutationOptions} = options ?
  */
 export const useHarvestersControllerCreate = <TError = unknown,
     TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof harvestersControllerCreate>>, TError,{data: CreateHarvesterRequestDto}, TContext>, }
- ): UseMutationResult<
+ , queryClient?: QueryClient): UseMutationResult<
         Awaited<ReturnType<typeof harvestersControllerCreate>>,
         TError,
         {data: CreateHarvesterRequestDto},
         TContext
       > => {
-      return useMutation(getHarvestersControllerCreateMutationOptions(options));
+      return useMutation(getHarvestersControllerCreateMutationOptions(options), queryClient);
     }
     /**
  * @summary List the harvesters in the caller farm roster
@@ -140,7 +145,7 @@ export const getHarvestersControllerFindAllQueryKey = (params?: HarvestersContro
     }
 
 
-export const getHarvestersControllerFindAllQueryOptions = <TData = Awaited<ReturnType<typeof harvestersControllerFindAll>>, TError = unknown>(params?: HarvestersControllerFindAllParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof harvestersControllerFindAll>>, TError, TData>, }
+export const getHarvestersControllerFindAllQueryOptions = <TData = Awaited<ReturnType<typeof harvestersControllerFindAll>>, TError = unknown>(params?: HarvestersControllerFindAllParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof harvestersControllerFindAll>>, TError, TData>>, }
 ) => {
 
 const {query: queryOptions} = options ?? {};
@@ -155,25 +160,49 @@ const {query: queryOptions} = options ?? {};
 
 
 
-   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof harvestersControllerFindAll>>, TError, TData> & { queryKey: QueryKey }
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof harvestersControllerFindAll>>, TError, TData> & { queryKey: DataTag<QueryKey, TData, TError> }
 }
 
 export type HarvestersControllerFindAllQueryResult = NonNullable<Awaited<ReturnType<typeof harvestersControllerFindAll>>>
 export type HarvestersControllerFindAllQueryError = unknown
 
 
+export function useHarvestersControllerFindAll<TData = Awaited<ReturnType<typeof harvestersControllerFindAll>>, TError = unknown>(
+ params: undefined |  HarvestersControllerFindAllParams, options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof harvestersControllerFindAll>>, TError, TData>> & Pick<
+        DefinedInitialDataOptions<
+          Awaited<ReturnType<typeof harvestersControllerFindAll>>,
+          TError,
+          Awaited<ReturnType<typeof harvestersControllerFindAll>>
+        > , 'initialData'
+      >, }
+ , queryClient?: QueryClient
+  ):  DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useHarvestersControllerFindAll<TData = Awaited<ReturnType<typeof harvestersControllerFindAll>>, TError = unknown>(
+ params?: HarvestersControllerFindAllParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof harvestersControllerFindAll>>, TError, TData>> & Pick<
+        UndefinedInitialDataOptions<
+          Awaited<ReturnType<typeof harvestersControllerFindAll>>,
+          TError,
+          Awaited<ReturnType<typeof harvestersControllerFindAll>>
+        > , 'initialData'
+      >, }
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useHarvestersControllerFindAll<TData = Awaited<ReturnType<typeof harvestersControllerFindAll>>, TError = unknown>(
+ params?: HarvestersControllerFindAllParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof harvestersControllerFindAll>>, TError, TData>>, }
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
 /**
  * @summary List the harvesters in the caller farm roster
  */
 
 export function useHarvestersControllerFindAll<TData = Awaited<ReturnType<typeof harvestersControllerFindAll>>, TError = unknown>(
- params?: HarvestersControllerFindAllParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof harvestersControllerFindAll>>, TError, TData>, }
-
- ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+ params?: HarvestersControllerFindAllParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof harvestersControllerFindAll>>, TError, TData>>, }
+ , queryClient?: QueryClient
+ ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
 
   const queryOptions = getHarvestersControllerFindAllQueryOptions(params,options)
 
-  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+  const query = useQuery(queryOptions, queryClient) as  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
 
   return withQueryKey(query, queryOptions.queryKey);
 }
@@ -239,13 +268,13 @@ const {mutation: mutationOptions} = options ?
  */
 export const useHarvestersControllerSync = <TError = unknown,
     TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof harvestersControllerSync>>, TError,{data: SyncHarvesterRequestDto}, TContext>, }
- ): UseMutationResult<
+ , queryClient?: QueryClient): UseMutationResult<
         Awaited<ReturnType<typeof harvestersControllerSync>>,
         TError,
         {data: SyncHarvesterRequestDto},
         TContext
       > => {
-      return useMutation(getHarvestersControllerSyncMutationOptions(options));
+      return useMutation(getHarvestersControllerSyncMutationOptions(options), queryClient);
     }
     /**
  * @summary Partially update a harvester in the caller farm roster (edit and/or activate/deactivate)
@@ -304,11 +333,11 @@ const {mutation: mutationOptions} = options ?
  */
 export const useHarvestersControllerUpdate = <TError = unknown,
     TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof harvestersControllerUpdate>>, TError,{id: string;data: UpdateHarvesterRequestDto}, TContext>, }
- ): UseMutationResult<
+ , queryClient?: QueryClient): UseMutationResult<
         Awaited<ReturnType<typeof harvestersControllerUpdate>>,
         TError,
         {id: string;data: UpdateHarvesterRequestDto},
         TContext
       > => {
-      return useMutation(getHarvestersControllerUpdateMutationOptions(options));
+      return useMutation(getHarvestersControllerUpdateMutationOptions(options), queryClient);
     }

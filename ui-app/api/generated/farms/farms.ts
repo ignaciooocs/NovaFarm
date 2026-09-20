@@ -10,9 +10,14 @@ import {
   useQuery
 } from '@tanstack/react-query';
 import type {
+  DataTag,
+  DefinedInitialDataOptions,
+  DefinedUseQueryResult,
   MutationFunction,
+  QueryClient,
   QueryFunction,
   QueryKey,
+  UndefinedInitialDataOptions,
   UseMutationOptions,
   UseMutationResult,
   UseQueryOptions,
@@ -23,6 +28,7 @@ import type {
   CreateFarmRequestDto,
   CreateFarmResponseDto,
   FindFarmResponseDto,
+  RegenerateFarmInvitationCodeResponseDto,
   UpdateFarmRequestDto,
   UpdateFarmResponseDto
 } from '../novaFarmAPI.schemas';
@@ -103,13 +109,13 @@ const {mutation: mutationOptions} = options ?
  */
 export const useFarmsControllerCreate = <TError = unknown,
     TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof farmsControllerCreate>>, TError,{data: CreateFarmRequestDto}, TContext>, }
- ): UseMutationResult<
+ , queryClient?: QueryClient): UseMutationResult<
         Awaited<ReturnType<typeof farmsControllerCreate>>,
         TError,
         {data: CreateFarmRequestDto},
         TContext
       > => {
-      return useMutation(getFarmsControllerCreateMutationOptions(options));
+      return useMutation(getFarmsControllerCreateMutationOptions(options), queryClient);
     }
     /**
  * @summary Get the caller's own farm
@@ -136,7 +142,7 @@ export const getFarmsControllerFindMeQueryKey = () => {
     }
 
 
-export const getFarmsControllerFindMeQueryOptions = <TData = Awaited<ReturnType<typeof farmsControllerFindMe>>, TError = unknown>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof farmsControllerFindMe>>, TError, TData>, }
+export const getFarmsControllerFindMeQueryOptions = <TData = Awaited<ReturnType<typeof farmsControllerFindMe>>, TError = unknown>( options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof farmsControllerFindMe>>, TError, TData>>, }
 ) => {
 
 const {query: queryOptions} = options ?? {};
@@ -151,25 +157,49 @@ const {query: queryOptions} = options ?? {};
 
 
 
-   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof farmsControllerFindMe>>, TError, TData> & { queryKey: QueryKey }
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof farmsControllerFindMe>>, TError, TData> & { queryKey: DataTag<QueryKey, TData, TError> }
 }
 
 export type FarmsControllerFindMeQueryResult = NonNullable<Awaited<ReturnType<typeof farmsControllerFindMe>>>
 export type FarmsControllerFindMeQueryError = unknown
 
 
+export function useFarmsControllerFindMe<TData = Awaited<ReturnType<typeof farmsControllerFindMe>>, TError = unknown>(
+  options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof farmsControllerFindMe>>, TError, TData>> & Pick<
+        DefinedInitialDataOptions<
+          Awaited<ReturnType<typeof farmsControllerFindMe>>,
+          TError,
+          Awaited<ReturnType<typeof farmsControllerFindMe>>
+        > , 'initialData'
+      >, }
+ , queryClient?: QueryClient
+  ):  DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useFarmsControllerFindMe<TData = Awaited<ReturnType<typeof farmsControllerFindMe>>, TError = unknown>(
+  options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof farmsControllerFindMe>>, TError, TData>> & Pick<
+        UndefinedInitialDataOptions<
+          Awaited<ReturnType<typeof farmsControllerFindMe>>,
+          TError,
+          Awaited<ReturnType<typeof farmsControllerFindMe>>
+        > , 'initialData'
+      >, }
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useFarmsControllerFindMe<TData = Awaited<ReturnType<typeof farmsControllerFindMe>>, TError = unknown>(
+  options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof farmsControllerFindMe>>, TError, TData>>, }
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
 /**
  * @summary Get the caller's own farm
  */
 
 export function useFarmsControllerFindMe<TData = Awaited<ReturnType<typeof farmsControllerFindMe>>, TError = unknown>(
-  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof farmsControllerFindMe>>, TError, TData>, }
-
- ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof farmsControllerFindMe>>, TError, TData>>, }
+ , queryClient?: QueryClient
+ ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
 
   const queryOptions = getFarmsControllerFindMeQueryOptions(options)
 
-  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+  const query = useQuery(queryOptions, queryClient) as  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
 
   return withQueryKey(query, queryOptions.queryKey);
 }
@@ -235,11 +265,73 @@ const {mutation: mutationOptions} = options ?
  */
 export const useFarmsControllerUpdateMe = <TError = unknown,
     TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof farmsControllerUpdateMe>>, TError,{data: UpdateFarmRequestDto}, TContext>, }
- ): UseMutationResult<
+ , queryClient?: QueryClient): UseMutationResult<
         Awaited<ReturnType<typeof farmsControllerUpdateMe>>,
         TError,
         {data: UpdateFarmRequestDto},
         TContext
       > => {
-      return useMutation(getFarmsControllerUpdateMeMutationOptions(options));
+      return useMutation(getFarmsControllerUpdateMeMutationOptions(options), queryClient);
+    }
+    /**
+ * @summary Generate a new invitation code for the caller's own farm (admin only), valid for one hour. The previous code stops working immediately.
+ */
+export const farmsControllerRegenerateInvitationCode = (
+
+ signal?: AbortSignal
+) => {
+
+
+      return apiClient<RegenerateFarmInvitationCodeResponseDto>(
+      {url: `/api/v1/farms/me/invitation-code`, method: 'POST', signal
+    },
+      );
+    }
+
+
+
+
+export const getFarmsControllerRegenerateInvitationCodeMutationOptions = <TError = unknown,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof farmsControllerRegenerateInvitationCode>>, TError,void, TContext>, }
+): UseMutationOptions<Awaited<ReturnType<typeof farmsControllerRegenerateInvitationCode>>, TError,void, TContext> => {
+
+const mutationKey = ['farmsControllerRegenerateInvitationCode'];
+const {mutation: mutationOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof farmsControllerRegenerateInvitationCode>>, void> = () => {
+
+
+          return  farmsControllerRegenerateInvitationCode()
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type FarmsControllerRegenerateInvitationCodeMutationResult = NonNullable<Awaited<ReturnType<typeof farmsControllerRegenerateInvitationCode>>>
+
+    export type FarmsControllerRegenerateInvitationCodeMutationError = unknown
+
+    /**
+ * @summary Generate a new invitation code for the caller's own farm (admin only), valid for one hour. The previous code stops working immediately.
+ */
+export const useFarmsControllerRegenerateInvitationCode = <TError = unknown,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof farmsControllerRegenerateInvitationCode>>, TError,void, TContext>, }
+ , queryClient?: QueryClient): UseMutationResult<
+        Awaited<ReturnType<typeof farmsControllerRegenerateInvitationCode>>,
+        TError,
+        void,
+        TContext
+      > => {
+      return useMutation(getFarmsControllerRegenerateInvitationCodeMutationOptions(options), queryClient);
     }

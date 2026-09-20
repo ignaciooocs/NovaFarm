@@ -27,10 +27,22 @@ export class FarmDto {
 
   @ApiProperty({
     description:
-      'Code a recorder enters during onboarding to join this farm. Regenerable by an admin, no expiry.',
+      'Code a recorder enters during onboarding to join this farm. Valid for one hour after it is generated (see invitationCodeExpiresAt); an admin generates a new one with POST /farms/me/invitation-code.',
     example: 'A1B2C3',
   })
   invitationCode!: string;
+
+  // `type: String` + `format` explícitos: el plugin de Swagger no infiere
+  // `Date | null` (mismo problema que kgFactor/payRate) y cae a `object`.
+  @ApiProperty({
+    description:
+      'Until when invitationCode can be used to join. Null for farms created before invitation codes expired — treated as already expired.',
+    type: String,
+    format: 'date-time',
+    example: '2026-09-16T15:42:00.000Z',
+    nullable: true,
+  })
+  invitationCodeExpiresAt!: Date | null;
 
   @ApiProperty({
     description: 'Whether the farm is active',

@@ -9,13 +9,28 @@ const INVITATION_CODE_LENGTH = 8;
 // Sin 0/O/1/I para evitar ambigüedad al leerlo en voz alta o escribirlo.
 const INVITATION_CODE_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
 const MAX_INVITATION_CODE_ATTEMPTS = 5;
+// Cuánto sirve un código desde que se genera. Una hora (decisión del
+// usuario, 2026-09-16): alcanza para mandarlo y que la persona se una ahí
+// mismo, y si se necesita otro después, el admin lo genera desde Ajustes.
+export const INVITATION_CODE_TTL_MS = 60 * 60 * 1000;
 
 // Código de error de Mongo para llave duplicada (choque de índice único).
 const MONGO_DUPLICATE_KEY_ERROR_CODE = 11000;
 
+// Si un código ya no sirve para unirse. Sin fecha es una farm de antes de
+// que los códigos vencieran: vencido, no eterno — un código que circuló sin
+// límite es justo lo que esto viene a cerrar.
+export function isInvitationCodeExpired(
+  expiresAt: Date | null,
+  now: Date = new Date(),
+): boolean {
+  return expiresAt === null || expiresAt.getTime() <= now.getTime();
+}
+
 /**
- * Maneja la farm (el tenant raíz): crearla generando su invitationCode, y
- * buscarla por ese código cuando un recorder se une durante el onboarding.
+ * Maneja la farm (el tenant raíz): crearla generando su invitationCode,
+ * generarle uno nuevo cuando el admin lo pide, y buscarla por ese código
+ * cuando un recorder se une durante el onboarding.
  */
 @Injectable()
 export class FarmsService {
@@ -23,44 +38,55 @@ export class FarmsService {
     @InjectModel(Farm.name) private readonly farmModel: Model<Farm>,
   ) {}
 
-  // Crea una farm nueva generando un invitationCode aleatorio. Si el código
-  // choca con uno ya existente (índice único), reintenta con uno nuevo hasta
-  // MAX_INVITATION_CODE_ATTEMPTS veces antes de fallar definitivamente.
+  // Crea una farm nueva con un invitationCode aleatorio que vence en
+  // INVITATION_CODE_TTL_MS.
   async create(dto: CreateFarmRequestDto): Promise<FarmDto> {
-    let lastError: unknown;
+    return this.withUniqueInvitationCode(async (invitationCode) => {
+      const created = await this.farmModel.create({
+        name: dto.name,
+        type: dto.type,
+        invitationCode,
+        invitationCodeExpiresAt: this.newInvitationCodeExpiry(),
+        active: true,
+      });
 
-    for (let attempt = 0; attempt < MAX_INVITATION_CODE_ATTEMPTS; attempt++) {
-      const invitationCode = this.generateInvitationCode();
+      return this.toDto(created);
+    });
+  }
 
-      try {
-        const created = await this.farmModel.create({
-          name: dto.name,
-          type: dto.type,
-          invitationCode,
-          active: true,
-        });
-
-        return this.toDto(created);
-      } catch (error) {
-        // Solo reintenta si el choque fue justo en invitationCode; cualquier
-        // otro error (de validación, de conexión, etc.) se propaga tal cual.
-        if (this.isDuplicateInvitationCodeError(error)) {
-          lastError = error;
-          continue;
-        }
-
-        throw error;
-      }
+  // Reemplaza el invitationCode de la farm por uno nuevo que vence en
+  // INVITATION_CODE_TTL_MS (POST /farms/me/invitation-code, admin only — el
+  // chequeo de rol vive en el controller). El anterior deja de servir al
+  // tiro, aunque no hubiera vencido: generar uno nuevo también es la forma
+  // de cortar uno que se compartió de más. Devuelve null si la farm no existe.
+  async regenerateInvitationCode(id: string): Promise<FarmDto | null> {
+    if (!Types.ObjectId.isValid(id)) {
+      return null;
     }
 
-    throw new Error(
-      `Failed to generate a unique invitationCode after ${MAX_INVITATION_CODE_ATTEMPTS} attempts`,
-      { cause: lastError },
-    );
+    return this.withUniqueInvitationCode(async (invitationCode) => {
+      // $set puntual y no .save(), por lo mismo que en update().
+      const updated = await this.farmModel
+        .findOneAndUpdate(
+          { _id: id },
+          {
+            $set: {
+              invitationCode,
+              invitationCodeExpiresAt: this.newInvitationCodeExpiry(),
+            },
+          },
+          { new: true },
+        )
+        .exec();
+
+      return updated ? this.toDto(updated) : null;
+    });
   }
 
   // Busca una farm activa por su invitationCode — es el paso que valida el
-  // código que un recorder ingresa para unirse a una farm ya existente.
+  // código que un recorder ingresa para unirse a una farm ya existente. No
+  // mira si venció: eso lo decide quien llama con isInvitationCodeExpired(),
+  // para poder responder "caducó" distinto de "no existe".
   async findActiveByInvitationCode(code: string): Promise<FarmDto | null> {
     const found = await this.farmModel
       .findOne({ invitationCode: code, active: true })
@@ -101,6 +127,40 @@ export class FarmsService {
       .exec();
 
     return updated ? this.toDto(updated) : null;
+  }
+
+  // Corre una escritura con un invitationCode recién generado. Si el código
+  // choca con uno ya existente (índice único — los vencidos siguen ocupando
+  // el suyo), reintenta con uno nuevo hasta MAX_INVITATION_CODE_ATTEMPTS
+  // veces antes de fallar definitivamente.
+  private async withUniqueInvitationCode<T>(
+    write: (invitationCode: string) => Promise<T>,
+  ): Promise<T> {
+    let lastError: unknown;
+
+    for (let attempt = 0; attempt < MAX_INVITATION_CODE_ATTEMPTS; attempt++) {
+      try {
+        return await write(this.generateInvitationCode());
+      } catch (error) {
+        // Solo reintenta si el choque fue justo en invitationCode; cualquier
+        // otro error (de validación, de conexión, etc.) se propaga tal cual.
+        if (this.isDuplicateInvitationCodeError(error)) {
+          lastError = error;
+          continue;
+        }
+
+        throw error;
+      }
+    }
+
+    throw new Error(
+      `Failed to generate a unique invitationCode after ${MAX_INVITATION_CODE_ATTEMPTS} attempts`,
+      { cause: lastError },
+    );
+  }
+
+  private newInvitationCodeExpiry(): Date {
+    return new Date(Date.now() + INVITATION_CODE_TTL_MS);
   }
 
   // Genera un código aleatorio de INVITATION_CODE_LENGTH caracteres tomados
@@ -147,6 +207,7 @@ export class FarmsService {
       name: doc.name,
       type: doc.type,
       invitationCode: doc.invitationCode,
+      invitationCodeExpiresAt: doc.invitationCodeExpiresAt ?? null,
       active: doc.active,
       createdAt: doc.createdAt,
       recordersCanManageCatalog: doc.recordersCanManageCatalog ?? true,

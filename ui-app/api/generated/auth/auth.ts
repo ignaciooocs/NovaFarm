@@ -10,6 +10,7 @@ import {
 } from '@tanstack/react-query';
 import type {
   MutationFunction,
+  QueryClient,
   UseMutationOptions,
   UseMutationResult
 } from '@tanstack/react-query';
@@ -83,16 +84,16 @@ const {mutation: mutationOptions} = options ?
  */
 export const useAuthControllerRegisterAdmin = <TError = unknown,
     TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof authControllerRegisterAdmin>>, TError,{data: RegisterAdminRequestDto}, TContext>, }
- ): UseMutationResult<
+ , queryClient?: QueryClient): UseMutationResult<
         Awaited<ReturnType<typeof authControllerRegisterAdmin>>,
         TError,
         {data: RegisterAdminRequestDto},
         TContext
       > => {
-      return useMutation(getAuthControllerRegisterAdminMutationOptions(options));
+      return useMutation(getAuthControllerRegisterAdminMutationOptions(options), queryClient);
     }
     /**
- * Requires a valid Firebase ID token (the account must already exist in Firebase Authentication; ui-app signs up/in against Firebase directly). After a successful call, the farmId/roles custom claims are set on the Firebase user — the client must force a token refresh (getIdToken(true)) before calling any endpoint protected by FarmScopeGuard, since the ID token already held in memory predates those claims.
+ * Requires a valid Firebase ID token (the account must already exist in Firebase Authentication; ui-app signs up/in against Firebase directly). After a successful call, the farmId/roles custom claims are set on the Firebase user — the client must force a token refresh (getIdToken(true)) before calling any endpoint protected by FarmScopeGuard, since the ID token already held in memory predates those claims. Responds 404 when no active farm has that invitation code, and 410 when the code existed but has expired (an admin has to generate a new one).
  * @summary Complete onboarding as a recorder, joining an existing farm
  */
 export const authControllerRegisterRecorder = (
@@ -148,11 +149,11 @@ const {mutation: mutationOptions} = options ?
  */
 export const useAuthControllerRegisterRecorder = <TError = unknown,
     TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof authControllerRegisterRecorder>>, TError,{data: RegisterRecorderRequestDto}, TContext>, }
- ): UseMutationResult<
+ , queryClient?: QueryClient): UseMutationResult<
         Awaited<ReturnType<typeof authControllerRegisterRecorder>>,
         TError,
         {data: RegisterRecorderRequestDto},
         TContext
       > => {
-      return useMutation(getAuthControllerRegisterRecorderMutationOptions(options));
+      return useMutation(getAuthControllerRegisterRecorderMutationOptions(options), queryClient);
     }

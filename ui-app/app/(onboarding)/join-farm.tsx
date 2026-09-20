@@ -1,11 +1,11 @@
 import { useState } from 'react';
-import { StyleSheet } from 'react-native';
+import { Share, StyleSheet } from 'react-native';
 import { Stack, useRouter } from 'expo-router';
 import { Button, HelperText, Text, TextInput } from 'react-native-paper';
 import { useAuthControllerRegisterRecorder } from '@/api/generated/auth/auth';
 import { Screen } from '@/components/Screen';
 import { strings } from '@/constants/strings';
-import { getErrorMessage } from '@/lib/errors';
+import { getErrorMessage, isExpiredInvitationCodeError } from '@/lib/errors';
 import { auth } from '@/lib/firebase';
 import { usePalette } from '@/stores';
 import { colors, spacing } from '@/theme';
@@ -39,6 +39,18 @@ export default function JoinFarmScreen() {
     registerRecorder.mutate({
       data: { name: name.trim(), invitationCode: invitationCode.trim() },
     });
+  }
+
+  // Con el código vencido, pedir otro es mandarle un mensaje a quien invitó
+  // por la app que se elija (share sheet): quien se une todavía no es parte
+  // de ninguna farm, así que no hay a quién avisarle dentro de la app.
+  async function handleRequestNewCode() {
+    try {
+      await Share.share({ message: strings.onboarding.requestNewCodeMessage });
+    } catch {
+      // Canceló el share sheet — no es un error real, mismo criterio que
+      // invite-code.tsx.
+    }
   }
 
   return (
@@ -76,6 +88,17 @@ export default function JoinFarmScreen() {
           {getErrorMessage(registerRecorder.error)}
         </HelperText>
       ) : null}
+      {isExpiredInvitationCodeError(registerRecorder.error) ? (
+        <Button
+          mode="text"
+          icon="message-text-outline"
+          onPress={handleRequestNewCode}
+          textColor={palette.primary}
+          style={styles.requestButton}
+        >
+          {strings.onboarding.requestNewCode}
+        </Button>
+      ) : null}
 
       <Button
         mode="contained"
@@ -101,4 +124,5 @@ const styles = StyleSheet.create({
   input: { marginBottom: spacing.md },
   buttonContent: { paddingVertical: spacing.xs },
   button: { marginTop: spacing.sm, borderRadius: 12 },
+  requestButton: { alignSelf: 'flex-start' },
 });

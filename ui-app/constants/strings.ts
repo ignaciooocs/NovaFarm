@@ -73,9 +73,22 @@ export const strings = {
     shareButton: 'Compartir código',
     shareMessage: (code: string) =>
       `Únete a mi equipo en ${APP_NAME} con el código: ${code}`,
+    // El código vence una hora después de generarse (ver
+    // invitationCodeExpiresAt en server-app).
+    invitationCodeValidFor:
+      'Sirve por 1 hora. Si vence, generas otro desde Ajustes.',
+    invitationCodeValidUntil: (time: string) => `Sirve hasta las ${time}`,
+    invitationCodeExpired: 'Este código ya caducó',
+    invitationCodeAskAdmin: 'Pídele uno nuevo al administrador.',
+    generateInvitationCode: 'Generar código nuevo',
     joinFarmTitle: 'Unirme a una farm',
     joinFarmSubtitle: 'Ingresa el código que te compartió tu equipo',
     joinFarmButton: 'Unirme',
+    // "Pedir" un código nuevo es mandarle un mensaje a quien te invitó por
+    // la app que elijas (WhatsApp, etc.): quien se está uniendo todavía no
+    // es parte de ninguna farm, así que no hay a quién avisarle adentro.
+    requestNewCode: 'Pedir código nuevo',
+    requestNewCodeMessage: `Hola, el código para unirme al equipo en ${APP_NAME} ya caducó. ¿Me mandas uno nuevo?`,
     starterProductsTitle: 'Arma tu catálogo',
     starterProductsSubtitle:
       'Elige los cultivos con los que trabajas — puedes agregar más después desde Cultivos.',
@@ -383,6 +396,8 @@ export const strings = {
     invalidCredential: 'Correo o contraseña incorrectos.',
     tooManyRequests: 'Demasiados intentos. Espera un momento e intenta de nuevo.',
     invalidInvitationCode: 'El código de invitación no es válido o ya no está activo.',
+    expiredInvitationCode:
+      'Este código ya caducó. Pídele uno nuevo a quien te invitó.',
     alreadyOnboarded: 'Esta cuenta ya completó el registro.',
     // El índice único del server es {farmId, name} y NO mira `active`, así
     // que un cultivo desactivado sigue ocupando su nombre. Sin esa pista el

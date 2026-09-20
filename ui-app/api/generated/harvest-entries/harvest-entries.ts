@@ -10,9 +10,14 @@ import {
   useQuery
 } from '@tanstack/react-query';
 import type {
+  DataTag,
+  DefinedInitialDataOptions,
+  DefinedUseQueryResult,
   MutationFunction,
+  QueryClient,
   QueryFunction,
   QueryKey,
+  UndefinedInitialDataOptions,
   UseMutationOptions,
   UseMutationResult,
   UseQueryOptions,
@@ -102,13 +107,13 @@ const {mutation: mutationOptions} = options ?
  */
 export const useHarvestEntriesControllerSync = <TError = unknown,
     TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof harvestEntriesControllerSync>>, TError,{data: SyncHarvestEntryRequestDto}, TContext>, }
- ): UseMutationResult<
+ , queryClient?: QueryClient): UseMutationResult<
         Awaited<ReturnType<typeof harvestEntriesControllerSync>>,
         TError,
         {data: SyncHarvestEntryRequestDto},
         TContext
       > => {
-      return useMutation(getHarvestEntriesControllerSyncMutationOptions(options));
+      return useMutation(getHarvestEntriesControllerSyncMutationOptions(options), queryClient);
     }
     /**
  * @summary List the delivery entries for a workday
@@ -136,7 +141,7 @@ export const getHarvestEntriesControllerFindAllQueryKey = (params?: HarvestEntri
     }
 
 
-export const getHarvestEntriesControllerFindAllQueryOptions = <TData = Awaited<ReturnType<typeof harvestEntriesControllerFindAll>>, TError = unknown>(params: HarvestEntriesControllerFindAllParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof harvestEntriesControllerFindAll>>, TError, TData>, }
+export const getHarvestEntriesControllerFindAllQueryOptions = <TData = Awaited<ReturnType<typeof harvestEntriesControllerFindAll>>, TError = unknown>(params: HarvestEntriesControllerFindAllParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof harvestEntriesControllerFindAll>>, TError, TData>>, }
 ) => {
 
 const {query: queryOptions} = options ?? {};
@@ -151,25 +156,49 @@ const {query: queryOptions} = options ?? {};
 
 
 
-   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof harvestEntriesControllerFindAll>>, TError, TData> & { queryKey: QueryKey }
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof harvestEntriesControllerFindAll>>, TError, TData> & { queryKey: DataTag<QueryKey, TData, TError> }
 }
 
 export type HarvestEntriesControllerFindAllQueryResult = NonNullable<Awaited<ReturnType<typeof harvestEntriesControllerFindAll>>>
 export type HarvestEntriesControllerFindAllQueryError = unknown
 
 
+export function useHarvestEntriesControllerFindAll<TData = Awaited<ReturnType<typeof harvestEntriesControllerFindAll>>, TError = unknown>(
+ params: HarvestEntriesControllerFindAllParams, options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof harvestEntriesControllerFindAll>>, TError, TData>> & Pick<
+        DefinedInitialDataOptions<
+          Awaited<ReturnType<typeof harvestEntriesControllerFindAll>>,
+          TError,
+          Awaited<ReturnType<typeof harvestEntriesControllerFindAll>>
+        > , 'initialData'
+      >, }
+ , queryClient?: QueryClient
+  ):  DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useHarvestEntriesControllerFindAll<TData = Awaited<ReturnType<typeof harvestEntriesControllerFindAll>>, TError = unknown>(
+ params: HarvestEntriesControllerFindAllParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof harvestEntriesControllerFindAll>>, TError, TData>> & Pick<
+        UndefinedInitialDataOptions<
+          Awaited<ReturnType<typeof harvestEntriesControllerFindAll>>,
+          TError,
+          Awaited<ReturnType<typeof harvestEntriesControllerFindAll>>
+        > , 'initialData'
+      >, }
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useHarvestEntriesControllerFindAll<TData = Awaited<ReturnType<typeof harvestEntriesControllerFindAll>>, TError = unknown>(
+ params: HarvestEntriesControllerFindAllParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof harvestEntriesControllerFindAll>>, TError, TData>>, }
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
 /**
  * @summary List the delivery entries for a workday
  */
 
 export function useHarvestEntriesControllerFindAll<TData = Awaited<ReturnType<typeof harvestEntriesControllerFindAll>>, TError = unknown>(
- params: HarvestEntriesControllerFindAllParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof harvestEntriesControllerFindAll>>, TError, TData>, }
-
- ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+ params: HarvestEntriesControllerFindAllParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof harvestEntriesControllerFindAll>>, TError, TData>>, }
+ , queryClient?: QueryClient
+ ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
 
   const queryOptions = getHarvestEntriesControllerFindAllQueryOptions(params,options)
 
-  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+  const query = useQuery(queryOptions, queryClient) as  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
 
   return withQueryKey(query, queryOptions.queryKey);
 }

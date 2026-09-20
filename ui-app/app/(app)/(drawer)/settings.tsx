@@ -1,9 +1,10 @@
-import { useState } from 'react';
+import { useEffect, useReducer, useState } from 'react';
 import { Pressable, Share, StyleSheet, View } from 'react-native';
 import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
 import * as Clipboard from 'expo-clipboard';
 import {
   ActivityIndicator,
+  Button,
   Divider,
   HelperText,
   IconButton,
@@ -14,6 +15,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import {
   getFarmsControllerFindMeQueryKey,
   useFarmsControllerFindMe,
+  useFarmsControllerRegenerateInvitationCode,
   useFarmsControllerUpdateMe,
 } from '@/api/generated/farms/farms';
 import { Screen } from '@/components/Screen';
@@ -68,6 +70,24 @@ export default function SettingsScreen() {
   function handleToggle(value: boolean) {
     updateFarm.mutate({ data: { recordersCanManageCatalog: value } });
   }
+
+  // El código de invitación vence una hora después de generarse. Solo quien
+  // administra la farm ve el botón para generar otro; server-app lo exige
+  // igual (RolesGuard en POST /farms/me/invitation-code).
+  const codeExpired = useIsPast(farm?.invitationCodeExpiresAt ?? null);
+  const regenerateCode = useFarmsControllerRegenerateInvitationCode({
+    mutation: {
+      // Mismo motivo que en updateFarm: un refresco en camino llegaría con
+      // el código vencido encima del nuevo.
+      onMutate: () =>
+        queryClient.cancelQueries({
+          queryKey: getFarmsControllerFindMeQueryKey(),
+        }),
+      // La respuesta ya es la farm con el código nuevo.
+      onSuccess: (updated) =>
+        queryClient.setQueryData(getFarmsControllerFindMeQueryKey(), updated),
+    },
+  });
 
   async function handleCopyCode(invitationCode: string) {
     await Clipboard.setStringAsync(invitationCode);
@@ -124,24 +144,70 @@ export default function SettingsScreen() {
               <Text style={styles.codeLabel}>
                 {strings.onboarding.invitationCodeLabel}
               </Text>
-              <Text
-                variant="titleLarge"
-                style={[styles.codeValue, { color: palette.primary }]}
-              >
-                {farm.invitationCode}
-              </Text>
+              {/* Vencido no se muestra: copiarlo o compartirlo solo haría
+                  que alguien se tope con "caducó" al intentar unirse. */}
+              {codeExpired ? (
+                <Text variant="titleMedium" style={styles.codeExpired}>
+                  {strings.onboarding.invitationCodeExpired}
+                </Text>
+              ) : (
+                <Text
+                  variant="titleLarge"
+                  style={[styles.codeValue, { color: palette.primary }]}
+                >
+                  {farm.invitationCode}
+                </Text>
+              )}
             </View>
-            <IconButton
-              icon={copied ? 'check' : 'content-copy'}
-              onPress={() => handleCopyCode(farm.invitationCode)}
-              accessibilityLabel={strings.common.copy}
-            />
-            <IconButton
-              icon="share-variant"
-              onPress={() => handleShareCode(farm.invitationCode)}
-              accessibilityLabel={strings.onboarding.shareButton}
-            />
+            {codeExpired ? null : (
+              <>
+                <IconButton
+                  icon={copied ? 'check' : 'content-copy'}
+                  onPress={() => handleCopyCode(farm.invitationCode)}
+                  accessibilityLabel={strings.common.copy}
+                />
+                <IconButton
+                  icon="share-variant"
+                  onPress={() => handleShareCode(farm.invitationCode)}
+                  accessibilityLabel={strings.onboarding.shareButton}
+                />
+              </>
+            )}
           </View>
+
+          {!codeExpired && farm.invitationCodeExpiresAt ? (
+            <Text variant="bodySmall" style={styles.codeHint}>
+              {strings.onboarding.invitationCodeValidUntil(
+                new Date(farm.invitationCodeExpiresAt).toLocaleTimeString(
+                  'es-CL',
+                  { hour: '2-digit', minute: '2-digit' },
+                ),
+              )}
+            </Text>
+          ) : null}
+          {codeExpired && canManageFarmSettings ? (
+            <Button
+              mode="outlined"
+              icon="refresh"
+              onPress={() => regenerateCode.mutate()}
+              loading={regenerateCode.isPending}
+              disabled={regenerateCode.isPending}
+              textColor={palette.primary}
+              style={styles.regenerateButton}
+            >
+              {strings.onboarding.generateInvitationCode}
+            </Button>
+          ) : null}
+          {codeExpired && !canManageFarmSettings ? (
+            <Text variant="bodySmall" style={styles.codeHint}>
+              {strings.onboarding.invitationCodeAskAdmin}
+            </Text>
+          ) : null}
+          {regenerateCode.error ? (
+            <HelperText type="error">
+              {getErrorMessage(regenerateCode.error)}
+            </HelperText>
+          ) : null}
 
           {canManageFarmSettings ? (
             <>
@@ -235,6 +301,9 @@ const styles = StyleSheet.create({
   codeTextWrap: { flex: 1 },
   codeLabel: { color: colors.textSecondary, fontSize: 12 },
   codeValue: { fontWeight: '800', letterSpacing: 2 },
+  codeExpired: { color: colors.textSecondary, paddingVertical: spacing.xs },
+  codeHint: { color: colors.textSecondary, marginTop: spacing.xs },
+  regenerateButton: { alignSelf: 'flex-start', marginTop: spacing.sm },
   divider: { marginVertical: spacing.lg },
   switchRow: {
     flexDirection: 'row',
@@ -259,3 +328,25 @@ const styles = StyleSheet.create({
   },
   swatchLabel: { marginTop: spacing.xs, color: colors.textSecondary },
 });
+
+// Si la fecha ya pasó (o no hay fecha), y vuelve a renderizar justo cuando
+// pasa: sin esto, un código que vence con Ajustes abierto seguiría
+// mostrándose como vigente hasta salir y volver a entrar.
+function useIsPast(iso: string | null): boolean {
+  const [, rerender] = useReducer((count: number) => count + 1, 0);
+  const time = iso === null ? null : new Date(iso).getTime();
+
+  useEffect(() => {
+    if (time === null) {
+      return;
+    }
+    const remaining = time - Date.now();
+    if (remaining <= 0) {
+      return;
+    }
+    const timer = setTimeout(rerender, remaining);
+    return () => clearTimeout(timer);
+  }, [time]);
+
+  return time === null || time <= Date.now();
+}

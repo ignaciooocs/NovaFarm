@@ -28,6 +28,7 @@ erDiagram
         string name
         string type "organization | independent, UI-only"
         string invitationCode UK
+        datetime invitationCodeExpiresAt "null en farms anteriores al vencimiento = vencido"
         boolean active
         datetime createdAt
     }
@@ -198,7 +199,7 @@ Role first, then affiliation:
 2. **If administrator** — two visible options, same backend action (create `farms` + `users.role='admin'`), differing in `type` and the following screen:
    - *"Create a farm for my team"* → `type: 'organization'`, asks for a name, then shows the `invitationCode` with an "invite your team" step.
    - *"Work independently"* → `type: 'independent'`, asks for a name too (avoids a generic name if someone is invited later), no invitation screen.
-3. **If recorder** — asks for the invitation code, validates it against `farms.invitationCode` (with `active: true`), creates `users` with `role: 'recorder'` and the `farmId` of the farm found. There's no "independent recorder" mode: someone working alone needs admin-level permissions over their own catalog (products/units/harvesters), so that case always falls under the administrator branch.
+3. **If recorder** — asks for the invitation code, validates it against `farms.invitationCode` (with `active: true`, and rejects it with 410 if `invitationCodeExpiresAt` has passed), creates `users` with `role: 'recorder'` and the `farmId` of the farm found. There's no "independent recorder" mode: someone working alone needs admin-level permissions over their own catalog (products/units/harvesters), so that case always falls under the administrator branch.
 
 Changing farms or roles after creation doesn't require any schema change (they're mutable fields on `users`), but **it's not retroactive**: workdays/records already created under the previous `farmId` keep that `farmId` forever — the same philosophy already used for never reassigning `harvesterId` except via an explicit manual merge.
 
@@ -244,5 +245,5 @@ Changing farms or roles after creation doesn't require any schema change (they'r
 - A user belonging to more than one farm at a time — today `users.farmId` is singular.
 - Transferring administration of a farm to another user.
 - Company → many-farms hierarchy — if needed later, this would be solved by adding a `companies` collection above `farms`, without reworking anything in the collections that already depend on `farmId`.
-- Expiration and usage auditing of `invitationCode` — today it's a fixed, non-expiring code; a code shared once could circulate indefinitely until an admin manually regenerates it.
+- ~~Expiration of `invitationCode`~~ — **built on 2026-09-20**: a code expires one hour after it is generated (`invitationCodeExpiresAt`), and an admin generates a new one from Settings (`POST /farms/me/invitation-code`), which invalidates the previous one immediately. Farms created before this have no expiry stored and their codes count as already expired. Still open: **usage auditing** — nothing records who used a code or how many times.
 - Reclaiming a guest workday (`recorderId: null`) later and assigning it to a real user — if built, it must preserve the workday's original `farmId` (the device's farm at the time of recording), never replace it with whoever is claiming it's current farm.

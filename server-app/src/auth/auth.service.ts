@@ -1,10 +1,11 @@
 import {
   ConflictException,
+  GoneException,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
 import { Types } from 'mongoose';
-import { FarmsService } from '../farms/farms.service';
+import { FarmsService, isInvitationCodeExpired } from '../farms/farms.service';
 import { UsersService } from '../users/users.service';
 import {
   RegisterAdminRequestDto,
@@ -60,8 +61,8 @@ export class AuthService {
   }
 
   // Registra un recorder: busca la farm por invitationCode (debe existir y
-  // estar activa, si no 404), crea el usuario recorder asociado a esa farm,
-  // y publica los claims en Firebase.
+  // estar activa, si no 404; y no haber vencido, si no 410), crea el usuario
+  // recorder asociado a esa farm, y publica los claims en Firebase.
   async registerRecorder(
     firebaseUser: FirebaseUser,
     dto: RegisterRecorderRequestDto,
@@ -74,6 +75,13 @@ export class AuthService {
 
     if (!farm) {
       throw new NotFoundException('Invalid or inactive invitation code');
+    }
+
+    // 410 y no el mismo 404: a quien se está uniendo le sirve saber que el
+    // código estaba bien pero caducó (tiene que pedir otro), en vez de
+    // pensar que lo escribió mal. No expone nada de la farm.
+    if (isInvitationCodeExpired(farm.invitationCodeExpiresAt)) {
+      throw new GoneException('Invitation code has expired');
     }
 
     const user = await this.usersService.create({

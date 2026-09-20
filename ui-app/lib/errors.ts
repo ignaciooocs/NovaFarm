@@ -44,6 +44,11 @@ function apiErrorMessage(error: {
       ? data.message
       : '';
 
+  // Antes que el de abajo: "Invitation code has expired" también calza con
+  // /invitation code/, y diría "no es válido" a alguien que lo escribió bien.
+  if (isExpiredInvitationCodeError(error)) {
+    return strings.errors.expiredInvitationCode;
+  }
   if (/invitation code/i.test(message)) {
     return strings.errors.invalidInvitationCode;
   }
@@ -61,6 +66,20 @@ function apiErrorMessage(error: {
   }
 
   return strings.errors.generic;
+}
+
+// Si el server rechazó un código de invitación porque venció (410), no
+// porque no exista. Exportada porque Unirme ofrece "Pedir código nuevo" solo
+// en este caso. Status y mensaje, mismo criterio que apiErrorMessage.
+export function isExpiredInvitationCodeError(error: unknown): boolean {
+  if (!isAxiosError(error) || error.response?.status !== 410) {
+    return false;
+  }
+  const data = error.response.data as { message?: unknown } | undefined;
+  return (
+    typeof data?.message === 'string' &&
+    /invitation code has expired/i.test(data.message)
+  );
 }
 
 // Punto de entrada único: recibe cualquier error atrapado en un catch (de

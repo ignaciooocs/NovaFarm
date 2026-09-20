@@ -1,4 +1,8 @@
-import { ConflictException, NotFoundException } from '@nestjs/common';
+import {
+  ConflictException,
+  GoneException,
+  NotFoundException,
+} from '@nestjs/common';
 import { Test, TestingModule } from '@nestjs/testing';
 import { FarmsService } from '../farms/farms.service';
 import { UsersService } from '../users/users.service';
@@ -108,6 +112,7 @@ describe('AuthService', () => {
         name: 'Fundo Los Alamos',
         type: 'organization',
         invitationCode: 'ABC12345',
+        invitationCodeExpiresAt: new Date(Date.now() + 30 * 60 * 1000),
         active: true,
         createdAt: new Date(),
       });
@@ -152,6 +157,35 @@ describe('AuthService', () => {
 
       expect(usersService.create).not.toHaveBeenCalled();
     });
+
+    it.each([
+      ['has passed its expiry', new Date(Date.now() - 60 * 1000)],
+      ['has no expiry (farm created before codes expired)', null],
+    ])(
+      'throws GoneException without joining when the code %s',
+      async (_case, invitationCodeExpiresAt) => {
+        usersService.findByFirebaseUid.mockResolvedValue(null);
+        farmsService.findActiveByInvitationCode.mockResolvedValue({
+          _id: farmId,
+          name: 'Fundo Los Alamos',
+          type: 'organization',
+          invitationCode: 'ABC12345',
+          invitationCodeExpiresAt,
+          active: true,
+          createdAt: new Date(),
+        });
+
+        await expect(
+          authService.registerRecorder(firebaseUser, {
+            name: 'Pedro Gonzalez',
+            invitationCode: 'ABC12345',
+          }),
+        ).rejects.toBeInstanceOf(GoneException);
+
+        expect(usersService.create).not.toHaveBeenCalled();
+        expect(firebaseAdminService.setCustomUserClaims).not.toHaveBeenCalled();
+      },
+    );
 
     it('throws ConflictException when the firebaseUid already onboarded', async () => {
       usersService.findByFirebaseUid.mockResolvedValue({ _id: 'user-1' });

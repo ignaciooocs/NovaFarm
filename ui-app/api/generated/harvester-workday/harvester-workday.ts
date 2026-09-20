@@ -10,9 +10,14 @@ import {
   useQuery
 } from '@tanstack/react-query';
 import type {
+  DataTag,
+  DefinedInitialDataOptions,
+  DefinedUseQueryResult,
   MutationFunction,
+  QueryClient,
   QueryFunction,
   QueryKey,
+  UndefinedInitialDataOptions,
   UseMutationOptions,
   UseMutationResult,
   UseQueryOptions,
@@ -102,13 +107,13 @@ const {mutation: mutationOptions} = options ?
  */
 export const useHarvesterWorkdayControllerSync = <TError = unknown,
     TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof harvesterWorkdayControllerSync>>, TError,{data: SyncHarvesterWorkdayRequestDto}, TContext>, }
- ): UseMutationResult<
+ , queryClient?: QueryClient): UseMutationResult<
         Awaited<ReturnType<typeof harvesterWorkdayControllerSync>>,
         TError,
         {data: SyncHarvesterWorkdayRequestDto},
         TContext
       > => {
-      return useMutation(getHarvesterWorkdayControllerSyncMutationOptions(options));
+      return useMutation(getHarvesterWorkdayControllerSyncMutationOptions(options), queryClient);
     }
     /**
  * @summary List the roster for a workday
@@ -136,7 +141,7 @@ export const getHarvesterWorkdayControllerFindAllQueryKey = (params?: HarvesterW
     }
 
 
-export const getHarvesterWorkdayControllerFindAllQueryOptions = <TData = Awaited<ReturnType<typeof harvesterWorkdayControllerFindAll>>, TError = unknown>(params: HarvesterWorkdayControllerFindAllParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof harvesterWorkdayControllerFindAll>>, TError, TData>, }
+export const getHarvesterWorkdayControllerFindAllQueryOptions = <TData = Awaited<ReturnType<typeof harvesterWorkdayControllerFindAll>>, TError = unknown>(params: HarvesterWorkdayControllerFindAllParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof harvesterWorkdayControllerFindAll>>, TError, TData>>, }
 ) => {
 
 const {query: queryOptions} = options ?? {};
@@ -151,25 +156,49 @@ const {query: queryOptions} = options ?? {};
 
 
 
-   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof harvesterWorkdayControllerFindAll>>, TError, TData> & { queryKey: QueryKey }
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof harvesterWorkdayControllerFindAll>>, TError, TData> & { queryKey: DataTag<QueryKey, TData, TError> }
 }
 
 export type HarvesterWorkdayControllerFindAllQueryResult = NonNullable<Awaited<ReturnType<typeof harvesterWorkdayControllerFindAll>>>
 export type HarvesterWorkdayControllerFindAllQueryError = unknown
 
 
+export function useHarvesterWorkdayControllerFindAll<TData = Awaited<ReturnType<typeof harvesterWorkdayControllerFindAll>>, TError = unknown>(
+ params: HarvesterWorkdayControllerFindAllParams, options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof harvesterWorkdayControllerFindAll>>, TError, TData>> & Pick<
+        DefinedInitialDataOptions<
+          Awaited<ReturnType<typeof harvesterWorkdayControllerFindAll>>,
+          TError,
+          Awaited<ReturnType<typeof harvesterWorkdayControllerFindAll>>
+        > , 'initialData'
+      >, }
+ , queryClient?: QueryClient
+  ):  DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useHarvesterWorkdayControllerFindAll<TData = Awaited<ReturnType<typeof harvesterWorkdayControllerFindAll>>, TError = unknown>(
+ params: HarvesterWorkdayControllerFindAllParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof harvesterWorkdayControllerFindAll>>, TError, TData>> & Pick<
+        UndefinedInitialDataOptions<
+          Awaited<ReturnType<typeof harvesterWorkdayControllerFindAll>>,
+          TError,
+          Awaited<ReturnType<typeof harvesterWorkdayControllerFindAll>>
+        > , 'initialData'
+      >, }
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useHarvesterWorkdayControllerFindAll<TData = Awaited<ReturnType<typeof harvesterWorkdayControllerFindAll>>, TError = unknown>(
+ params: HarvesterWorkdayControllerFindAllParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof harvesterWorkdayControllerFindAll>>, TError, TData>>, }
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
 /**
  * @summary List the roster for a workday
  */
 
 export function useHarvesterWorkdayControllerFindAll<TData = Awaited<ReturnType<typeof harvesterWorkdayControllerFindAll>>, TError = unknown>(
- params: HarvesterWorkdayControllerFindAllParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof harvesterWorkdayControllerFindAll>>, TError, TData>, }
-
- ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+ params: HarvesterWorkdayControllerFindAllParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof harvesterWorkdayControllerFindAll>>, TError, TData>>, }
+ , queryClient?: QueryClient
+ ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
 
   const queryOptions = getHarvesterWorkdayControllerFindAllQueryOptions(params,options)
 
-  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+  const query = useQuery(queryOptions, queryClient) as  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
 
   return withQueryKey(query, queryOptions.queryKey);
 }

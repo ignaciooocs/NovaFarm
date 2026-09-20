@@ -43,8 +43,13 @@ export interface FarmDto {
   name: string;
   /** UI-only classification: whether to show the 'invite your team' step after creation. No backend logic differs between the two values. */
   type: FarmDtoType;
-  /** Code a recorder enters during onboarding to join this farm. Regenerable by an admin, no expiry. */
+  /** Code a recorder enters during onboarding to join this farm. Valid for one hour after it is generated (see invitationCodeExpiresAt); an admin generates a new one with POST /farms/me/invitation-code. */
   invitationCode: string;
+  /**
+     * Until when invitationCode can be used to join. Null for farms created before invitation codes expired — treated as already expired.
+     * @nullable
+     */
+  invitationCodeExpiresAt: string | null;
   /** Whether the farm is active */
   active: boolean;
   /** Creation timestamp */
@@ -207,8 +212,13 @@ export interface CreateFarmResponseDto {
   name: string;
   /** UI-only classification: whether to show the 'invite your team' step after creation. No backend logic differs between the two values. */
   type: CreateFarmResponseDtoType;
-  /** Code a recorder enters during onboarding to join this farm. Regenerable by an admin, no expiry. */
+  /** Code a recorder enters during onboarding to join this farm. Valid for one hour after it is generated (see invitationCodeExpiresAt); an admin generates a new one with POST /farms/me/invitation-code. */
   invitationCode: string;
+  /**
+     * Until when invitationCode can be used to join. Null for farms created before invitation codes expired — treated as already expired.
+     * @nullable
+     */
+  invitationCodeExpiresAt: string | null;
   /** Whether the farm is active */
   active: boolean;
   /** Creation timestamp */
@@ -235,8 +245,13 @@ export interface FindFarmResponseDto {
   name: string;
   /** UI-only classification: whether to show the 'invite your team' step after creation. No backend logic differs between the two values. */
   type: FindFarmResponseDtoType;
-  /** Code a recorder enters during onboarding to join this farm. Regenerable by an admin, no expiry. */
+  /** Code a recorder enters during onboarding to join this farm. Valid for one hour after it is generated (see invitationCodeExpiresAt); an admin generates a new one with POST /farms/me/invitation-code. */
   invitationCode: string;
+  /**
+     * Until when invitationCode can be used to join. Null for farms created before invitation codes expired — treated as already expired.
+     * @nullable
+     */
+  invitationCodeExpiresAt: string | null;
   /** Whether the farm is active */
   active: boolean;
   /** Creation timestamp */
@@ -268,8 +283,46 @@ export interface UpdateFarmResponseDto {
   name: string;
   /** UI-only classification: whether to show the 'invite your team' step after creation. No backend logic differs between the two values. */
   type: UpdateFarmResponseDtoType;
-  /** Code a recorder enters during onboarding to join this farm. Regenerable by an admin, no expiry. */
+  /** Code a recorder enters during onboarding to join this farm. Valid for one hour after it is generated (see invitationCodeExpiresAt); an admin generates a new one with POST /farms/me/invitation-code. */
   invitationCode: string;
+  /**
+     * Until when invitationCode can be used to join. Null for farms created before invitation codes expired — treated as already expired.
+     * @nullable
+     */
+  invitationCodeExpiresAt: string | null;
+  /** Whether the farm is active */
+  active: boolean;
+  /** Creation timestamp */
+  createdAt: string;
+  /** Whether recorders (not just admins) can view/manage the farm catalog (products/harvesters/measurement-units). A single per-farm switch, not per-user permissions. Does not affect the team roster, which stays admin-only regardless. */
+  recordersCanManageCatalog: boolean;
+}
+
+/**
+ * UI-only classification: whether to show the 'invite your team' step after creation. No backend logic differs between the two values.
+ */
+export type RegenerateFarmInvitationCodeResponseDtoType = typeof RegenerateFarmInvitationCodeResponseDtoType[keyof typeof RegenerateFarmInvitationCodeResponseDtoType];
+
+
+export const RegenerateFarmInvitationCodeResponseDtoType = {
+  organization: 'organization',
+  independent: 'independent',
+} as const;
+
+export interface RegenerateFarmInvitationCodeResponseDto {
+  /** Unique identifier of the farm */
+  _id: string;
+  /** Display name of the farm */
+  name: string;
+  /** UI-only classification: whether to show the 'invite your team' step after creation. No backend logic differs between the two values. */
+  type: RegenerateFarmInvitationCodeResponseDtoType;
+  /** Code a recorder enters during onboarding to join this farm. Valid for one hour after it is generated (see invitationCodeExpiresAt); an admin generates a new one with POST /farms/me/invitation-code. */
+  invitationCode: string;
+  /**
+     * Until when invitationCode can be used to join. Null for farms created before invitation codes expired — treated as already expired.
+     * @nullable
+     */
+  invitationCodeExpiresAt: string | null;
   /** Whether the farm is active */
   active: boolean;
   /** Creation timestamp */

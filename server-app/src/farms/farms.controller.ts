@@ -2,6 +2,8 @@ import {
   Body,
   Controller,
   Get,
+  HttpCode,
+  HttpStatus,
   NotFoundException,
   Patch,
   Post,
@@ -22,6 +24,7 @@ import {
   CreateFarmRequestDto,
   CreateFarmResponseDto,
   FindFarmResponseDto,
+  RegenerateFarmInvitationCodeResponseDto,
   UpdateFarmRequestDto,
   UpdateFarmResponseDto,
 } from './dto';
@@ -82,6 +85,33 @@ export class FarmsController {
     @Body() dto: UpdateFarmRequestDto,
   ): Promise<UpdateFarmResponseDto> {
     const updated = await this.farmsService.update(farmId, dto);
+    if (!updated) {
+      throw new NotFoundException('Farm not found');
+    }
+    return updated;
+  }
+
+  // Ruta propia y no un campo más de PATCH /farms/me: el código lo genera
+  // el server, nunca lo manda el cliente (ver ValidationPipe en main.ts).
+  // 200 y no 201: no crea un recurso, reemplaza el código de la farm.
+  @Post('me/invitation-code')
+  @HttpCode(HttpStatus.OK)
+  @ApiBearerAuth()
+  @UseGuards(FarmScopeGuard, RolesGuard)
+  @Roles('admin')
+  @ApiOperation({
+    summary:
+      "Generate a new invitation code for the caller's own farm (admin only), valid for one hour. The previous code stops working immediately.",
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'The farm with its new invitation code and expiry.',
+    type: RegenerateFarmInvitationCodeResponseDto,
+  })
+  async regenerateInvitationCode(
+    @CurrentFarm() farmId: string,
+  ): Promise<RegenerateFarmInvitationCodeResponseDto> {
+    const updated = await this.farmsService.regenerateInvitationCode(farmId);
     if (!updated) {
       throw new NotFoundException('Farm not found');
     }

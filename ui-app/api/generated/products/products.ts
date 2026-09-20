@@ -10,9 +10,14 @@ import {
   useQuery
 } from '@tanstack/react-query';
 import type {
+  DataTag,
+  DefinedInitialDataOptions,
+  DefinedUseQueryResult,
   MutationFunction,
+  QueryClient,
   QueryFunction,
   QueryKey,
+  UndefinedInitialDataOptions,
   UseMutationOptions,
   UseMutationResult,
   UseQueryOptions,
@@ -104,13 +109,13 @@ const {mutation: mutationOptions} = options ?
  */
 export const useProductsControllerCreate = <TError = unknown,
     TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof productsControllerCreate>>, TError,{data: CreateProductRequestDto}, TContext>, }
- ): UseMutationResult<
+ , queryClient?: QueryClient): UseMutationResult<
         Awaited<ReturnType<typeof productsControllerCreate>>,
         TError,
         {data: CreateProductRequestDto},
         TContext
       > => {
-      return useMutation(getProductsControllerCreateMutationOptions(options));
+      return useMutation(getProductsControllerCreateMutationOptions(options), queryClient);
     }
     /**
  * @summary List the products in the caller farm catalog
@@ -138,7 +143,7 @@ export const getProductsControllerFindAllQueryKey = (params?: ProductsController
     }
 
 
-export const getProductsControllerFindAllQueryOptions = <TData = Awaited<ReturnType<typeof productsControllerFindAll>>, TError = unknown>(params?: ProductsControllerFindAllParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof productsControllerFindAll>>, TError, TData>, }
+export const getProductsControllerFindAllQueryOptions = <TData = Awaited<ReturnType<typeof productsControllerFindAll>>, TError = unknown>(params?: ProductsControllerFindAllParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof productsControllerFindAll>>, TError, TData>>, }
 ) => {
 
 const {query: queryOptions} = options ?? {};
@@ -153,25 +158,49 @@ const {query: queryOptions} = options ?? {};
 
 
 
-   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof productsControllerFindAll>>, TError, TData> & { queryKey: QueryKey }
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof productsControllerFindAll>>, TError, TData> & { queryKey: DataTag<QueryKey, TData, TError> }
 }
 
 export type ProductsControllerFindAllQueryResult = NonNullable<Awaited<ReturnType<typeof productsControllerFindAll>>>
 export type ProductsControllerFindAllQueryError = unknown
 
 
+export function useProductsControllerFindAll<TData = Awaited<ReturnType<typeof productsControllerFindAll>>, TError = unknown>(
+ params: undefined |  ProductsControllerFindAllParams, options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof productsControllerFindAll>>, TError, TData>> & Pick<
+        DefinedInitialDataOptions<
+          Awaited<ReturnType<typeof productsControllerFindAll>>,
+          TError,
+          Awaited<ReturnType<typeof productsControllerFindAll>>
+        > , 'initialData'
+      >, }
+ , queryClient?: QueryClient
+  ):  DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useProductsControllerFindAll<TData = Awaited<ReturnType<typeof productsControllerFindAll>>, TError = unknown>(
+ params?: ProductsControllerFindAllParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof productsControllerFindAll>>, TError, TData>> & Pick<
+        UndefinedInitialDataOptions<
+          Awaited<ReturnType<typeof productsControllerFindAll>>,
+          TError,
+          Awaited<ReturnType<typeof productsControllerFindAll>>
+        > , 'initialData'
+      >, }
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useProductsControllerFindAll<TData = Awaited<ReturnType<typeof productsControllerFindAll>>, TError = unknown>(
+ params?: ProductsControllerFindAllParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof productsControllerFindAll>>, TError, TData>>, }
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
 /**
  * @summary List the products in the caller farm catalog
  */
 
 export function useProductsControllerFindAll<TData = Awaited<ReturnType<typeof productsControllerFindAll>>, TError = unknown>(
- params?: ProductsControllerFindAllParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof productsControllerFindAll>>, TError, TData>, }
-
- ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+ params?: ProductsControllerFindAllParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof productsControllerFindAll>>, TError, TData>>, }
+ , queryClient?: QueryClient
+ ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
 
   const queryOptions = getProductsControllerFindAllQueryOptions(params,options)
 
-  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+  const query = useQuery(queryOptions, queryClient) as  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
 
   return withQueryKey(query, queryOptions.queryKey);
 }
@@ -206,7 +235,7 @@ export const getProductsControllerFindAvailableQueryKey = () => {
     }
 
 
-export const getProductsControllerFindAvailableQueryOptions = <TData = Awaited<ReturnType<typeof productsControllerFindAvailable>>, TError = unknown>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof productsControllerFindAvailable>>, TError, TData>, }
+export const getProductsControllerFindAvailableQueryOptions = <TData = Awaited<ReturnType<typeof productsControllerFindAvailable>>, TError = unknown>( options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof productsControllerFindAvailable>>, TError, TData>>, }
 ) => {
 
 const {query: queryOptions} = options ?? {};
@@ -221,25 +250,49 @@ const {query: queryOptions} = options ?? {};
 
 
 
-   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof productsControllerFindAvailable>>, TError, TData> & { queryKey: QueryKey }
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof productsControllerFindAvailable>>, TError, TData> & { queryKey: DataTag<QueryKey, TData, TError> }
 }
 
 export type ProductsControllerFindAvailableQueryResult = NonNullable<Awaited<ReturnType<typeof productsControllerFindAvailable>>>
 export type ProductsControllerFindAvailableQueryError = unknown
 
 
+export function useProductsControllerFindAvailable<TData = Awaited<ReturnType<typeof productsControllerFindAvailable>>, TError = unknown>(
+  options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof productsControllerFindAvailable>>, TError, TData>> & Pick<
+        DefinedInitialDataOptions<
+          Awaited<ReturnType<typeof productsControllerFindAvailable>>,
+          TError,
+          Awaited<ReturnType<typeof productsControllerFindAvailable>>
+        > , 'initialData'
+      >, }
+ , queryClient?: QueryClient
+  ):  DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useProductsControllerFindAvailable<TData = Awaited<ReturnType<typeof productsControllerFindAvailable>>, TError = unknown>(
+  options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof productsControllerFindAvailable>>, TError, TData>> & Pick<
+        UndefinedInitialDataOptions<
+          Awaited<ReturnType<typeof productsControllerFindAvailable>>,
+          TError,
+          Awaited<ReturnType<typeof productsControllerFindAvailable>>
+        > , 'initialData'
+      >, }
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useProductsControllerFindAvailable<TData = Awaited<ReturnType<typeof productsControllerFindAvailable>>, TError = unknown>(
+  options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof productsControllerFindAvailable>>, TError, TData>>, }
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
 /**
  * @summary List the products the caller farm could add — the app catalog plus its own community products, minus the ones already in its catalog
  */
 
 export function useProductsControllerFindAvailable<TData = Awaited<ReturnType<typeof productsControllerFindAvailable>>, TError = unknown>(
-  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof productsControllerFindAvailable>>, TError, TData>, }
-
- ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof productsControllerFindAvailable>>, TError, TData>>, }
+ , queryClient?: QueryClient
+ ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
 
   const queryOptions = getProductsControllerFindAvailableQueryOptions(options)
 
-  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+  const query = useQuery(queryOptions, queryClient) as  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
 
   return withQueryKey(query, queryOptions.queryKey);
 }
@@ -306,11 +359,11 @@ const {mutation: mutationOptions} = options ?
  */
 export const useProductsControllerUpdate = <TError = unknown,
     TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof productsControllerUpdate>>, TError,{productId: string;data: UpdateProductRequestDto}, TContext>, }
- ): UseMutationResult<
+ , queryClient?: QueryClient): UseMutationResult<
         Awaited<ReturnType<typeof productsControllerUpdate>>,
         TError,
         {productId: string;data: UpdateProductRequestDto},
         TContext
       > => {
-      return useMutation(getProductsControllerUpdateMutationOptions(options));
+      return useMutation(getProductsControllerUpdateMutationOptions(options), queryClient);
     }

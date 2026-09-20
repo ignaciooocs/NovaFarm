@@ -52,6 +52,11 @@ export default function InviteCodeScreen() {
           {code}
         </Text>
       </View>
+      {/* Sin la hora exacta: la farm se acaba de crear, así que "1 hora" es
+          lo mismo y no hay que pasarla por parámetro. */}
+      <Text style={styles.validFor}>
+        {strings.onboarding.invitationCodeValidFor}
+      </Text>
 
       <Button
         mode="outlined"
@@ -97,6 +102,11 @@ function createStyles(palette: ReturnType<typeof usePalette>) {
       borderRadius: 20,
       paddingVertical: spacing.lg,
       paddingHorizontal: spacing.md,
+      marginBottom: spacing.sm,
+    },
+    validFor: {
+      textAlign: 'center',
+      color: colors.textSecondary,
       marginBottom: spacing.lg,
     },
     codeLabel: { color: colors.textSecondary, marginBottom: spacing.xs },

@@ -65,13 +65,18 @@ export class AuthController {
       'are set on the Firebase user — the client must force a token ' +
       'refresh (getIdToken(true)) before calling any endpoint protected by ' +
       'FarmScopeGuard, since the ID token already held in memory predates ' +
-      'those claims.',
+      'those claims. Responds 404 when no active farm has that invitation ' +
+      'code, and 410 when the code existed but has expired (an admin has ' +
+      'to generate a new one).',
   })
   @ApiResponse({
     status: 201,
     description: 'The recorder user was created and joined the farm.',
     type: RegisterRecorderResponseDto,
   })
+  // Los 404/410 van en la descripción y no como @ApiResponse propios: sin
+  // un tipo de cuerpo, orval los traduce a un error `void` en el hook de
+  // ui-app, y `if (error)` deja de compilar.
   async registerRecorder(
     @Req() request: Request & { firebaseUser: FirebaseUser },
     @Body() dto: RegisterRecorderRequestDto,

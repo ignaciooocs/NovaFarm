@@ -1,6 +1,7 @@
 import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
 import { Tabs } from 'expo-router';
 import { DrawerToggleButton } from 'expo-router/drawer';
+import { HistoryMenu } from '@/components/HistoryMenu';
 import { strings } from '@/constants/strings';
 import { usePalette } from '@/stores';
 import { colors } from '@/theme';
@@ -41,6 +42,9 @@ export default function TabsLayout() {
           tabBarIcon: ({ color, size }) => (
             <MaterialCommunityIcons name="history" color={color} size={size} />
           ),
+          // El header de esta tab lo arma este navegador, así que los tres
+          // puntitos del Historial se cuelgan acá y no en la pantalla.
+          headerRight: () => <HistoryMenu />,
         }}
       />
     </Tabs>

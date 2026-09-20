@@ -178,3 +178,91 @@ export async function clearLocalData(): Promise<void> {
     tx.delete(measurementUnits).run();
   });
 }
+
+// Lo que este dispositivo guardó de cada jornada, esté subida o no. Es el
+// historial local (pedido del usuario, 2026-09-20): la base local conserva
+// todo hasta cerrar sesión, pero hasta ahora no había forma de verlo desde
+// el celular — cuando algo quedaba rechazado por el server, el anotador no
+// tenía cómo saber qué tenía él y qué tenía el server.
+//
+// Agrega en JS y no en SQL, igual que el Anotador y Cerrar Jornada: son
+// tablas chicas y así son tres consultas en vez de una por jornada.
+export interface LocalWorkdaySummary {
+  id: string;
+  serverId: string | null;
+  date: string;
+  productId: string;
+  status: 'OPEN' | 'CLOSED';
+  // La jornada misma cuenta como pendiente si se abrió sin conexión y
+  // todavía no subió (mismo criterio que Cerrar Jornada).
+  synced: boolean;
+  totalKg: number;
+  entryCount: number;
+  pendingEntries: number;
+  rosterCount: number;
+  pendingRoster: number;
+}
+
+export async function readLocalWorkdays(): Promise<LocalWorkdaySummary[]> {
+  const [workdayRows, entryRows, rosterRows] = await Promise.all([
+    db.select().from(workdays),
+    db
+      .select({
+        workdayId: harvestEntries.workdayId,
+        totalKg: harvestEntries.totalKg,
+        synced: harvestEntries.synced,
+      })
+      .from(harvestEntries),
+    db
+      .select({
+        workdayId: harvesterWorkday.workdayId,
+        synced: harvesterWorkday.synced,
+      })
+      .from(harvesterWorkday),
+  ]);
+
+  const summaries = new Map<string, LocalWorkdaySummary>(
+    workdayRows.map((row) => [
+      row.id,
+      {
+        id: row.id,
+        serverId: row.serverId,
+        date: row.date,
+        productId: row.productId,
+        status: row.status,
+        synced: row.synced,
+        totalKg: 0,
+        entryCount: 0,
+        pendingEntries: 0,
+        rosterCount: 0,
+        pendingRoster: 0,
+      },
+    ]),
+  );
+
+  entryRows.forEach((entry) => {
+    const summary = summaries.get(entry.workdayId);
+    if (!summary) {
+      return;
+    }
+    summary.totalKg += entry.totalKg;
+    summary.entryCount += 1;
+    if (!entry.synced) {
+      summary.pendingEntries += 1;
+    }
+  });
+
+  rosterRows.forEach((roster) => {
+    const summary = summaries.get(roster.workdayId);
+    if (!summary) {
+      return;
+    }
+    summary.rosterCount += 1;
+    if (!roster.synced) {
+      summary.pendingRoster += 1;
+    }
+  });
+
+  // La más reciente arriba, igual que el Historial del server.
+  return [...summaries.values()].sort((a, b) => b.date.localeCompare(a.date));
+}

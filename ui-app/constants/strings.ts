@@ -29,6 +29,7 @@ export const strings = {
     inactive: 'Inactivo',
     skip: 'Omitir',
     copy: 'Copiar',
+    more: 'Más opciones',
   },
   auth: {
     brand: APP_NAME,
@@ -355,6 +356,21 @@ export const strings = {
     lastNameLabel: 'Apellido',
     nicknameLabel: 'Apodo (opcional)',
     emptyList: 'Todavía no hay nada acá.',
+  },
+  // El historial local: lo que este celular guardó de cada jornada, se haya
+  // subido o no. Existe para poder comparar contra el server cuando algo
+  // queda pendiente o rechazado (pedido del usuario, 2026-09-20).
+  localHistory: {
+    title: 'Historial local',
+    menuItem: 'Ver historial local',
+    subtitle:
+      'Lo que este celular tiene guardado, se haya subido o no. Se borra al cerrar sesión.',
+    empty: 'Todavía no hay jornadas guardadas en este celular.',
+    pending: (count: number) => `${count} sin subir`,
+    closedAndSynced: 'Cerrada y subida',
+    openAndSynced: 'Abierta',
+    rounds: (count: number) =>
+      count === 1 ? '1 vuelta' : `${count} vueltas`,
   },
   settings: {
     title: 'Ajustes',

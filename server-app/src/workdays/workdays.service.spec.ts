@@ -201,8 +201,54 @@ describe('WorkdaysService', () => {
       expect(passed.createdAt.getTime()).toBeGreaterThanOrEqual(before);
     });
 
-    it('leaves recorderId null when opened by an admin (guest mode)', async () => {
+    // Atribuir sin mirar roles (2026-09-20): un admin que abre una jornada
+    // la está anotando él, y sin dueño ningún otro dispositivo puede
+    // recuperarla. El modo invitado (recorderId null) queda solo para
+    // cuando no hay usuario para ese uid.
+    it('attributes the workday to an admin who opens it, without the recorder role', async () => {
       mockNoExistingClientEntry();
+      const adminMongoId = new Types.ObjectId();
+      usersService.findByFirebaseUid.mockResolvedValue({
+        _id: adminMongoId,
+        name: 'Ana Admin',
+      });
+      productsService.findActiveById.mockResolvedValue({
+        _id: productId,
+        active: true,
+      });
+      measurementUnitsService.findActiveById.mockResolvedValue({
+        _id: measurementUnitId,
+        active: true,
+      });
+
+      workdayModel.create.mockResolvedValue({
+        _id: new Types.ObjectId(),
+        farmId: new Types.ObjectId(farmId),
+        date: new Date(dto.date),
+        productId: new Types.ObjectId(productId),
+        defaultMeasurementUnitId: new Types.ObjectId(measurementUnitId),
+        status: 'OPEN',
+        createdAt: new Date(),
+        recorderId: adminMongoId,
+        clientEntryId: dto.clientEntryId,
+      });
+
+      const result = await workdaysService.create(
+        farmId,
+        { uid: 'firebase-uid', farmId, roles: ['admin'] },
+        dto,
+      );
+
+      expect(workdayModel.create).toHaveBeenCalledWith(
+        expect.objectContaining({ recorderId: adminMongoId }),
+      );
+      expect(result.recorderId).toEqual(adminMongoId.toString());
+      expect(result.recorderName).toBe('Ana Admin');
+    });
+
+    it('leaves recorderId null when no user matches the caller uid', async () => {
+      mockNoExistingClientEntry();
+      usersService.findByFirebaseUid.mockResolvedValue(null);
       productsService.findActiveById.mockResolvedValue({
         _id: productId,
         active: true,
@@ -230,7 +276,6 @@ describe('WorkdaysService', () => {
         dto,
       );
 
-      expect(usersService.findByFirebaseUid).not.toHaveBeenCalled();
       expect(workdayModel.create).toHaveBeenCalledWith(
         expect.objectContaining({ recorderId: null }),
       );

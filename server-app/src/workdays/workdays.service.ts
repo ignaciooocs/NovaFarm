@@ -342,21 +342,24 @@ export class WorkdaysService {
     }
   }
 
-  // Si quien abre la jornada tiene el rol recorder asignado (sin importar
-  // qué otros roles tenga, ni cuál sea su "modo activo" en la UI — el server
-  // no conoce ese concepto, ver ui-arquitectura.md), resuelve su _id de
-  // Mongo (y de paso su nombre, ya viene en el mismo documento — no hace
-  // falta otra consulta) a partir del uid de Firebase (el token no trae el
-  // _id de Mongo, solo el uid). Si no tiene ese rol (admin puro,
-  // supervisor), la jornada queda en modo invitado (recorderId null) —
-  // abrirla no alcanza para atribuírsela a un recorder específico.
+  // La jornada queda a nombre de quien la abre, **sin mirar sus roles**
+  // (2026-09-20). Antes solo se atribuía si la cuenta tenía el rol recorder,
+  // y una abierta por un admin puro quedaba en modo invitado (recorderId
+  // null). Eso se veía bien en el papel, pero en la app un admin puede
+  // anotar igual (ver permissions.ts en ui-app), así que la jornada sí es de
+  // alguien — y sin dueño, **ningún otro dispositivo puede recuperarla**
+  // (recoverActiveWorkday busca "la jornada abierta mía"): problema real,
+  // encontrado probando con dos celulares.
+  //
+  // Resuelve el _id de Mongo (y de paso el nombre, ya viene en el mismo
+  // documento) a partir del uid de Firebase, porque el token solo trae el
+  // uid. Si no hay usuario para ese uid —no debería pasar, FarmScopeGuard ya
+  // exige claims— queda en null, que es el modo invitado de siempre: las
+  // jornadas viejas lo siguen teniendo y todo lo que lee `recorderId` ya
+  // sabe tratarlo.
   private async resolveRecorder(
     authUser: AuthenticatedUser,
   ): Promise<{ recorderId: Types.ObjectId | null; recorderName?: string }> {
-    if (!authUser.roles.includes('recorder')) {
-      return { recorderId: null };
-    }
-
     const user = await this.usersService.findByFirebaseUid(authUser.uid);
     return user
       ? { recorderId: user._id, recorderName: user.name }

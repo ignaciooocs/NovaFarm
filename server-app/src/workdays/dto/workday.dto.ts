@@ -58,7 +58,7 @@ export class WorkdayDto {
 
   @ApiProperty({
     description:
-      'Recorder attributed to this workday, or null for guest mode (opened by an admin, not tied to a specific recorder)',
+      'Whoever opened this workday, whatever their roles. Null only for guest-mode workdays: those opened before attribution stopped requiring the recorder role, or opened by a caller with no user document.',
     example: '64f1a2b3c4d5e6f7a8b9c0d4',
     type: String,
     nullable: true,

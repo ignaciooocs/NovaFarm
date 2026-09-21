@@ -738,7 +738,7 @@ export interface CreateWorkdayResponseDto {
   /** Frozen aggregate total in kilos, computed and set when the workday is closed (RF-01.2) */
   finalTotalKg?: number;
   /**
-     * Recorder attributed to this workday, or null for guest mode (opened by an admin, not tied to a specific recorder)
+     * Whoever opened this workday, whatever their roles. Null only for guest-mode workdays: those opened before attribution stopped requiring the recorder role, or opened by a caller with no user document.
      * @nullable
      */
   recorderId: string | null;
@@ -799,7 +799,7 @@ export interface FindWorkdayResponseDto {
   /** Frozen aggregate total in kilos, computed and set when the workday is closed (RF-01.2) */
   finalTotalKg?: number;
   /**
-     * Recorder attributed to this workday, or null for guest mode (opened by an admin, not tied to a specific recorder)
+     * Whoever opened this workday, whatever their roles. Null only for guest-mode workdays: those opened before attribution stopped requiring the recorder role, or opened by a caller with no user document.
      * @nullable
      */
   recorderId: string | null;
@@ -881,7 +881,7 @@ export interface UpdateWorkdayPayResponseDto {
   /** Frozen aggregate total in kilos, computed and set when the workday is closed (RF-01.2) */
   finalTotalKg?: number;
   /**
-     * Recorder attributed to this workday, or null for guest mode (opened by an admin, not tied to a specific recorder)
+     * Whoever opened this workday, whatever their roles. Null only for guest-mode workdays: those opened before attribution stopped requiring the recorder role, or opened by a caller with no user document.
      * @nullable
      */
   recorderId: string | null;
@@ -942,7 +942,7 @@ export interface CloseWorkdayResponseDto {
   /** Frozen aggregate total in kilos, computed and set when the workday is closed (RF-01.2) */
   finalTotalKg?: number;
   /**
-     * Recorder attributed to this workday, or null for guest mode (opened by an admin, not tied to a specific recorder)
+     * Whoever opened this workday, whatever their roles. Null only for guest-mode workdays: those opened before attribution stopped requiring the recorder role, or opened by a caller with no user document.
      * @nullable
      */
   recorderId: string | null;

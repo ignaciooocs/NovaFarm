@@ -99,6 +99,18 @@ export const workdays = sqliteTable('workdays', {
   // dos cuentas distintas (dos recorders de dos cuadrillas) usaban el mismo
   // celular para probar, la segunda cuenta veía la jornada de la primera.
   createdByUid: text('created_by_uid').notNull().default(''),
+  // "Esta jornada ya no se va a subir": la marca el usuario desde el
+  // historial local cuando el server la rechaza para siempre — no la tiene
+  // (base borrada, jornada de otra instalación) o ya la cerró, así que sus
+  // pendientes nunca van a poder subir. Sin esto, esos pendientes bloquean
+  // cerrar sesión para siempre y la única salida es borrar los datos de la
+  // app (caso real, 2026-09-20).
+  //
+  // No borra nada: la jornada y sus entregas se siguen viendo en el
+  // historial local. Solo deja de contar como pendiente.
+  syncSkipped: integer('sync_skipped', { mode: 'boolean' })
+    .notNull()
+    .default(false),
 });
 
 // El roster del día. `workdayNumber` se calcula 100% local (máximo actual +

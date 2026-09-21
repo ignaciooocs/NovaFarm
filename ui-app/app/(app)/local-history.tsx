@@ -1,7 +1,13 @@
 import { useCallback, useMemo, useState } from 'react';
 import { FlatList, StyleSheet, View } from 'react-native';
-import { Stack, useFocusEffect } from 'expo-router';
-import { ActivityIndicator, HelperText, Text } from 'react-native-paper';
+import { Stack, useFocusEffect, useRouter } from 'expo-router';
+import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
+import {
+  ActivityIndicator,
+  HelperText,
+  Text,
+  TouchableRipple,
+} from 'react-native-paper';
 import { Screen } from '@/components/Screen';
 import { DEFAULT_PRODUCT_ICON } from '@/constants/productIcon';
 import { strings } from '@/constants/strings';
@@ -21,6 +27,7 @@ import { spacing } from '@/theme';
 // sin señal y mostrar lo que el server todavía no sabe (ver "Capa de API" en
 // ui-arquitectura.md).
 export default function LocalHistoryScreen() {
+  const router = useRouter();
   const palette = usePalette();
   const styles = useMemo(() => createStyles(palette), [palette]);
   const productsById = useLocalRead(readProductsById);
@@ -85,40 +92,59 @@ export default function LocalHistoryScreen() {
               (item.synced ? 0 : 1) + item.pendingRoster + item.pendingEntries;
 
             return (
-              <View style={styles.row}>
-                <View style={styles.rowMain}>
-                  <View style={styles.rowTopLine}>
+              <TouchableRipple
+                onPress={() =>
+                  router.push({
+                    pathname: '/local-history/[id]',
+                    params: { id: item.id },
+                  })
+                }
+              >
+                <View style={styles.row}>
+                  <View style={styles.rowMain}>
+                    <View style={styles.rowTopLine}>
+                      <Text
+                        variant="titleMedium"
+                        style={styles.rowTitle}
+                        numberOfLines={1}
+                      >
+                        {product?.icon ?? DEFAULT_PRODUCT_ICON}{' '}
+                        {product?.name ?? strings.localHistory.unknownProduct}
+                      </Text>
+                      <Text style={styles.rowTotal}>
+                        {formatKg(item.totalKg)} {strings.anotador.kg}
+                      </Text>
+                    </View>
+                    <Text style={styles.rowSubtitle} numberOfLines={1}>
+                      {new Date(item.date).toLocaleDateString('es-CL')} ·{' '}
+                      {strings.localHistory.rounds(item.entryCount)}
+                    </Text>
                     <Text
-                      variant="titleMedium"
-                      style={styles.rowTitle}
+                      style={[
+                        styles.rowState,
+                        // Dada por perdida no es una alerta: ya se decidió.
+                        pending > 0 && !item.syncSkipped
+                          ? styles.rowStatePending
+                          : null,
+                      ]}
                       numberOfLines={1}
                     >
-                      {product?.icon ?? DEFAULT_PRODUCT_ICON}{' '}
-                      {product?.name ?? item.productId}
-                    </Text>
-                    <Text style={styles.rowTotal}>
-                      {formatKg(item.totalKg)} {strings.anotador.kg}
+                      {item.syncSkipped
+                        ? strings.localHistory.skippedState
+                        : pending > 0
+                          ? strings.localHistory.pending(pending)
+                          : item.status === 'CLOSED'
+                            ? strings.localHistory.closedAndSynced
+                            : strings.localHistory.openAndSynced}
                     </Text>
                   </View>
-                  <Text style={styles.rowSubtitle} numberOfLines={1}>
-                    {new Date(item.date).toLocaleDateString('es-CL')} ·{' '}
-                    {strings.localHistory.rounds(item.entryCount)}
-                  </Text>
-                  <Text
-                    style={[
-                      styles.rowState,
-                      pending > 0 ? styles.rowStatePending : null,
-                    ]}
-                    numberOfLines={1}
-                  >
-                    {pending > 0
-                      ? strings.localHistory.pending(pending)
-                      : item.status === 'CLOSED'
-                        ? strings.localHistory.closedAndSynced
-                        : strings.localHistory.openAndSynced}
-                  </Text>
+                  <MaterialCommunityIcons
+                    name="chevron-right"
+                    size={22}
+                    color={palette.textSecondary}
+                  />
                 </View>
-              </View>
+              </TouchableRipple>
             );
           }}
         />

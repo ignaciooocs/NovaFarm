@@ -1,0 +1,1 @@
+ALTER TABLE `workdays` ADD `sync_skipped` integer DEFAULT false NOT NULL;

@@ -371,6 +371,44 @@ export const strings = {
     openAndSynced: 'Abierta',
     rounds: (count: number) =>
       count === 1 ? '1 vuelta' : `${count} vueltas`,
+    // Detalle: comparación de esta jornada contra el server.
+    detailTitle: 'Jornada guardada',
+    // El cultivo se resuelve contra la caché local, y en una jornada vieja
+    // puede que ya no esté (se desactivó, o la farm cambió). Mostrar el id
+    // crudo de Mongo no le dice nada a nadie.
+    unknownProduct: 'Cultivo desconocido',
+    compareTitle: 'Comparación',
+    onThisPhone: 'Este celular',
+    onServer: 'En el server',
+    kilosLabel: 'Kilos',
+    roundsLabel: 'Vueltas',
+    harvestersLabel: 'Cosechadores',
+    statusLabel: 'Estado',
+    neverUploaded: 'Esta jornada todavía no sube al server.',
+    notOnServer:
+      'El server no tiene esta jornada. Lo que quedó acá no se puede subir a ninguna parte.',
+    pendingWhileOpen: (count: number) =>
+      `Faltan ${count} por subir, y en el server la jornada sigue abierta: se pueden subir.`,
+    pendingWhileClosed: (count: number) =>
+      `En el server ya está cerrada, así que su total no va a cambiar. Las ${count} cosas sin subir se quedan solo en este celular.`,
+    closedOnServerOnly:
+      'En el server ya está cerrada, pero en este celular quedó abierta: se perdió la respuesta del cierre.',
+    allMatches: 'Todo lo de este celular ya está en el server.',
+    uploadMissing: 'Subir lo que falta',
+    // La salida cuando el server rechaza algo para siempre: se deja de
+    // intentar, sin borrar nada.
+    skippedState: 'No se va a subir',
+    skipped:
+      'Diste esta jornada por perdida: ya no se intenta subir y no bloquea cerrar sesión. Lo anotado sigue guardado acá.',
+    skipAction: 'Dejar de intentar subirla',
+    skipDialogTitle: '¿Dejar de intentar subirla?',
+    skipDialogBody:
+      'Lo que quedó sin subir se queda solo en este celular y no va a llegar al server. Deja de contar como pendiente, así puedes cerrar sesión. Lo puedes deshacer desde acá mismo.',
+    unskipAction: 'Volver a intentar subirla',
+    markClosedHere: 'Marcar como cerrada acá',
+    goToClose: 'Ir a Cerrar Jornada',
+    serverOpen: 'Abierta',
+    serverClosed: 'Cerrada',
   },
   settings: {
     title: 'Ajustes',

@@ -1,4 +1,4 @@
-import { and, eq } from 'drizzle-orm';
+import { and, eq, notInArray } from 'drizzle-orm';
 import { db } from './client';
 import {
   products,
@@ -16,13 +16,35 @@ import {
 // jornada que abrió la primera. La usan Home (para mostrar la jornada
 // activa) y open-workday (para no dejar abrir una segunda encima de la que
 // ya está abierta).
+//
+// Una jornada marcada como "ya no se va a subir" (syncSkipped) tampoco
+// cuenta como activa: si el server no la tiene o ya la cerró, seguir
+// anotando en ella sería anotar en el vacío — y así abrir una nueva deja de
+// estar bloqueado por una jornada muerta.
 export async function getActiveWorkday(uid: string) {
   const [row] = await db
     .select()
     .from(workdays)
-    .where(and(eq(workdays.status, 'OPEN'), eq(workdays.createdByUid, uid)))
+    .where(
+      and(
+        eq(workdays.status, 'OPEN'),
+        eq(workdays.createdByUid, uid),
+        eq(workdays.syncSkipped, false),
+      ),
+    )
     .limit(1);
   return row ?? null;
+}
+
+// Las jornadas que el usuario dio por perdidas. Se usa para descontar sus
+// filas de los conteos de pendientes (no hay join en estas consultas: el
+// roster y las entregas guardan workdayId, no la jornada entera).
+async function readSkippedWorkdayIds(): Promise<string[]> {
+  const rows = await db
+    .select({ id: workdays.id })
+    .from(workdays)
+    .where(eq(workdays.syncSkipped, true));
+  return rows.map((row) => row.id);
 }
 
 // Chequeo previo a limpiar la base local al cerrar sesión (ver
@@ -33,11 +55,18 @@ export async function getActiveWorkday(uid: string) {
 // después (ni siquiera esa misma cuenta, si ya no tiene sesión). Mismo
 // criterio que ya usa el cierre de jornada (RF-01.2): bloquear, no solo
 // avisar.
+//
+// Lo que el usuario marcó como "ya no se va a subir" (workdays.syncSkipped,
+// desde el historial local) no cuenta: el server lo rechaza para siempre, y
+// sin esta salida esas filas bloquean cerrar sesión hasta borrar los datos
+// de la app. Sigue todo guardado y visible en el historial local.
 export async function hasUnsyncedData(): Promise<boolean> {
+  const skippedWorkdayIds = await readSkippedWorkdayIds();
+
   const [pendingWorkday] = await db
     .select({ id: workdays.id })
     .from(workdays)
-    .where(eq(workdays.synced, false))
+    .where(and(eq(workdays.synced, false), eq(workdays.syncSkipped, false)))
     .limit(1);
   if (pendingWorkday) {
     return true;
@@ -46,7 +75,12 @@ export async function hasUnsyncedData(): Promise<boolean> {
   const [pendingRoster] = await db
     .select({ id: harvesterWorkday.id })
     .from(harvesterWorkday)
-    .where(eq(harvesterWorkday.synced, false))
+    .where(
+      and(
+        eq(harvesterWorkday.synced, false),
+        notInArray(harvesterWorkday.workdayId, skippedWorkdayIds),
+      ),
+    )
     .limit(1);
   if (pendingRoster) {
     return true;
@@ -55,7 +89,12 @@ export async function hasUnsyncedData(): Promise<boolean> {
   const [pendingEntry] = await db
     .select({ id: harvestEntries.id })
     .from(harvestEntries)
-    .where(eq(harvestEntries.synced, false))
+    .where(
+      and(
+        eq(harvestEntries.synced, false),
+        notInArray(harvestEntries.workdayId, skippedWorkdayIds),
+      ),
+    )
     .limit(1);
   if (pendingEntry) {
     return true;
@@ -83,6 +122,9 @@ export async function hasUnsyncedData(): Promise<boolean> {
 // siempre es otra jornada o un cosechador, y sin esto no hay cómo verlo.
 // Una línea, ids cortos y conteos; nada de nombres (datos personales).
 export async function describeUnsyncedData(): Promise<string> {
+  // Las mismas exclusiones que hasUnsyncedData(), o el log diría que hay
+  // pendientes cuando cerrar sesión ya no está bloqueado.
+  const skippedWorkdayIds = await readSkippedWorkdayIds();
   const [allWorkdays, pendingRoster, pendingEntries, pendingHarvesters] =
     await Promise.all([
       db
@@ -92,16 +134,27 @@ export async function describeUnsyncedData(): Promise<string> {
           status: workdays.status,
           date: workdays.date,
           synced: workdays.synced,
+          syncSkipped: workdays.syncSkipped,
         })
         .from(workdays),
       db
         .select({ workdayId: harvesterWorkday.workdayId })
         .from(harvesterWorkday)
-        .where(eq(harvesterWorkday.synced, false)),
+        .where(
+          and(
+            eq(harvesterWorkday.synced, false),
+            notInArray(harvesterWorkday.workdayId, skippedWorkdayIds),
+          ),
+        ),
       db
         .select({ workdayId: harvestEntries.workdayId })
         .from(harvestEntries)
-        .where(eq(harvestEntries.synced, false)),
+        .where(
+          and(
+            eq(harvestEntries.synced, false),
+            notInArray(harvestEntries.workdayId, skippedWorkdayIds),
+          ),
+        ),
       db
         .select({ id: harvesters.id })
         .from(harvesters)
@@ -122,7 +175,7 @@ export async function describeUnsyncedData(): Promise<string> {
     return current;
   };
   allWorkdays
-    .filter((workday) => !workday.synced)
+    .filter((workday) => !workday.synced && !workday.syncSkipped)
     .forEach((workday) => {
       bucket(workday.id).workday = true;
     });
@@ -196,6 +249,8 @@ export interface LocalWorkdaySummary {
   // La jornada misma cuenta como pendiente si se abrió sin conexión y
   // todavía no subió (mismo criterio que Cerrar Jornada).
   synced: boolean;
+  // El usuario la dio por perdida: lo suyo ya no cuenta como pendiente.
+  syncSkipped: boolean;
   totalKg: number;
   entryCount: number;
   pendingEntries: number;
@@ -231,6 +286,7 @@ export async function readLocalWorkdays(): Promise<LocalWorkdaySummary[]> {
         productId: row.productId,
         status: row.status,
         synced: row.synced,
+        syncSkipped: row.syncSkipped,
         totalKg: 0,
         entryCount: 0,
         pendingEntries: 0,
@@ -265,4 +321,39 @@ export async function readLocalWorkdays(): Promise<LocalWorkdaySummary[]> {
 
   // La más reciente arriba, igual que el Historial del server.
   return [...summaries.values()].sort((a, b) => b.date.localeCompare(a.date));
+}
+
+// Una sola jornada local, para el detalle del historial local. Reusa la
+// lectura completa en vez de una consulta aparte: son tablas chicas y así
+// los dos lugares muestran exactamente lo mismo.
+export async function readLocalWorkday(
+  id: string,
+): Promise<LocalWorkdaySummary | null> {
+  const all = await readLocalWorkdays();
+  return all.find((workday) => workday.id === id) ?? null;
+}
+
+// Deja la jornada local igual que en el server cuando allá ya está cerrada
+// y acá no (la respuesta del cierre se perdió). No toca `synced` ni las
+// entregas: solo copia el estado y el total congelado que el server ya
+// calculó, que es el que vale.
+export async function markLocalWorkdayClosed(
+  id: string,
+  finalTotalKg: number | null,
+): Promise<void> {
+  await db
+    .update(workdays)
+    .set({ status: 'CLOSED', finalTotalKg })
+    .where(eq(workdays.id, id));
+}
+
+// Marca (o desmarca) una jornada como "ya no se va a subir". No borra nada:
+// la jornada y todo lo suyo se siguen viendo en el historial local, solo
+// dejan de contar como pendientes y de bloquear cerrar sesión. Desmarcar
+// existe para el caso de haberse apurado: vuelve a quedar como estaba.
+export async function setLocalWorkdaySyncSkipped(
+  id: string,
+  syncSkipped: boolean,
+): Promise<void> {
+  await db.update(workdays).set({ syncSkipped }).where(eq(workdays.id, id));
 }

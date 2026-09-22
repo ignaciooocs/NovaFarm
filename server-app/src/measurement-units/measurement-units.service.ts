@@ -1,8 +1,5 @@
-import {
-  BadRequestException,
-  ConflictException,
-  Injectable,
-} from '@nestjs/common';
+import { Injectable } from '@nestjs/common';
+import { AppException } from '../common/errors/app.exception';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model, Types } from 'mongoose';
 import {
@@ -46,7 +43,8 @@ export class MeasurementUnitsService {
     // El @ValidateIf del DTO ya lo exige para COUNT; esto es el mismo
     // chequeo del lado del servicio, y de paso le da el narrowing a TS.
     if (dto.mode === 'COUNT' && dto.kgFactor === undefined) {
-      throw new BadRequestException(
+      throw AppException.badRequest(
+        'UNIT_KG_FACTOR_REQUIRED',
         'kgFactor is required for COUNT measurement units',
       );
     }
@@ -66,7 +64,8 @@ export class MeasurementUnitsService {
       return this.toDto(created);
     } catch (error) {
       if (this.isDuplicateNameError(error)) {
-        throw new ConflictException(
+        throw AppException.conflict(
+          'UNIT_NAME_TAKEN',
           'A measurement unit with this name already exists for this farm',
         );
       }
@@ -154,7 +153,8 @@ export class MeasurementUnitsService {
       const kgFactor = dto.kgFactor ?? current.kgFactor ?? null;
 
       if (mode === 'COUNT' && kgFactor === null) {
-        throw new BadRequestException(
+        throw AppException.badRequest(
+          'UNIT_KG_FACTOR_REQUIRED',
           'kgFactor is required for COUNT measurement units',
         );
       }
@@ -178,7 +178,8 @@ export class MeasurementUnitsService {
       return updated ? this.toDto(updated) : null;
     } catch (error) {
       if (this.isDuplicateNameError(error)) {
-        throw new ConflictException(
+        throw AppException.conflict(
+          'UNIT_NAME_TAKEN',
           'A measurement unit with this name already exists for this farm',
         );
       }

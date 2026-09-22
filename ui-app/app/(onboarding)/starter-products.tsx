@@ -9,13 +9,13 @@ import {
   TouchableRipple,
 } from 'react-native-paper';
 import { useMutation } from '@tanstack/react-query';
-import { isAxiosError } from 'axios';
 import {
   productsControllerCreate,
   useProductsControllerFindAvailable,
 } from '@/api/generated/products/products';
 import { Screen } from '@/components/Screen';
 import { strings } from '@/constants/strings';
+import { getErrorCode } from '@/lib/errors';
 import { useErrorToast, usePalette } from '@/stores';
 import { colors, spacing } from '@/theme';
 
@@ -147,22 +147,15 @@ export default function StarterProductsScreen() {
 // Si un intento anterior alcanzó a sumar algunos y falló en otro (la señal
 // se corta a la mitad), reintentar vuelve a mandar todos y el server responde
 // 409 por los que ya están. Eso es justo lo que se pedía, no un error: sin
-// esto el reintento fallaba siempre y solo quedaba Saltar. Se matchea también
-// el mensaje, no solo el 409 (mismo criterio que lib/errors.ts).
+// esto el reintento fallaba siempre y solo quedaba Saltar. Por el código y no
+// por el 409 pelado: un 409 puede significar otra cosa, y hasta hace poco
+// esto miraba el texto en inglés del mensaje — si alguien lo reformulaba en
+// el server, reintentar volvía a fallar para siempre sin que nada avisara.
 async function addProduct(productId: string): Promise<void> {
   try {
     await productsControllerCreate({ productId });
   } catch (err) {
-    const message = isAxiosError(err)
-      ? (err.response?.data as { message?: unknown } | undefined)?.message
-      : undefined;
-    const alreadyInCatalog =
-      isAxiosError(err) &&
-      err.response?.status === 409 &&
-      typeof message === 'string' &&
-      /already in the farm catalog/i.test(message);
-
-    if (!alreadyInCatalog) {
+    if (getErrorCode(err) !== 'PRODUCT_ALREADY_IN_CATALOG') {
       throw err;
     }
   }

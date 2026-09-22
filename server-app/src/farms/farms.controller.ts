@@ -4,11 +4,11 @@ import {
   Get,
   HttpCode,
   HttpStatus,
-  NotFoundException,
   Patch,
   Post,
   UseGuards,
 } from '@nestjs/common';
+import { AppException } from '../common/errors/app.exception';
 import {
   ApiBearerAuth,
   ApiOperation,
@@ -62,7 +62,7 @@ export class FarmsController {
   async findMe(@CurrentFarm() farmId: string): Promise<FindFarmResponseDto> {
     const farm = await this.farmsService.findById(farmId);
     if (!farm) {
-      throw new NotFoundException('Farm not found');
+      throw AppException.notFound('FARM_NOT_FOUND', 'Farm not found');
     }
     return farm;
   }
@@ -86,7 +86,7 @@ export class FarmsController {
   ): Promise<UpdateFarmResponseDto> {
     const updated = await this.farmsService.update(farmId, dto);
     if (!updated) {
-      throw new NotFoundException('Farm not found');
+      throw AppException.notFound('FARM_NOT_FOUND', 'Farm not found');
     }
     return updated;
   }
@@ -113,7 +113,7 @@ export class FarmsController {
   ): Promise<RegenerateFarmInvitationCodeResponseDto> {
     const updated = await this.farmsService.regenerateInvitationCode(farmId);
     if (!updated) {
-      throw new NotFoundException('Farm not found');
+      throw AppException.notFound('FARM_NOT_FOUND', 'Farm not found');
     }
     return updated;
   }

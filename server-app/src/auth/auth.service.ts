@@ -1,10 +1,6 @@
-import {
-  ConflictException,
-  GoneException,
-  Injectable,
-  NotFoundException,
-} from '@nestjs/common';
+import { Injectable } from '@nestjs/common';
 import { Types } from 'mongoose';
+import { AppException } from '../common/errors/app.exception';
 import { FarmsService, isInvitationCodeExpired } from '../farms/farms.service';
 import { UsersService } from '../users/users.service';
 import {
@@ -74,14 +70,20 @@ export class AuthService {
     );
 
     if (!farm) {
-      throw new NotFoundException('Invalid or inactive invitation code');
+      throw AppException.notFound(
+        'INVITATION_CODE_INVALID',
+        'Invalid or inactive invitation code',
+      );
     }
 
     // 410 y no el mismo 404: a quien se está uniendo le sirve saber que el
     // código estaba bien pero caducó (tiene que pedir otro), en vez de
     // pensar que lo escribió mal. No expone nada de la farm.
     if (isInvitationCodeExpired(farm.invitationCodeExpiresAt)) {
-      throw new GoneException('Invitation code has expired');
+      throw AppException.gone(
+        'INVITATION_CODE_EXPIRED',
+        'Invitation code has expired',
+      );
     }
 
     const user = await this.usersService.create({
@@ -106,7 +108,8 @@ export class AuthService {
     const existing = await this.usersService.findByFirebaseUid(firebaseUid);
 
     if (existing) {
-      throw new ConflictException(
+      throw AppException.conflict(
+        'ALREADY_ONBOARDED',
         'This account has already completed onboarding',
       );
     }

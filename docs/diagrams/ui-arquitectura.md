@@ -44,13 +44,25 @@ Pedido en `docs/issues.md` ("actualmente es solo un texto rojo"). Antes cada pan
 Se muestra desde `stores/useToastStore.ts`, con funciones sueltas y no hooks (mismo patrón que `bootstrapConnectivityListener`), así que también puede avisar algo de `lib/`:
 
 - `showToast(mensaje, { duration, action })` — devuelve el id del aviso. Uno nuevo reemplaza al anterior; nunca se apilan, que es justo lo que hace ilegible un cartel en el campo.
-- `showErrorToast(err)` — el camino corto para un `catch`: traduce con el `getErrorMessage` de siempre (`lib/errors.ts`, sin cambios) y lo muestra.
+- `showErrorToast(err)` — el camino corto para un `catch`: traduce con `getErrorMessage` (`lib/errors.ts`) y lo muestra.
 - `useErrorToast(error)` — para los errores de React Query, que son **estado y no evento**: dispara el aviso una sola vez, cuando el error aparece (la query conserva el mismo objeto de error entre renders).
 - `hideToast(id?)` — con id, baja ese aviso solo si es el que está puesto.
 
 **Qué flota y qué no.** Flota lo que falló al tocar algo (una mutación, un sync, una escritura local) y un refresco que falla teniendo datos en caché — el aviso avisa, y lo que ya se tenía sigue abajo, intacto. **Se queda fijo en la pantalla** lo que está pegado a un campo dentro de un diálogo (nombre de cultivo/unidad/cosechador duplicado, roles vacíos, contraseñas que no calzan): ahí un cartel que se va en 4 segundos desaparece justo cuando la persona está leyendo qué escribió mal. Por eso el host queda **debajo** de los `Portal` de Paper (los diálogos se montan después) — es a propósito, no un z-index accidental. Y cuando una pantalla queda sin **nada** que mostrar porque su carga falló, en vez del error rojo va `components/LoadError.tsx`: una línea gris ("No pudimos cargar esto…"), porque sin señal eso es lo normal en terreno y el motivo exacto ya lo dijo el cartel.
 
 **Posición (decidida con el usuario tras probar en iPhone).** Por defecto Paper lo pega al borde de abajo, donde el teclado lo tapa entero. El host calcula su `wrapperStyle`: con el teclado arriba se pone justo encima de él (vía `lib/useKeyboardHeight.ts`, el mismo de "Agregar cosechador"; en iOS escucha `keyboardWillShow`, así que sube acompañando la animación), y en Inicio/Historial sube `49px` + área segura para no tapar la tab bar (`TABBAR_HEIGHT_UIKIT` en el código de expo-router, que no lo exporta — y este componente vive fuera del navegador de tabs, así que tampoco puede preguntarlo con `useBottomTabBarHeight`). Detecta la tab bar con `useSegments()`. En Android el alto del teclado que reporta React Native ya viene sin la barra de navegación, así que ahí hay que sumarle el inset. `paddingBottom: 0` pisa el del propio Paper, que si no suma el área segura dos veces.
+
+### Qué mensaje le toca a cada error (2026-09-22)
+
+`lib/errors.ts` es **el único lugar de la app que mira el cuerpo de un error**, y traduce por código, no por texto. `server-app` manda `code` en todo error (ver "Error contract" en [arquitectura.md §2](arquitectura.md)); acá hay un `Record<string, string>` de código → mensaje en español, y lo que no esté en el mapa cae en "Algo salió mal", igual que antes.
+
+Antes se matcheaba el mensaje **en inglés** del server con expresiones regulares. Funcionaba, pero nada lo verificaba: reformular un mensaje allá dejaba de calzar acá sin que fallara `tsc` ni un test, y el usuario pasaba a ver "Algo salió mal". Ya había pasado en dos lugares — una regex que buscaba una frase que el server ya no decía, y (el que importaba) `starter-products.tsx`, que decidía **si el reintento del onboarding podía continuar** matcheando texto: si alguien reformulaba ese mensaje, reintentar fallaba para siempre y al admin nuevo solo le quedaba "Saltar". Ese caso ahora usa `getErrorCode(err)`, la misma puerta.
+
+De paso, los mensajes pasaron de 6 a 25: los 403 de rol y de onboarding sin terminar, los 404 de cada entidad, la sesión vencida y el 400 de validación tenían mensaje propio en ninguna parte y salían todos como "Algo salió mal".
+
+**Un 401 no manda al login solo**, a propósito: muestra "Tu sesión venció. Vuelve a iniciar sesión.". Un redirect automático ante cualquier 401 puede cortar la sesión a media jornada por algo transitorio — los datos están a salvo en SQLite, pero es una patada fea en terreno. Si alguna vez se quiere automático, va en el interceptor de `api/axios-instance.ts`, no en cada pantalla.
+
+**Sigue pendiente:** los rechazos del sync (`reason` por fila) viajan en inglés y `sync.tsx` los muestra tal cual — "Workday is already closed" en la cara de un cosechador chileno. Necesita un campo de código en los DTO de respuesta del server y regenerar orval.
 
 El "Anotado… Deshacer" del Anotador usa este mismo host: tenía su propio `Snackbar` y habrían convivido dos en la pantalla más usada del día. La lógica de Deshacer no cambió — la pantalla guarda en una ref el id del aviso de la última anotación, para poder bajar **ese** si la escritura falla o si se pierde el foco (ver "Anotar se mantiene apretado" más abajo: Deshacer no puede sobrevivir a salir de la pantalla).
 

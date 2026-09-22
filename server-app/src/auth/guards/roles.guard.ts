@@ -1,11 +1,7 @@
-import {
-  CanActivate,
-  ExecutionContext,
-  ForbiddenException,
-  Injectable,
-} from '@nestjs/common';
+import { CanActivate, ExecutionContext, Injectable } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
 import { Request } from 'express';
+import { AppException } from '../../common/errors/app.exception';
 import { ROLES_KEY } from '../decorators/roles.decorator';
 import { AuthenticatedUser } from './farm-scope.guard';
 
@@ -37,7 +33,10 @@ export class RolesGuard implements CanActivate {
       .getRequest<Request & { user: AuthenticatedUser }>();
 
     if (!requiredRoles.some((role) => request.user.roles.includes(role))) {
-      throw new ForbiddenException('This action requires a different role');
+      throw AppException.forbidden(
+        'ROLE_NOT_ALLOWED',
+        'This action requires a different role',
+      );
     }
 
     return true;

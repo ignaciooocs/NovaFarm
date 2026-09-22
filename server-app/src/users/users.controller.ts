@@ -2,12 +2,12 @@ import {
   Body,
   Controller,
   Get,
-  NotFoundException,
   Param,
   Patch,
   Query,
   UseGuards,
 } from '@nestjs/common';
+import { AppException } from '../common/errors/app.exception';
 import {
   ApiBearerAuth,
   ApiOperation,
@@ -77,7 +77,7 @@ export class UsersController {
   ): Promise<FindUserResponseDto> {
     const user = await this.usersService.findMe(authUser.uid);
     if (!user) {
-      throw new NotFoundException('User not found');
+      throw AppException.notFound('USER_NOT_FOUND', 'User not found');
     }
     return user;
   }
@@ -99,7 +99,7 @@ export class UsersController {
   ): Promise<UpdateUserResponseDto> {
     const updated = await this.usersService.updateMe(authUser.uid, dto);
     if (!updated) {
-      throw new NotFoundException('User not found');
+      throw AppException.notFound('USER_NOT_FOUND', 'User not found');
     }
     return updated;
   }

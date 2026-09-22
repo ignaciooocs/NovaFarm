@@ -1,4 +1,3 @@
-import { BadRequestException, ConflictException } from '@nestjs/common';
 import { getModelToken } from '@nestjs/mongoose';
 import { Test, TestingModule } from '@nestjs/testing';
 import { Types } from 'mongoose';
@@ -97,17 +96,17 @@ describe('MeasurementUnitsService', () => {
       expect(result.mode).toBe('WEIGHT');
     });
 
-    it('throws BadRequestException for a COUNT unit with no kgFactor', async () => {
+    it('throws UNIT_KG_FACTOR_REQUIRED for a COUNT unit with no kgFactor', async () => {
       await expect(
         measurementUnitsService.create(farmId, {
           name: 'Crate',
           mode: 'COUNT',
         }),
-      ).rejects.toBeInstanceOf(BadRequestException);
+      ).rejects.toMatchObject({ code: 'UNIT_KG_FACTOR_REQUIRED' });
       expect(measurementUnitModel.create).not.toHaveBeenCalled();
     });
 
-    it('throws ConflictException when the name is already taken for the farm', async () => {
+    it('throws UNIT_NAME_TAKEN when the name is already taken for the farm', async () => {
       measurementUnitModel.create.mockRejectedValue({
         code: 11000,
         keyPattern: { farmId: 1, name: 1 },
@@ -119,7 +118,7 @@ describe('MeasurementUnitsService', () => {
           mode: 'COUNT',
           kgFactor: 10,
         }),
-      ).rejects.toBeInstanceOf(ConflictException);
+      ).rejects.toMatchObject({ code: 'UNIT_NAME_TAKEN' });
     });
   });
 
@@ -315,7 +314,7 @@ describe('MeasurementUnitsService', () => {
       expect(result?.active).toBe(true);
     });
 
-    it('throws ConflictException when renaming to a name already taken in the farm', async () => {
+    it('throws UNIT_NAME_TAKEN when renaming to a name already taken in the farm', async () => {
       measurementUnitModel.findOneAndUpdate.mockReturnValue({
         exec: jest.fn().mockRejectedValue({
           code: 11000,
@@ -327,7 +326,7 @@ describe('MeasurementUnitsService', () => {
         measurementUnitsService.update(farmId, unitId.toString(), {
           name: 'Crate 10kg',
         }),
-      ).rejects.toBeInstanceOf(ConflictException);
+      ).rejects.toMatchObject({ code: 'UNIT_NAME_TAKEN' });
     });
 
     it('returns null when no matching measurement unit exists for the farm', async () => {
@@ -389,7 +388,7 @@ describe('MeasurementUnitsService', () => {
       expect(result?.kgFactor).toBeNull();
     });
 
-    it('throws BadRequestException when switching to COUNT with no kgFactor anywhere', async () => {
+    it('throws UNIT_KG_FACTOR_REQUIRED when switching to COUNT with no kgFactor anywhere', async () => {
       measurementUnitModel.findOne.mockReturnValue({
         exec: jest.fn().mockResolvedValue({
           _id: unitId,
@@ -405,7 +404,7 @@ describe('MeasurementUnitsService', () => {
         measurementUnitsService.update(farmId, unitId.toString(), {
           mode: 'COUNT',
         }),
-      ).rejects.toBeInstanceOf(BadRequestException);
+      ).rejects.toMatchObject({ code: 'UNIT_KG_FACTOR_REQUIRED' });
       expect(measurementUnitModel.findOneAndUpdate).not.toHaveBeenCalled();
     });
   });

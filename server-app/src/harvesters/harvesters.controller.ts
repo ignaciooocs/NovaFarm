@@ -2,13 +2,13 @@ import {
   Body,
   Controller,
   Get,
-  NotFoundException,
   Param,
   Patch,
   Post,
   Query,
   UseGuards,
 } from '@nestjs/common';
+import { AppException } from '../common/errors/app.exception';
 import {
   ApiBearerAuth,
   ApiOperation,
@@ -101,7 +101,8 @@ export class HarvestersController {
   ): Promise<UpdateHarvesterResponseDto> {
     const updated = await this.harvestersService.update(farmId, id, dto);
     if (!updated) {
-      throw new NotFoundException(
+      throw AppException.notFound(
+        'HARVESTER_NOT_FOUND',
         'Harvester not found in the caller farm roster',
       );
     }

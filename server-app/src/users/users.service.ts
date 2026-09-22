@@ -1,8 +1,5 @@
-import {
-  BadRequestException,
-  Injectable,
-  NotFoundException,
-} from '@nestjs/common';
+import { Injectable } from '@nestjs/common';
+import { AppException } from '../common/errors/app.exception';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model, Types } from 'mongoose';
 import { FirebaseAdminService } from '../auth/firebase-admin.service';
@@ -168,12 +165,15 @@ export class UsersService {
       })
       .exec();
     if (!user) {
-      throw new NotFoundException('User not found');
+      throw AppException.notFound('USER_NOT_FOUND', 'User not found');
     }
 
     const isAdmin = user.roles.includes('admin');
     if (!isAdmin && roles.length === 0) {
-      throw new BadRequestException('A user must have at least one role');
+      throw AppException.badRequest(
+        'USER_ROLES_EMPTY',
+        'A user must have at least one role',
+      );
     }
     const finalRoles: Array<'recorder' | 'admin' | 'supervisor'> = isAdmin
       ? ['admin', ...roles]
@@ -187,7 +187,7 @@ export class UsersService {
       )
       .exec();
     if (!updated) {
-      throw new NotFoundException('User not found');
+      throw AppException.notFound('USER_NOT_FOUND', 'User not found');
     }
 
     await this.firebaseAdminService.setCustomUserClaims(user.firebaseUid, {

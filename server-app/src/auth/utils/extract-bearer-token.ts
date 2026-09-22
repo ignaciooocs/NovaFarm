@@ -1,4 +1,4 @@
-import { UnauthorizedException } from '@nestjs/common';
+import { AppException } from '../../common/errors/app.exception';
 
 /**
  * Extracts the bearer token from an Authorization header value.
@@ -7,13 +7,13 @@ import { UnauthorizedException } from '@nestjs/common';
  */
 export function extractBearerToken(authHeader: string | undefined): string {
   if (!authHeader || !authHeader.startsWith('Bearer ')) {
-    throw new UnauthorizedException('Missing bearer token');
+    throw AppException.unauthorized('TOKEN_MISSING', 'Missing bearer token');
   }
 
   const token = authHeader.slice('Bearer '.length).trim();
 
   if (!token) {
-    throw new UnauthorizedException('Missing bearer token');
+    throw AppException.unauthorized('TOKEN_MISSING', 'Missing bearer token');
   }
 
   return token;

@@ -1,9 +1,5 @@
-import {
-  BadRequestException,
-  ConflictException,
-  Injectable,
-  NotFoundException,
-} from '@nestjs/common';
+import { Injectable } from '@nestjs/common';
+import { AppException } from '../common/errors/app.exception';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model, Types } from 'mongoose';
 import { AuthenticatedUser } from '../auth/guards/farm-scope.guard';
@@ -73,7 +69,8 @@ export class WorkdaysService {
       dto.productId,
     );
     if (!product) {
-      throw new NotFoundException(
+      throw AppException.notFound(
+        'PRODUCT_NOT_FOUND',
         'Product not found in the caller farm catalog',
       );
     }
@@ -83,7 +80,8 @@ export class WorkdaysService {
       dto.defaultMeasurementUnitId,
     );
     if (!measurementUnit) {
-      throw new NotFoundException(
+      throw AppException.notFound(
+        'UNIT_NOT_FOUND',
         'Measurement unit not found in the caller farm catalog',
       );
     }
@@ -203,7 +201,7 @@ export class WorkdaysService {
   // junto con el nuevo status.
   async close(farmId: string, id: string): Promise<WorkdayDto> {
     if (!Types.ObjectId.isValid(id)) {
-      throw new NotFoundException('Workday not found');
+      throw AppException.notFound('WORKDAY_NOT_FOUND', 'Workday not found');
     }
 
     const workday = await this.workdayModel
@@ -211,7 +209,7 @@ export class WorkdaysService {
       .exec();
 
     if (!workday) {
-      throw new NotFoundException('Workday not found');
+      throw AppException.notFound('WORKDAY_NOT_FOUND', 'Workday not found');
     }
 
     const recorderName = await this.resolveRecorderName(workday.recorderId);
@@ -257,7 +255,7 @@ export class WorkdaysService {
       .exec();
 
     if (!updated) {
-      throw new NotFoundException('Workday not found');
+      throw AppException.notFound('WORKDAY_NOT_FOUND', 'Workday not found');
     }
 
     return this.toDto(updated, recorderName);
@@ -275,7 +273,7 @@ export class WorkdaysService {
     dto: UpdateWorkdayPayRequestDto,
   ): Promise<WorkdayDto> {
     if (!Types.ObjectId.isValid(id)) {
-      throw new NotFoundException('Workday not found');
+      throw AppException.notFound('WORKDAY_NOT_FOUND', 'Workday not found');
     }
 
     const workday = await this.workdayModel
@@ -283,11 +281,14 @@ export class WorkdaysService {
       .exec();
 
     if (!workday) {
-      throw new NotFoundException('Workday not found');
+      throw AppException.notFound('WORKDAY_NOT_FOUND', 'Workday not found');
     }
 
     if (workday.status === 'CLOSED') {
-      throw new ConflictException('Cannot change the pay of a closed workday');
+      throw AppException.conflict(
+        'WORKDAY_CLOSED_PAY',
+        'Cannot change the pay of a closed workday',
+      );
     }
 
     const payRate = dto.payRate;
@@ -316,7 +317,7 @@ export class WorkdaysService {
       .exec();
 
     if (!updated) {
-      throw new NotFoundException('Workday not found');
+      throw AppException.notFound('WORKDAY_NOT_FOUND', 'Workday not found');
     }
 
     return this.toDto(
@@ -336,7 +337,8 @@ export class WorkdaysService {
     unitMode: 'COUNT' | 'WEIGHT' | undefined,
   ): void {
     if (payBasis === 'PER_UNIT' && unitMode === 'WEIGHT') {
-      throw new BadRequestException(
+      throw AppException.badRequest(
+        'PAY_BASIS_INVALID',
         'A WEIGHT measurement unit can only be paid PER_KG',
       );
     }

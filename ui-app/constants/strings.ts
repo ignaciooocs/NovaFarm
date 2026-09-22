@@ -464,5 +464,35 @@ export const strings = {
       'Ya tienes un cultivo con ese nombre. Búscalo en tu catálogo — puede estar desactivado.',
     duplicateUnitName:
       'Ya tienes una unidad de medida con ese nombre. Búscala en tu catálogo — puede estar desactivada.',
+    // De acá para abajo, los errores del server que hasta ahora caían todos
+    // en `generic` — ver el mapa por código en lib/errors.ts.
+    sessionExpired: 'Tu sesión venció. Vuelve a iniciar sesión.',
+    onboardingIncomplete: 'Esta cuenta todavía no termina su registro.',
+    roleNotAllowed:
+      'Tu rol no te deja hacer esto. Pídeselo a un administrador de tu farm.',
+    farmNotFound: 'No encontramos tu farm.',
+    harvesterNotFound: 'Ese cosechador ya no está en el catálogo de tu farm.',
+    unitNotFound: 'Esa unidad de medida ya no está en tu catálogo.',
+    unitKgFactorRequired: 'Falta decir cuántos kilos trae el envase.',
+    productNotFound: 'Ese cultivo ya no está en tu catálogo.',
+    productNotAvailable: 'Ese cultivo no está disponible para tu farm.',
+    productAlreadyInCatalog:
+      'Ya tienes ese cultivo en tu catálogo. Búscalo — puede estar desactivado.',
+    productNameRequired: 'Falta el nombre del cultivo.',
+    productFromAppCatalog:
+      'Este cultivo lo trae la app: su nombre y su ícono los define ella.',
+    productFromAnotherFarm:
+      'Este cultivo lo creó otra farm, así que no se puede cambiar desde acá.',
+    productUsedInWorkday:
+      'Este cultivo ya se usó en una jornada, así que su nombre y su ícono no se pueden cambiar.',
+    userNotFound: 'No encontramos esa cuenta en tu equipo.',
+    userRolesEmpty: 'Tienes que dejarle al menos un rol.',
+    workdayNotFound: 'El servidor no tiene esa jornada.',
+    workdayClosedPay:
+      'La jornada ya está cerrada, así que la tarifa no se puede cambiar.',
+    payBasisInvalid:
+      'Si el envase se pesa en cada vuelta, el pago tiene que ser por kilo.',
+    validationFailed:
+      'Hay algo que no cuadra en los datos. Revísalos e intenta de nuevo.',
   },
 } as const;

@@ -1,10 +1,5 @@
-import {
-  BadRequestException,
-  ConflictException,
-  Injectable,
-  Logger,
-  OnModuleInit,
-} from '@nestjs/common';
+import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
+import { AppException } from '../common/errors/app.exception';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model, Types } from 'mongoose';
 import { Workday } from '../workdays/schemas/workday.schema';
@@ -163,7 +158,8 @@ export class ProductsService implements OnModuleInit {
         : await this.createCommunityProduct(farmId, dto);
 
     if (!product) {
-      throw new BadRequestException(
+      throw AppException.badRequest(
+        'PRODUCT_NOT_AVAILABLE',
         'Product not found or not visible to this farm',
       );
     }
@@ -176,7 +172,8 @@ export class ProductsService implements OnModuleInit {
       });
     } catch (error) {
       if (this.isDuplicateKeyError(error)) {
-        throw new ConflictException(
+        throw AppException.conflict(
+          'PRODUCT_ALREADY_IN_CATALOG',
           'This product is already in the farm catalog',
         );
       }
@@ -218,17 +215,20 @@ export class ProductsService implements OnModuleInit {
 
     if (dto.name !== undefined || dto.icon !== undefined) {
       if (product.source === 'APP') {
-        throw new ConflictException(
+        throw AppException.conflict(
+          'PRODUCT_FROM_APP_CATALOG',
           'This product comes from the app catalog, so its name and icon cannot be changed',
         );
       }
       if (product.createdByFarmId?.toString() !== farmId) {
-        throw new ConflictException(
+        throw AppException.conflict(
+          'PRODUCT_FROM_ANOTHER_FARM',
           'This product was created by another farm, so it cannot be changed here',
         );
       }
       if (used) {
-        throw new ConflictException(
+        throw AppException.conflict(
+          'PRODUCT_USED_IN_WORKDAY',
           'This product is already used in a workday, so its name and icon cannot be changed',
         );
       }
@@ -247,7 +247,8 @@ export class ProductsService implements OnModuleInit {
           .exec();
       } catch (error) {
         if (this.isDuplicateKeyError(error)) {
-          throw new ConflictException(
+          throw AppException.conflict(
+            'PRODUCT_NAME_TAKEN',
             'A product with this name already exists for this farm',
           );
         }
@@ -310,7 +311,8 @@ export class ProductsService implements OnModuleInit {
     dto: CreateProductRequestDto,
   ): Promise<ProductDocument> {
     if (dto.name === undefined) {
-      throw new BadRequestException(
+      throw AppException.badRequest(
+        'PRODUCT_NAME_REQUIRED',
         'name is required when creating a product outside the app catalog',
       );
     }
@@ -327,7 +329,8 @@ export class ProductsService implements OnModuleInit {
       });
     } catch (error) {
       if (this.isDuplicateKeyError(error)) {
-        throw new ConflictException(
+        throw AppException.conflict(
+          'PRODUCT_NAME_TAKEN',
           'A product with this name already exists for this farm',
         );
       }

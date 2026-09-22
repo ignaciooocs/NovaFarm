@@ -2,6 +2,7 @@ import { NestFactory } from '@nestjs/core';
 import { ValidationPipe } from '@nestjs/common';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import { AppModule } from './app.module';
+import { AllExceptionsFilter } from './common/errors/all-exceptions.filter';
 
 const APP_NAME = 'NovaFarm';
 
@@ -15,6 +16,11 @@ async function bootstrap() {
       forbidNonWhitelisted: true,
     }),
   );
+
+  // Todo error sale con `code` (ver common/errors/error-codes.ts): es el
+  // contrato con ui-app, en vez del texto del mensaje que hasta ahora la app
+  // matcheaba con expresiones regulares.
+  app.useGlobalFilters(new AllExceptionsFilter());
 
   // Per arquitectura.md §2, the API is versioned from the first real
   // endpoint: every controller route is served under /api/v1/...

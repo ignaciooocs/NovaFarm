@@ -2,13 +2,13 @@ import {
   Body,
   Controller,
   Get,
-  NotFoundException,
   Param,
   Patch,
   Post,
   Query,
   UseGuards,
 } from '@nestjs/common';
+import { AppException } from '../common/errors/app.exception';
 import {
   ApiBearerAuth,
   ApiOperation,
@@ -85,7 +85,8 @@ export class MeasurementUnitsController {
   ): Promise<UpdateMeasurementUnitResponseDto> {
     const updated = await this.measurementUnitsService.update(farmId, id, dto);
     if (!updated) {
-      throw new NotFoundException(
+      throw AppException.notFound(
+        'UNIT_NOT_FOUND',
         'Measurement unit not found in the caller farm catalog',
       );
     }

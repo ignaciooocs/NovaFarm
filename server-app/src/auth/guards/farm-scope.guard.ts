@@ -1,12 +1,7 @@
-import {
-  CanActivate,
-  ExecutionContext,
-  ForbiddenException,
-  Injectable,
-  UnauthorizedException,
-} from '@nestjs/common';
+import { CanActivate, ExecutionContext, Injectable } from '@nestjs/common';
 import { Request } from 'express';
 import * as admin from 'firebase-admin';
+import { AppException } from '../../common/errors/app.exception';
 import { FirebaseAdminService } from '../firebase-admin.service';
 import { extractBearerToken } from '../utils/extract-bearer-token';
 
@@ -43,13 +38,19 @@ export class FarmScopeGuard implements CanActivate {
     try {
       decoded = await this.firebaseAdminService.verifyIdToken(token);
     } catch {
-      throw new UnauthorizedException('Invalid or expired token');
+      throw AppException.unauthorized(
+        'TOKEN_INVALID',
+        'Invalid or expired token',
+      );
     }
 
     const claims = decoded as unknown as FirebaseCustomClaims;
 
     if (!claims.farmId) {
-      throw new ForbiddenException('Account has not completed onboarding');
+      throw AppException.forbidden(
+        'ONBOARDING_INCOMPLETE',
+        'Account has not completed onboarding',
+      );
     }
 
     (request as Request & { user: AuthenticatedUser }).user = {

@@ -1,4 +1,3 @@
-import { BadRequestException, ConflictException } from '@nestjs/common';
 import { getModelToken } from '@nestjs/mongoose';
 import { Test, TestingModule } from '@nestjs/testing';
 import { Types } from 'mongoose';
@@ -238,13 +237,13 @@ describe('ProductsService', () => {
       expect(result.source).toBe('COMMUNITY');
     });
 
-    it('throws BadRequestException with neither a productId nor a name', async () => {
-      await expect(productsService.create(farmId, {})).rejects.toBeInstanceOf(
-        BadRequestException,
-      );
+    it('throws PRODUCT_NAME_REQUIRED with neither a productId nor a name', async () => {
+      await expect(productsService.create(farmId, {})).rejects.toMatchObject({
+        code: 'PRODUCT_NAME_REQUIRED',
+      });
     });
 
-    it('throws ConflictException when the product is already in the farm catalog', async () => {
+    it('throws PRODUCT_ALREADY_IN_CATALOG when the product is already in the farm catalog', async () => {
       productModel.findOne.mockReturnValue(
         exec({ _id: productId, name: 'Palta', source: 'APP' }),
       );
@@ -252,7 +251,7 @@ describe('ProductsService', () => {
 
       await expect(
         productsService.create(farmId, { productId: productId.toString() }),
-      ).rejects.toBeInstanceOf(ConflictException);
+      ).rejects.toMatchObject({ code: 'PRODUCT_ALREADY_IN_CATALOG' });
     });
   });
 
@@ -292,7 +291,7 @@ describe('ProductsService', () => {
         productsService.update(farmId, productId.toString(), {
           name: 'Aguacate',
         }),
-      ).rejects.toBeInstanceOf(ConflictException);
+      ).rejects.toMatchObject({ code: 'PRODUCT_FROM_APP_CATALOG' });
       expect(productModel.updateOne).not.toHaveBeenCalled();
     });
 
@@ -308,7 +307,7 @@ describe('ProductsService', () => {
         productsService.update(farmId, productId.toString(), {
           name: 'Murtilla',
         }),
-      ).rejects.toBeInstanceOf(ConflictException);
+      ).rejects.toMatchObject({ code: 'PRODUCT_FROM_ANOTHER_FARM' });
     });
 
     it('refuses to rename a product already used in a workday', async () => {
@@ -324,7 +323,7 @@ describe('ProductsService', () => {
         productsService.update(farmId, productId.toString(), {
           name: 'Murtilla',
         }),
-      ).rejects.toBeInstanceOf(ConflictException);
+      ).rejects.toMatchObject({ code: 'PRODUCT_USED_IN_WORKDAY' });
       expect(productModel.updateOne).not.toHaveBeenCalled();
     });
 

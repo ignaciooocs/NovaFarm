@@ -1,8 +1,3 @@
-import {
-  ConflictException,
-  GoneException,
-  NotFoundException,
-} from '@nestjs/common';
 import { Test, TestingModule } from '@nestjs/testing';
 import { FarmsService } from '../farms/farms.service';
 import { UsersService } from '../users/users.service';
@@ -89,7 +84,7 @@ describe('AuthService', () => {
       expect(result.user._id).toBe('user-1');
     });
 
-    it('throws ConflictException when the firebaseUid already onboarded', async () => {
+    it('throws ALREADY_ONBOARDED when the firebaseUid already onboarded', async () => {
       usersService.findByFirebaseUid.mockResolvedValue({ _id: 'user-1' });
 
       await expect(
@@ -98,7 +93,7 @@ describe('AuthService', () => {
           farmName: 'Fundo Los Alamos',
           farmType: 'organization',
         }),
-      ).rejects.toBeInstanceOf(ConflictException);
+      ).rejects.toMatchObject({ code: 'ALREADY_ONBOARDED' });
 
       expect(farmsService.create).not.toHaveBeenCalled();
     });
@@ -144,7 +139,7 @@ describe('AuthService', () => {
       expect(result.user._id).toBe('user-2');
     });
 
-    it('throws NotFoundException when the invitation code is invalid', async () => {
+    it('throws INVITATION_CODE_INVALID when the invitation code is invalid', async () => {
       usersService.findByFirebaseUid.mockResolvedValue(null);
       farmsService.findActiveByInvitationCode.mockResolvedValue(null);
 
@@ -153,7 +148,7 @@ describe('AuthService', () => {
           name: 'Pedro Gonzalez',
           invitationCode: 'INVALID1',
         }),
-      ).rejects.toBeInstanceOf(NotFoundException);
+      ).rejects.toMatchObject({ code: 'INVITATION_CODE_INVALID' });
 
       expect(usersService.create).not.toHaveBeenCalled();
     });
@@ -162,7 +157,7 @@ describe('AuthService', () => {
       ['has passed its expiry', new Date(Date.now() - 60 * 1000)],
       ['has no expiry (farm created before codes expired)', null],
     ])(
-      'throws GoneException without joining when the code %s',
+      'throws INVITATION_CODE_EXPIRED without joining when the code %s',
       async (_case, invitationCodeExpiresAt) => {
         usersService.findByFirebaseUid.mockResolvedValue(null);
         farmsService.findActiveByInvitationCode.mockResolvedValue({
@@ -180,14 +175,14 @@ describe('AuthService', () => {
             name: 'Pedro Gonzalez',
             invitationCode: 'ABC12345',
           }),
-        ).rejects.toBeInstanceOf(GoneException);
+        ).rejects.toMatchObject({ code: 'INVITATION_CODE_EXPIRED' });
 
         expect(usersService.create).not.toHaveBeenCalled();
         expect(firebaseAdminService.setCustomUserClaims).not.toHaveBeenCalled();
       },
     );
 
-    it('throws ConflictException when the firebaseUid already onboarded', async () => {
+    it('throws ALREADY_ONBOARDED when the firebaseUid already onboarded', async () => {
       usersService.findByFirebaseUid.mockResolvedValue({ _id: 'user-1' });
 
       await expect(
@@ -195,7 +190,7 @@ describe('AuthService', () => {
           name: 'Pedro Gonzalez',
           invitationCode: 'ABC12345',
         }),
-      ).rejects.toBeInstanceOf(ConflictException);
+      ).rejects.toMatchObject({ code: 'ALREADY_ONBOARDED' });
 
       expect(farmsService.findActiveByInvitationCode).not.toHaveBeenCalled();
     });

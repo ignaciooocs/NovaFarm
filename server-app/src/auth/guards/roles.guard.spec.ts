@@ -1,4 +1,4 @@
-import { ExecutionContext, ForbiddenException } from '@nestjs/common';
+import { ExecutionContext } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
 import { RolesGuard } from './roles.guard';
 
@@ -41,11 +41,11 @@ describe('RolesGuard', () => {
     );
   });
 
-  it('throws ForbiddenException when the caller lacks a required role', () => {
+  it('throws ROLE_NOT_ALLOWED when the caller lacks a required role', () => {
     (reflector.getAllAndOverride as jest.Mock).mockReturnValue(['admin']);
 
     expect(() => rolesGuard.canActivate(contextWith(['recorder']))).toThrow(
-      ForbiddenException,
+      expect.objectContaining({ code: 'ROLE_NOT_ALLOWED' }) as Error,
     );
   });
 });

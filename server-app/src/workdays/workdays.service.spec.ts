@@ -1,8 +1,3 @@
-import {
-  BadRequestException,
-  ConflictException,
-  NotFoundException,
-} from '@nestjs/common';
 import { getModelToken } from '@nestjs/mongoose';
 import { Test, TestingModule } from '@nestjs/testing';
 import { Types } from 'mongoose';
@@ -282,7 +277,7 @@ describe('WorkdaysService', () => {
       expect(result.recorderId).toBeNull();
     });
 
-    it('throws NotFoundException when the product does not exist in the caller farm', async () => {
+    it('throws PRODUCT_NOT_FOUND when the product does not exist in the caller farm', async () => {
       mockNoExistingClientEntry();
       productsService.findActiveById.mockResolvedValue(null);
 
@@ -292,12 +287,12 @@ describe('WorkdaysService', () => {
           { uid: 'u', farmId, roles: ['admin'] },
           dto,
         ),
-      ).rejects.toBeInstanceOf(NotFoundException);
+      ).rejects.toMatchObject({ code: 'PRODUCT_NOT_FOUND' });
       expect(measurementUnitsService.findActiveById).not.toHaveBeenCalled();
       expect(workdayModel.create).not.toHaveBeenCalled();
     });
 
-    it('throws NotFoundException when the measurement unit does not exist in the caller farm', async () => {
+    it('throws UNIT_NOT_FOUND when the measurement unit does not exist in the caller farm', async () => {
       mockNoExistingClientEntry();
       productsService.findActiveById.mockResolvedValue({
         _id: productId,
@@ -311,7 +306,7 @@ describe('WorkdaysService', () => {
           { uid: 'u', farmId, roles: ['admin'] },
           dto,
         ),
-      ).rejects.toBeInstanceOf(NotFoundException);
+      ).rejects.toMatchObject({ code: 'UNIT_NOT_FOUND' });
       expect(workdayModel.create).not.toHaveBeenCalled();
     });
 
@@ -501,7 +496,7 @@ describe('WorkdaysService', () => {
           { uid: 'firebase-uid', farmId, roles: ['admin'] },
           { ...dto, payRate: 500, payBasis: 'PER_UNIT' },
         ),
-      ).rejects.toBeInstanceOf(BadRequestException);
+      ).rejects.toMatchObject({ code: 'PAY_BASIS_INVALID' });
       expect(workdayModel.create).not.toHaveBeenCalled();
     });
   });
@@ -587,7 +582,7 @@ describe('WorkdaysService', () => {
           payRate: 500,
           payBasis: 'PER_UNIT',
         }),
-      ).rejects.toBeInstanceOf(BadRequestException);
+      ).rejects.toMatchObject({ code: 'PAY_BASIS_INVALID' });
       expect(workdayModel.findOneAndUpdate).not.toHaveBeenCalled();
     });
 
@@ -599,11 +594,11 @@ describe('WorkdaysService', () => {
           payRate: 500,
           payBasis: 'PER_KG',
         }),
-      ).rejects.toBeInstanceOf(ConflictException);
+      ).rejects.toMatchObject({ code: 'WORKDAY_CLOSED_PAY' });
       expect(workdayModel.findOneAndUpdate).not.toHaveBeenCalled();
     });
 
-    it('throws NotFoundException when the workday does not exist for the caller farm', async () => {
+    it('throws WORKDAY_NOT_FOUND when the workday does not exist for the caller farm', async () => {
       workdayModel.findOne.mockReturnValue({
         exec: jest.fn().mockResolvedValue(null),
       });
@@ -613,16 +608,16 @@ describe('WorkdaysService', () => {
           payRate: 500,
           payBasis: 'PER_KG',
         }),
-      ).rejects.toBeInstanceOf(NotFoundException);
+      ).rejects.toMatchObject({ code: 'WORKDAY_NOT_FOUND' });
     });
 
-    it('throws NotFoundException without querying when the id is not a valid ObjectId', async () => {
+    it('throws WORKDAY_NOT_FOUND without querying when the id is not a valid ObjectId', async () => {
       await expect(
         workdaysService.updatePay(farmId, 'not-an-id', {
           payRate: 500,
           payBasis: 'PER_KG',
         }),
-      ).rejects.toBeInstanceOf(NotFoundException);
+      ).rejects.toMatchObject({ code: 'WORKDAY_NOT_FOUND' });
       expect(workdayModel.findOne).not.toHaveBeenCalled();
     });
   });
@@ -852,14 +847,14 @@ describe('WorkdaysService', () => {
       expect(result.finalTotalKg).toEqual(128.5);
     });
 
-    it('throws NotFoundException when the workday does not exist for the caller farm', async () => {
+    it('throws WORKDAY_NOT_FOUND when the workday does not exist for the caller farm', async () => {
       workdayModel.findOne.mockReturnValue({
         exec: jest.fn().mockResolvedValue(null),
       });
 
       await expect(
         workdaysService.close(farmId, workdayId),
-      ).rejects.toBeInstanceOf(NotFoundException);
+      ).rejects.toMatchObject({ code: 'WORKDAY_NOT_FOUND' });
     });
 
     it('includes the recorder name when the workday has one attributed', async () => {
@@ -899,10 +894,10 @@ describe('WorkdaysService', () => {
       expect(result.recorderName).toEqual('Juana Perez');
     });
 
-    it('throws NotFoundException without querying when the id is not a valid ObjectId', async () => {
+    it('throws WORKDAY_NOT_FOUND without querying when the id is not a valid ObjectId', async () => {
       await expect(
         workdaysService.close(farmId, 'not-an-id'),
-      ).rejects.toBeInstanceOf(NotFoundException);
+      ).rejects.toMatchObject({ code: 'WORKDAY_NOT_FOUND' });
       expect(workdayModel.findOne).not.toHaveBeenCalled();
     });
   });

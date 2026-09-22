@@ -21,6 +21,14 @@ The block is also **visually delimited**: `src/common/logging/sync-session-log.t
 
 Known gaps: CI, e2e coverage beyond the scaffold test, and PaaS deployment aren't set up yet (see [arquitectura.md §3–5](../../docs/diagrams/arquitectura.md)).
 
+## Errors: throw `AppException`, never Nest's own
+
+Every business error throws `AppException` (`src/common/errors/app.exception.ts`) with a stable code from `src/common/errors/error-codes.ts` — `throw AppException.conflict('PRODUCT_NAME_TAKEN', 'A product with this name already exists for this farm')` — not `ConflictException` and friends. The code is what `ui-app` switches on to pick a Spanish message (`lib/errors.ts` there); the English text is for the log and Swagger and can be reworded freely. Matching the message was the old contract and it silently drifted, so don't reintroduce it. A global `AllExceptionsFilter` (`main.ts`) adds a generic code to everything that isn't an `AppException` (ValidationPipe, throttler, unmatched routes, unhandled 500s), so the shape `{ statusCode, code, message }` holds for every error response.
+
+Adding an error means: a code in `error-codes.ts`, the throw, and its Spanish message in `ui-app/constants/strings.ts` + the map in `ui-app/lib/errors.ts`. Service specs assert the code (`rejects.toMatchObject({ code: 'WORKDAY_NOT_FOUND' })`), not the exception class — that's what keeps the contract honest. Full reasoning: [arquitectura.md §2](../../docs/diagrams/arquitectura.md).
+
+**Still on the old contract:** the per-item `reason` strings in the sync responses (`harvest-entries`/`harvester-workday`) travel as English text and `ui-app` shows them verbatim to the field worker ("Workday is already closed"), which breaks RNF-02. Fixing it means a code field on those response DTOs plus an orval regen.
+
 ## Mongoose gotcha worth knowing
 
 Adding a `required` field to an existing schema (`Workday.clientEntryId`, `Farm.recordersCanManageCatalog`) doesn't backfill it onto documents already in the database — a `.save()` on one of those old documents re-validates the *whole* document and throws (this broke `PATCH /workdays/:id/close` in practice). The fix pattern used throughout is `findOneAndUpdate` with a targeted `$set` (skips validation by default) instead of fetch-mutate-`.save()`, plus `?? <default>` in the service's `toDto()` for reads.

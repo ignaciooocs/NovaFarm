@@ -32,6 +32,16 @@ REST over HTTPS, JSON bodies, DTO-validated (`class-validator`/`class-transforme
 
 **API is versioned from the first real endpoint** (`/api/v1/...`). This matters more than usual here specifically because the client is a mobile app: app-store update lag means old binaries keep calling the API long after a new server version ships. The version boundary needs to exist from day one, not get retrofitted once it's already painful.
 
+### Error contract: a stable `code`, never the message text (2026-09-22)
+
+Every error response carries `{ statusCode, code, message }`. **`code` is the contract; `message` is not.** The English text is for the log and for Swagger and can be reworded freely; `ui-app` decides what to show the user by switching on `code` (`lib/errors.ts` there, `src/common/errors/error-codes.ts` here).
+
+This replaced matching the message with regular expressions on the client, which was fragile in a way nothing could catch: rewording a message in a service silently turned a specific Spanish message into "Algo salió mal", with no failing test and no type error. It had already drifted in two places — one message the client looked for didn't exist server-side anymore, and `starter-products.tsx` decided whether an onboarding retry could continue by matching English text, so a reworded message would have made that retry fail permanently.
+
+Mechanics: `AppException` (a subclass of Nest's `HttpException`, with constructors per status) carries the code, and a global `AllExceptionsFilter` adds one to **everything else** too — the `ValidationPipe`'s 400, the throttler's 429, an unmatched route's 404, and any unhandled 500 (which goes out generic, never leaking internals, and gets one log line plus the stack). That last distinction matters: since every business 404 now throws `AppException`, a bare 404 means the URL was wrong, which the client used to misread as a business error.
+
+Same reasoning as the API version prefix above: the client is a mobile app, so old binaries keep running against new servers. A contract made of prose doesn't survive that. Adding an error means adding a code here and its Spanish message in `ui-app` — an unknown code falls back to a generic message rather than breaking.
+
 ### Offline-sync design (the part that can't be hand-waved)
 
 `ui-app` captures everything locally in SQLite the instant it happens (RNF-01, <100ms, zero network dependency) and only talks to the server when the user explicitly presses "Sincronizar Jornada." That means the sync endpoint has to handle everything a normal always-online API doesn't:

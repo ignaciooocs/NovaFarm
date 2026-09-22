@@ -2,13 +2,13 @@ import {
   Body,
   Controller,
   Get,
-  NotFoundException,
   Param,
   Patch,
   Post,
   Query,
   UseGuards,
 } from '@nestjs/common';
+import { AppException } from '../common/errors/app.exception';
 import {
   ApiBearerAuth,
   ApiOperation,
@@ -98,7 +98,8 @@ export class ProductsController {
   ): Promise<UpdateProductResponseDto> {
     const updated = await this.productsService.update(farmId, productId, dto);
     if (!updated) {
-      throw new NotFoundException(
+      throw AppException.notFound(
+        'PRODUCT_NOT_FOUND',
         'Product not found in the caller farm catalog',
       );
     }

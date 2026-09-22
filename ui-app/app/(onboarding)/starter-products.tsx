@@ -5,7 +5,6 @@ import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
 import {
   ActivityIndicator,
   Button,
-  HelperText,
   Text,
   TouchableRipple,
 } from 'react-native-paper';
@@ -17,8 +16,7 @@ import {
 } from '@/api/generated/products/products';
 import { Screen } from '@/components/Screen';
 import { strings } from '@/constants/strings';
-import { getErrorMessage } from '@/lib/errors';
-import { usePalette } from '@/stores';
+import { useErrorToast, usePalette } from '@/stores';
 import { colors, spacing } from '@/theme';
 
 // Se ofrecen solo los marcados `featured` en el catálogo de la app (ver
@@ -62,7 +60,7 @@ export default function StarterProductsScreen() {
       Promise.all(productIds.map(addProduct)),
     onSuccess: () => router.replace('/home'),
   });
-  const error = addProducts.error ?? availableQuery.error;
+  useErrorToast(addProducts.error ?? availableQuery.error);
 
   function toggle(key: string) {
     setSelected((prev) => {
@@ -122,10 +120,6 @@ export default function StarterProductsScreen() {
           );
         })}
       </ScrollView>
-
-      {error ? (
-        <HelperText type="error">{getErrorMessage(error)}</HelperText>
-      ) : null}
 
       <Button
         mode="contained"

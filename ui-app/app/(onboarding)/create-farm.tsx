@@ -1,14 +1,13 @@
 import { useState } from 'react';
 import { StyleSheet } from 'react-native';
 import { Stack, useRouter } from 'expo-router';
-import { Button, HelperText, Text, TextInput } from 'react-native-paper';
+import { Button, Text, TextInput } from 'react-native-paper';
 import { useAuthControllerRegisterAdmin } from '@/api/generated/auth/auth';
 import { OptionSelector } from '@/components/OptionSelector';
 import { Screen } from '@/components/Screen';
 import { strings } from '@/constants/strings';
-import { getErrorMessage } from '@/lib/errors';
 import { auth } from '@/lib/firebase';
-import { usePalette } from '@/stores';
+import { useErrorToast, usePalette } from '@/stores';
 import { colors, spacing } from '@/theme';
 
 type FarmType = 'organization' | 'independent';
@@ -44,6 +43,8 @@ export default function CreateFarmScreen() {
       },
     },
   });
+
+  useErrorToast(registerAdmin.error);
 
   const canSubmit =
     name.trim().length > 0 &&
@@ -108,12 +109,6 @@ export default function CreateFarmScreen() {
           },
         ]}
       />
-
-      {registerAdmin.error ? (
-        <HelperText type="error">
-          {getErrorMessage(registerAdmin.error)}
-        </HelperText>
-      ) : null}
 
       <Button
         mode="contained"

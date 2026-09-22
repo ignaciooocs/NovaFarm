@@ -32,7 +32,7 @@ import { strings } from '@/constants/strings';
 import { syncCatalogs } from '@/lib/catalogSync';
 import { getErrorMessage } from '@/lib/errors';
 import { useRefreshOnFocus } from '@/lib/useRefreshOnFocus';
-import { usePalette } from '@/stores';
+import { useErrorToast, usePalette } from '@/stores';
 import { spacing } from '@/theme';
 
 // Grilla de 2 columnas (RF-03.3 + pasada de UI/UX pedida por el usuario,
@@ -113,6 +113,7 @@ export default function ProductsScreen() {
     availableQuery.error ??
     toggleProduct.error ??
     addSuggestion.error;
+  useErrorToast(screenError);
 
   // FlatList con numColumns=2 + columnWrapperStyle "space-around": cuando la
   // última fila tiene un solo ítem (cantidad impar), ese ítem queda
@@ -232,10 +233,6 @@ export default function ProductsScreen() {
 
   return (
     <Screen edges={['bottom', 'left', 'right']}>
-      {screenError ? (
-        <HelperText type="error">{getErrorMessage(screenError)}</HelperText>
-      ) : null}
-
       {/* Solo la primera vez: después la grilla en caché se ve al tiro. */}
       {productsQuery.isPending || availableQuery.isPending ? (
         <ActivityIndicator />

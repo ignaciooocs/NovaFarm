@@ -37,6 +37,23 @@ El usuario notó el morado del bug de `elevation` de arriba y, en vez de solo pe
 
 `constants/strings.ts` agrupa el copy de campo por pantalla/dominio ("Anotar", "Tarro", "Vuelta" — RNF-02). Mismo principio que los colores: un lugar para cambiar un texto, no una búsqueda pantalla por pantalla. No es i18n completo (`react-i18next`, etc.) a propósito — la app tiene un solo idioma de destino, así que un módulo de constantes alcanza sin agregar una capa de indirección de más.
 
+## Errores en pantalla — un solo aviso flotante (2026-09-21)
+
+Pedido en `docs/issues.md` ("actualmente es solo un texto rojo"). Antes cada pantalla tenía su propio `useState<string|null>` + un `<HelperText type="error">` metido en el layout; eran ~30 lugares, cada uno decidiendo por su cuenta dónde iba el mensaje. Ahora hay **un solo `Snackbar` en toda la app**, `components/ToastHost.tsx`, montado en `app/_layout.tsx` al lado del navegador (no dentro de ninguna pantalla) — así el aviso se ve igual en todas, sobrevive a un `router.replace()` y no hay dos peleando por el mismo borde de abajo.
+
+Se muestra desde `stores/useToastStore.ts`, con funciones sueltas y no hooks (mismo patrón que `bootstrapConnectivityListener`), así que también puede avisar algo de `lib/`:
+
+- `showToast(mensaje, { duration, action })` — devuelve el id del aviso. Uno nuevo reemplaza al anterior; nunca se apilan, que es justo lo que hace ilegible un cartel en el campo.
+- `showErrorToast(err)` — el camino corto para un `catch`: traduce con el `getErrorMessage` de siempre (`lib/errors.ts`, sin cambios) y lo muestra.
+- `useErrorToast(error)` — para los errores de React Query, que son **estado y no evento**: dispara el aviso una sola vez, cuando el error aparece (la query conserva el mismo objeto de error entre renders).
+- `hideToast(id?)` — con id, baja ese aviso solo si es el que está puesto.
+
+**Qué flota y qué no.** Flota lo que falló al tocar algo (una mutación, un sync, una escritura local) y un refresco que falla teniendo datos en caché — el aviso avisa, y lo que ya se tenía sigue abajo, intacto. **Se queda fijo en la pantalla** lo que está pegado a un campo dentro de un diálogo (nombre de cultivo/unidad/cosechador duplicado, roles vacíos, contraseñas que no calzan): ahí un cartel que se va en 4 segundos desaparece justo cuando la persona está leyendo qué escribió mal. Por eso el host queda **debajo** de los `Portal` de Paper (los diálogos se montan después) — es a propósito, no un z-index accidental. Y cuando una pantalla queda sin **nada** que mostrar porque su carga falló, en vez del error rojo va `components/LoadError.tsx`: una línea gris ("No pudimos cargar esto…"), porque sin señal eso es lo normal en terreno y el motivo exacto ya lo dijo el cartel.
+
+**Posición (decidida con el usuario tras probar en iPhone).** Por defecto Paper lo pega al borde de abajo, donde el teclado lo tapa entero. El host calcula su `wrapperStyle`: con el teclado arriba se pone justo encima de él (vía `lib/useKeyboardHeight.ts`, el mismo de "Agregar cosechador"; en iOS escucha `keyboardWillShow`, así que sube acompañando la animación), y en Inicio/Historial sube `49px` + área segura para no tapar la tab bar (`TABBAR_HEIGHT_UIKIT` en el código de expo-router, que no lo exporta — y este componente vive fuera del navegador de tabs, así que tampoco puede preguntarlo con `useBottomTabBarHeight`). Detecta la tab bar con `useSegments()`. En Android el alto del teclado que reporta React Native ya viene sin la barra de navegación, así que ahí hay que sumarle el inset. `paddingBottom: 0` pisa el del propio Paper, que si no suma el área segura dos veces.
+
+El "Anotado… Deshacer" del Anotador usa este mismo host: tenía su propio `Snackbar` y habrían convivido dos en la pantalla más usada del día. La lógica de Deshacer no cambió — la pantalla guarda en una ref el id del aviso de la última anotación, para poder bajar **ese** si la escritura falla o si se pierde el foco (ver "Anotar se mantiene apretado" más abajo: Deshacer no puede sobrevivir a salir de la pantalla).
+
 ## Persistencia local — Drizzle + expo-sqlite
 
 `db/schema.ts` espeja el modelo de Mongo de `server-app` (mismos nombres de campo en inglés, misma convención código-en-inglés/copy-en-español del proyecto):
@@ -63,6 +80,7 @@ Cola de sync: toda fila con `synced=false` en `workdays`/`harvesters`/`harvester
 - `stores/useActiveWorkdayStore.ts` — solo el `id` local de la jornada activa (un puntero, no los datos — todo lo demás se lee de SQLite vía ese id).
 - `stores/useConnectivityStore.ts` — flag online/offline vía `@react-native-community/netinfo`. Es el indicador de RF-04.2 y también la fuente que `lib/catalogSync.ts` y `lib/farmSettings.ts` escuchan para reintentar sus refrescos al reconectar (`bootstrapCatalogSyncOnReconnect`/`bootstrapFarmSettingsOnReconnect`). Lo que **nunca** dispara automáticamente es el sync de datos capturados por el usuario — el trigger de eso sigue siendo el botón explícito "Sincronizar Jornada" (decisión ya tomada: automatizarlo arriesga consumo de datos/batería inesperado justo en el contexto de campo que la app está diseñada para respetar; refrescar catálogos/settings es solo lectura de referencia, así que no aplica la misma razón).
 - `stores/useFarmSettingsStore.ts` — hoy solo `recordersCanManageCatalog` (el interruptor de catálogo, ver **Decisiones**). Optimista en `true` hasta el primer fetch real, mismo espíritu que `useConnectivityStore`. Refrescado por `lib/farmSettings.ts` desde los mismos puntos que `catalogSync.ts` (Home al enfocar, y al reconectar).
+- `stores/useToastStore.ts` — el aviso flotante que se está mostrando (ver **Errores en pantalla** más arriba). En memoria y efímero, como el resto salvo el tema.
 - `stores/useThemeStore.ts` — preferencia de tema del dispositivo (ver **Temas seleccionables** más abajo), persistida con `persist`+AsyncStorage a diferencia de los otros stores (esos son puramente en memoria, se refrescan del server). Exporta también `usePalette()`, el hook que consumen las pantallas para el color de marca activo.
 
 ## Capa de API

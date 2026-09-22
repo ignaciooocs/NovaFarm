@@ -25,7 +25,12 @@ import { roundToOneDecimal } from '@/lib/format';
 import { pushPendingHarvesters } from '@/lib/harvesterSync';
 import { startSyncLog, summarizeBatch } from '@/lib/syncLog';
 import { pushPendingWorkdays } from '@/lib/workdaySync';
-import { useAuthStore, useConnectivityStore, usePalette } from '@/stores';
+import {
+  showErrorToast,
+  useAuthStore,
+  useConnectivityStore,
+  usePalette,
+} from '@/stores';
 import { colors, spacing } from '@/theme';
 
 interface PendingCounts {
@@ -164,7 +169,6 @@ export default function SyncScreen() {
     }
 
     setSyncing(true);
-    setError(null);
     setRejectedReasons([]);
 
     // Log de la saga completa, etapa por etapa (ver lib/syncLog.ts): es lo
@@ -369,7 +373,11 @@ export default function SyncScreen() {
       // Cierra la saga con el mismo id que el resto de sus líneas, así se ve
       // en qué etapa se cortó sin tener que cruzar dos consolas.
       log.fail(getErrorMessage(err));
-      setError(getErrorMessage(err));
+      // Flotante y no en la pantalla: lo que quedó pendiente se sigue
+      // viendo abajo, así que el error es el aviso de que el intento falló,
+      // no el estado de la pantalla. Lo rechazado por el server sí se queda
+      // fijo — eso hay que leerlo con calma.
+      showErrorToast(err);
     } finally {
       setSyncing(false);
     }

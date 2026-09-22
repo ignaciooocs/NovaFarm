@@ -20,7 +20,7 @@ import { harvesters as harvestersTable, harvesterWorkday } from '@/db/schema';
 import { getErrorMessage } from '@/lib/errors';
 import { generateLocalId } from '@/lib/id';
 import { useKeyboardHeight } from '@/lib/useKeyboardHeight';
-import { useAuthStore, usePalette } from '@/stores';
+import { showErrorToast, useAuthStore, usePalette } from '@/stores';
 import { spacing } from '@/theme';
 
 type LocalHarvester = typeof harvestersTable.$inferSelect;
@@ -96,7 +96,7 @@ export default function AddHarvesterScreen() {
       setHarvesters(harvestersResult);
       setExistingIds(new Set(rosterRows.map((row) => row.harvesterId)));
     } catch (err) {
-      setError(getErrorMessage(err));
+      showErrorToast(err);
     } finally {
       setLoading(false);
     }
@@ -124,7 +124,6 @@ export default function AddHarvesterScreen() {
     }
 
     setAddingId(harvesterId);
-    setError(null);
     try {
       const currentRows = await db
         .select({ workdayNumber: harvesterWorkday.workdayNumber })
@@ -149,7 +148,7 @@ export default function AddHarvesterScreen() {
       setQuery('');
       searchInputRef.current?.focus();
     } catch (err) {
-      setError(getErrorMessage(err));
+      showErrorToast(err);
     } finally {
       setAddingId(null);
     }
@@ -230,8 +229,6 @@ export default function AddHarvesterScreen() {
           style={styles.input}
           autoFocus
         />
-
-        {error ? <HelperText type="error">{error}</HelperText> : null}
 
         {loading ? (
           <ActivityIndicator style={styles.input} />

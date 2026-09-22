@@ -24,12 +24,12 @@ import { syncCatalogs } from '@/lib/catalogSync';
 import { formatCLP, sanitizeIntegerInput } from '@/lib/format';
 import { generateLocalId } from '@/lib/id';
 import { convertRate, type PayBasis } from '@/lib/pay';
-import { getErrorMessage } from '@/lib/errors';
 import { getActiveWorkdayWithRecovery } from '@/lib/recoverActiveWorkday';
 import { daysSinceLocalDay, isFromPreviousDay } from '@/lib/workdayDate';
 import { pushPendingWorkdays } from '@/lib/workdaySync';
 import {
   useActiveWorkdayStore,
+  showErrorToast,
   useAuthStore,
   useConnectivityStore,
   usePalette,
@@ -83,7 +83,6 @@ export default function OpenWorkdayScreen() {
   const [payPrefilled, setPayPrefilled] = useState(false);
 
   const [saving, setSaving] = useState(false);
-  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!uid) {
@@ -155,7 +154,7 @@ export default function OpenWorkdayScreen() {
         setProducts(productsResult);
         setUnits(unitsResult);
       } catch (err) {
-        setError(getErrorMessage(err));
+        showErrorToast(err);
       } finally {
         setLoadingCatalogs(false);
       }
@@ -242,7 +241,6 @@ export default function OpenWorkdayScreen() {
       return;
     }
 
-    setError(null);
     setSaving(true);
     try {
       // Local primero y sin red, igual que el resto de la captura (RNF-01):
@@ -290,7 +288,7 @@ export default function OpenWorkdayScreen() {
       // camino de captura lee esos dos campos.
       pushPendingWorkdays();
     } catch (err) {
-      setError(getErrorMessage(err));
+      showErrorToast(err);
     } finally {
       setSaving(false);
     }
@@ -547,8 +545,6 @@ export default function OpenWorkdayScreen() {
           </>
         ) : null}
       </ScrollView>
-
-      {error ? <HelperText type="error">{error}</HelperText> : null}
 
       <Button
         mode="contained"

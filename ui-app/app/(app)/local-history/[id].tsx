@@ -10,7 +10,6 @@ import {
   ActivityIndicator,
   Button,
   Dialog,
-  HelperText,
   Portal,
   Text,
 } from 'react-native-paper';
@@ -26,6 +25,7 @@ import {
   getWorkdaysControllerFindAllQueryKey,
   useWorkdaysControllerFindAll,
 } from '@/api/generated/workdays/workdays';
+import { LoadError } from '@/components/LoadError';
 import { Screen } from '@/components/Screen';
 import { DEFAULT_PRODUCT_ICON } from '@/constants/productIcon';
 import { strings } from '@/constants/strings';
@@ -35,11 +35,10 @@ import {
   setLocalWorkdaySyncSkipped,
   type LocalWorkdaySummary,
 } from '@/db/queries';
-import { getErrorMessage } from '@/lib/errors';
 import { formatKg } from '@/lib/format';
 import { readProductsById, useLocalRead } from '@/lib/localCatalogNames';
 import { useRefreshOnFocus } from '@/lib/useRefreshOnFocus';
-import { usePalette } from '@/stores';
+import { showErrorToast, useErrorToast, usePalette } from '@/stores';
 import { spacing } from '@/theme';
 
 // Sin filtro de status: se compara contra la jornada del server esté abierta
@@ -65,16 +64,14 @@ export default function LocalHistoryDetailScreen() {
 
   const [local, setLocal] = useState<LocalWorkdaySummary | null>(null);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
   const [marking, setMarking] = useState(false);
   const [skipDialogOpen, setSkipDialogOpen] = useState(false);
 
   const loadLocal = useCallback(async () => {
     try {
       setLocal(await readLocalWorkday(localWorkdayId));
-      setError(null);
     } catch (err) {
-      setError(getErrorMessage(err));
+      showErrorToast(err);
     } finally {
       setLoading(false);
     }
@@ -141,6 +138,9 @@ export default function LocalHistoryDetailScreen() {
 
   const queryError =
     workdaysQuery.error ?? entriesQuery.error ?? rosterQuery.error;
+  // El error de red no tapa la mitad local: sin señal, lo de este celular
+  // igual se ve, que es el punto de esta pantalla.
+  useErrorToast(queryError);
   const askingServer =
     askServer &&
     (workdaysQuery.isPending || entriesQuery.isPending || rosterQuery.isPending);
@@ -152,7 +152,7 @@ export default function LocalHistoryDetailScreen() {
       await setLocalWorkdaySyncSkipped(localWorkdayId, syncSkipped);
       await loadLocal();
     } catch (err) {
-      setError(getErrorMessage(err));
+      showErrorToast(err);
     } finally {
       setMarking(false);
     }
@@ -170,7 +170,7 @@ export default function LocalHistoryDetailScreen() {
       );
       await loadLocal();
     } catch (err) {
-      setError(getErrorMessage(err));
+      showErrorToast(err);
     } finally {
       setMarking(false);
     }
@@ -193,7 +193,7 @@ export default function LocalHistoryDetailScreen() {
         <Stack.Screen
           options={{ headerShown: true, title: strings.localHistory.detailTitle }}
         />
-        <HelperText type="error">{error ?? strings.errors.generic}</HelperText>
+        <LoadError />
       </Screen>
     );
   }
@@ -245,13 +245,6 @@ export default function LocalHistoryDetailScreen() {
             month: 'long',
           })}
         </Text>
-
-        {/* El error de red no tapa la mitad local: sin señal, lo de este
-            celular igual se ve, que es el punto de esta pantalla. */}
-        {queryError ? (
-          <HelperText type="error">{getErrorMessage(queryError)}</HelperText>
-        ) : null}
-        {error ? <HelperText type="error">{error}</HelperText> : null}
 
         {diagnosis ? (
           <Text

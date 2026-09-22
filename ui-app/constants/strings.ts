@@ -443,6 +443,9 @@ export const strings = {
   },
   errors: {
     generic: 'Algo salió mal. Intenta de nuevo.',
+    // Para una pantalla que quedó vacía porque su carga falló: el motivo
+    // (sin conexión, sesión vencida) ya va en el aviso flotante.
+    loadFailed: 'No pudimos cargar esto. Vuelve a entrar para reintentar.',
     network: 'No hay conexión. Revisa tu internet e intenta de nuevo.',
     invalidEmail: 'El correo electrónico no es válido.',
     emailInUse: 'Ya existe una cuenta con ese correo. Intenta iniciar sesión.',

@@ -6,7 +6,6 @@ import {
   ActivityIndicator,
   Button,
   Divider,
-  HelperText,
   IconButton,
   Switch,
   Text,
@@ -18,12 +17,17 @@ import {
   useFarmsControllerRegenerateInvitationCode,
   useFarmsControllerUpdateMe,
 } from '@/api/generated/farms/farms';
+import { LoadError } from '@/components/LoadError';
 import { Screen } from '@/components/Screen';
 import { strings } from '@/constants/strings';
-import { getErrorMessage } from '@/lib/errors';
 import { useCapabilities } from '@/lib/permissions';
 import { useRefreshOnFocus } from '@/lib/useRefreshOnFocus';
-import { useFarmSettingsStore, usePalette, useThemeStore } from '@/stores';
+import {
+  useErrorToast,
+  useFarmSettingsStore,
+  usePalette,
+  useThemeStore,
+} from '@/stores';
 import { colors, palettes, spacing, type PaletteName } from '@/theme';
 
 const PALETTE_NAMES = Object.keys(palettes) as PaletteName[];
@@ -89,6 +93,10 @@ export default function SettingsScreen() {
     },
   });
 
+  useErrorToast(farmQuery.error);
+  useErrorToast(updateFarm.error);
+  useErrorToast(regenerateCode.error);
+
   async function handleCopyCode(invitationCode: string) {
     await Clipboard.setStringAsync(invitationCode);
     setCopied(true);
@@ -124,17 +132,10 @@ export default function SettingsScreen() {
         farmQuery.isPending ? (
           <ActivityIndicator style={styles.loading} />
         ) : (
-          <HelperText type="error">{getErrorMessage(farmQuery.error)}</HelperText>
+          <LoadError />
         )
       ) : (
         <>
-          {/* Un refresco que falla con datos en caché: el aviso va arriba,
-              sin tapar lo que ya se tenía. */}
-          {farmQuery.error ? (
-            <HelperText type="error">
-              {getErrorMessage(farmQuery.error)}
-            </HelperText>
-          ) : null}
           <Text style={styles.row}>{farm.name}</Text>
 
           <View
@@ -203,12 +204,6 @@ export default function SettingsScreen() {
               {strings.onboarding.invitationCodeAskAdmin}
             </Text>
           ) : null}
-          {regenerateCode.error ? (
-            <HelperText type="error">
-              {getErrorMessage(regenerateCode.error)}
-            </HelperText>
-          ) : null}
-
           {canManageFarmSettings ? (
             <>
               <Divider style={styles.divider} />
@@ -234,11 +229,6 @@ export default function SettingsScreen() {
               <Text variant="bodySmall" style={styles.switchHelp}>
                 {strings.settings.recordersCanManageCatalogHelp}
               </Text>
-              {updateFarm.error ? (
-                <HelperText type="error">
-                  {getErrorMessage(updateFarm.error)}
-                </HelperText>
-              ) : null}
             </>
           ) : null}
         </>

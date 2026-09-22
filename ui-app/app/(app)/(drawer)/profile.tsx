@@ -14,11 +14,12 @@ import {
   useUsersControllerFindMe,
   useUsersControllerUpdateMe,
 } from '@/api/generated/users/users';
+import { LoadError } from '@/components/LoadError';
 import { Screen } from '@/components/Screen';
 import { strings } from '@/constants/strings';
-import { getErrorMessage } from '@/lib/errors';
 import { rolesLabelFor } from '@/lib/teamRoles';
 import { useRefreshOnFocus } from '@/lib/useRefreshOnFocus';
+import { useErrorToast } from '@/stores';
 import { spacing } from '@/theme';
 
 // Solo perfil propio — editar los roles o desactivar la propia cuenta no
@@ -50,6 +51,9 @@ export default function ProfileScreen() {
       },
     },
   });
+
+  useErrorToast(meQuery.error);
+  useErrorToast(updateMe.error);
 
   function handleFieldChange(setDraft: (value: string) => void) {
     return (value: string) => {
@@ -83,7 +87,7 @@ export default function ProfileScreen() {
         <Text variant="headlineMedium" style={styles.title}>
           {strings.profile.title}
         </Text>
-        <HelperText type="error">{getErrorMessage(meQuery.error)}</HelperText>
+        <LoadError />
       </Screen>
     );
   }
@@ -109,12 +113,6 @@ export default function ProfileScreen() {
       <Text style={styles.readOnlyRow}>{me.email}</Text>
       <Text style={styles.readOnlyRow}>{rolesLabelFor(me.roles)}</Text>
 
-      {/* Un refresco que falla con datos en caché: el aviso va arriba, sin
-          tapar el formulario ni confundirse con un guardado fallido. */}
-      {meQuery.error ? (
-        <HelperText type="error">{getErrorMessage(meQuery.error)}</HelperText>
-      ) : null}
-
       <TextInput
         label={strings.common.name}
         value={name}
@@ -128,9 +126,6 @@ export default function ProfileScreen() {
         style={styles.input}
       />
 
-      {updateMe.error ? (
-        <HelperText type="error">{getErrorMessage(updateMe.error)}</HelperText>
-      ) : null}
       {updateMe.isSuccess ? (
         <HelperText type="info">{strings.profile.saved}</HelperText>
       ) : null}

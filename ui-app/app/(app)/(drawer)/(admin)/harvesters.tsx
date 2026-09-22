@@ -30,7 +30,7 @@ import { syncCatalogs } from '@/lib/catalogSync';
 import { getErrorMessage } from '@/lib/errors';
 import { formatKg } from '@/lib/format';
 import { useRefreshOnFocus } from '@/lib/useRefreshOnFocus';
-import { useActiveWorkdayStore, usePalette } from '@/stores';
+import { useActiveWorkdayStore, useErrorToast, usePalette } from '@/stores';
 import { colors, spacing } from '@/theme';
 
 interface TodayTotal {
@@ -87,6 +87,7 @@ export default function HarvestersScreen() {
   // Antes el error solo se pintaba dentro del formulario: si fallaba el ojo
   // (sin señal) o la carga de la lista, no aparecía nada en pantalla.
   const screenError = harvestersQuery.error ?? toggleHarvester.error;
+  useErrorToast(screenError);
 
   // useFocusEffect (no un simple useEffect): al volver del Anotador después
   // de anotar entregas, esta pantalla sigue montada en el drawer — hay que
@@ -202,10 +203,6 @@ export default function HarvestersScreen() {
       <Text variant="headlineMedium" style={styles.title}>
         {strings.admin.harvestersTitle}
       </Text>
-
-      {screenError ? (
-        <HelperText type="error">{getErrorMessage(screenError)}</HelperText>
-      ) : null}
 
       {harvestersQuery.isPending ? (
         <ActivityIndicator />

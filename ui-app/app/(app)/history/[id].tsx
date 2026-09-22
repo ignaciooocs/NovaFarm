@@ -7,7 +7,6 @@ import * as Sharing from 'expo-sharing';
 import { Stack, useLocalSearchParams } from 'expo-router';
 import {
   ActivityIndicator,
-  HelperText,
   IconButton,
   Text,
 } from 'react-native-paper';
@@ -21,10 +20,10 @@ import {
 } from '@/api/generated/harvester-workday/harvester-workday';
 import type { FindWorkdayResponseDto } from '@/api/generated/novaFarmAPI.schemas';
 import { useWorkdaysControllerFindAll } from '@/api/generated/workdays/workdays';
+import { LoadError } from '@/components/LoadError';
 import { Screen } from '@/components/Screen';
 import { DEFAULT_PRODUCT_ICON } from '@/constants/productIcon';
 import { strings } from '@/constants/strings';
-import { getErrorMessage } from '@/lib/errors';
 import { formatCLP, formatKg } from '@/lib/format';
 import {
   readHarvesterNamesById,
@@ -36,7 +35,7 @@ import { useRefreshOnFocus } from '@/lib/useRefreshOnFocus';
 import { computePay, hasPay, sumPay, type WorkdayPay } from '@/lib/pay';
 import { summarizeWeighing, type WeighingSummary } from '@/lib/weighing';
 import { generateWorkdaySummaryPdf } from '@/lib/workdayPdf';
-import { usePalette } from '@/stores';
+import { useErrorToast, usePalette } from '@/stores';
 import { spacing } from '@/theme';
 
 interface RosterRow {
@@ -188,6 +187,9 @@ export default function HistoryDetailScreen() {
     workdaysQuery.isPending || entriesQuery.isPending || rosterQuery.isPending;
   const queryError =
     workdaysQuery.error ?? entriesQuery.error ?? rosterQuery.error;
+  // Hay detalle en caché pero el último refresco falló (sin señal): se avisa
+  // flotando, sin tapar lo que ya se tenía.
+  useErrorToast(queryError);
 
   async function handleExportPdf() {
     if (!detail) {
@@ -247,11 +249,7 @@ export default function HistoryDetailScreen() {
   if (!detail) {
     return (
       <Screen edges={['bottom', 'left', 'right']}>
-        <HelperText type="error">
-          {/* Sin error de red y sin detalle: la lista llegó pero esa jornada
-              no está en ella. */}
-          {queryError ? getErrorMessage(queryError) : strings.errors.generic}
-        </HelperText>
+        <LoadError />
       </Screen>
     );
   }
@@ -274,12 +272,6 @@ export default function HistoryDetailScreen() {
             ),
         }}
       />
-
-      {/* Hay detalle en caché pero el último refresco falló (sin señal): se
-          avisa arriba en vez de tapar lo que ya se tenía. */}
-      {queryError ? (
-        <HelperText type="error">{getErrorMessage(queryError)}</HelperText>
-      ) : null}
 
       <FlatList
         data={detail.roster}

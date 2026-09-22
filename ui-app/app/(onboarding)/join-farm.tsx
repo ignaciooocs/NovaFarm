@@ -1,13 +1,13 @@
 import { useState } from 'react';
 import { Share, StyleSheet } from 'react-native';
 import { Stack, useRouter } from 'expo-router';
-import { Button, HelperText, Text, TextInput } from 'react-native-paper';
+import { Button, Text, TextInput } from 'react-native-paper';
 import { useAuthControllerRegisterRecorder } from '@/api/generated/auth/auth';
 import { Screen } from '@/components/Screen';
 import { strings } from '@/constants/strings';
-import { getErrorMessage, isExpiredInvitationCodeError } from '@/lib/errors';
+import { isExpiredInvitationCodeError } from '@/lib/errors';
 import { auth } from '@/lib/firebase';
-import { usePalette } from '@/stores';
+import { useErrorToast, usePalette } from '@/stores';
 import { colors, spacing } from '@/theme';
 
 export default function JoinFarmScreen() {
@@ -29,6 +29,11 @@ export default function JoinFarmScreen() {
       },
     },
   });
+
+  // El aviso flota; lo que sí se queda en la pantalla es el botón de pedir
+  // un código nuevo cuando el que escribió está vencido (ver abajo): eso es
+  // la salida, no el error.
+  useErrorToast(registerRecorder.error);
 
   const canSubmit =
     name.trim().length > 0 &&
@@ -83,11 +88,6 @@ export default function JoinFarmScreen() {
         style={styles.input}
       />
 
-      {registerRecorder.error ? (
-        <HelperText type="error">
-          {getErrorMessage(registerRecorder.error)}
-        </HelperText>
-      ) : null}
       {isExpiredInvitationCodeError(registerRecorder.error) ? (
         <Button
           mode="text"

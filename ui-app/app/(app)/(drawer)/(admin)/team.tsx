@@ -4,7 +4,6 @@ import { useRouter } from 'expo-router';
 import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
 import {
   ActivityIndicator,
-  HelperText,
   Text,
   TouchableRipple,
 } from 'react-native-paper';
@@ -12,10 +11,9 @@ import { useUsersControllerFindAll } from '@/api/generated/users/users';
 import { useWorkdaysControllerFindAll } from '@/api/generated/workdays/workdays';
 import { Screen } from '@/components/Screen';
 import { strings } from '@/constants/strings';
-import { getErrorMessage } from '@/lib/errors';
 import { rolesLabelFor } from '@/lib/teamRoles';
 import { useRefreshOnFocus } from '@/lib/useRefreshOnFocus';
-import { usePalette } from '@/stores';
+import { useErrorToast, usePalette } from '@/stores';
 import { colors, spacing } from '@/theme';
 
 const OPEN_WORKDAYS = { status: 'OPEN' } as const;
@@ -57,17 +55,13 @@ export default function TeamScreen() {
     [openWorkdaysQuery.data],
   );
 
-  const error = usersQuery.error ?? openWorkdaysQuery.error;
+  useErrorToast(usersQuery.error ?? openWorkdaysQuery.error);
 
   return (
     <Screen edges={['bottom', 'left', 'right']}>
       <Text variant="headlineMedium" style={styles.title}>
         {strings.admin.teamTitle}
       </Text>
-
-      {error ? (
-        <HelperText type="error">{getErrorMessage(error)}</HelperText>
-      ) : null}
 
       {/* Espera las dos: sin la de jornadas, la lista aparecería y las marcas
           de "Jornada activa" saltarían un instante después. Solo la primera

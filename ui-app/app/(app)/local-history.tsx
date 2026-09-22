@@ -4,7 +4,6 @@ import { Stack, useFocusEffect, useRouter } from 'expo-router';
 import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
 import {
   ActivityIndicator,
-  HelperText,
   Text,
   TouchableRipple,
 } from 'react-native-paper';
@@ -12,10 +11,9 @@ import { Screen } from '@/components/Screen';
 import { DEFAULT_PRODUCT_ICON } from '@/constants/productIcon';
 import { strings } from '@/constants/strings';
 import { readLocalWorkdays, type LocalWorkdaySummary } from '@/db/queries';
-import { getErrorMessage } from '@/lib/errors';
 import { formatKg } from '@/lib/format';
 import { readProductsById, useLocalRead } from '@/lib/localCatalogNames';
-import { usePalette } from '@/stores';
+import { showErrorToast, usePalette } from '@/stores';
 import { spacing } from '@/theme';
 
 // Historial local: lo que este celular guardó de cada jornada, se haya
@@ -34,7 +32,6 @@ export default function LocalHistoryScreen() {
 
   const [workdays, setWorkdays] = useState<LocalWorkdaySummary[]>([]);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
 
   // Al foco y sin prender el spinner más que la primera vez, mismo criterio
   // que el Anotador: al volver de sincronizar, los estados cambian.
@@ -45,12 +42,11 @@ export default function LocalHistoryScreen() {
         .then((rows) => {
           if (!cancelled) {
             setWorkdays(rows);
-            setError(null);
           }
         })
         .catch((err: unknown) => {
           if (!cancelled) {
-            setError(getErrorMessage(err));
+            showErrorToast(err);
           }
         })
         .finally(() => {
@@ -72,8 +68,6 @@ export default function LocalHistoryScreen() {
       />
 
       <Text style={styles.subtitle}>{strings.localHistory.subtitle}</Text>
-
-      {error ? <HelperText type="error">{error}</HelperText> : null}
 
       {loading ? (
         <ActivityIndicator />

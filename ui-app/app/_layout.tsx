@@ -6,6 +6,7 @@ import { useMigrations } from 'drizzle-orm/expo-sqlite/migrator';
 import { QueryClientProvider } from '@tanstack/react-query';
 import { PaperProvider, Text } from 'react-native-paper';
 import { LoadingScreen } from '@/components/LoadingScreen';
+import { ToastHost } from '@/components/ToastHost';
 import { db } from '@/db/client';
 // eslint-disable-next-line import/no-unresolved -- generado por `pnpm db:generate`
 import migrations from '../drizzle/migrations';
@@ -65,7 +66,13 @@ export default function RootLayout() {
     <GestureHandlerRootView style={{ flex: 1 }}>
       <QueryClientProvider client={queryClient}>
         <PaperProvider theme={theme}>
-          <Stack screenOptions={{ headerShown: false }} />
+          {/* El aviso flotante vive acá arriba, al lado del navegador y no
+              adentro: se muestra desde cualquier pantalla con showToast() /
+              showErrorToast() (stores/useToastStore.ts). */}
+          <View style={{ flex: 1 }}>
+            <Stack screenOptions={{ headerShown: false }} />
+            <ToastHost />
+          </View>
         </PaperProvider>
       </QueryClientProvider>
     </GestureHandlerRootView>

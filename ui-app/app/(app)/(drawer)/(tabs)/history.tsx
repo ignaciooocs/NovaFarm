@@ -4,18 +4,16 @@ import { useRouter } from 'expo-router';
 import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
 import {
   ActivityIndicator,
-  HelperText,
   Text,
   TouchableRipple,
 } from 'react-native-paper';
 import { useWorkdaysControllerFindAll } from '@/api/generated/workdays/workdays';
 import { Screen } from '@/components/Screen';
 import { strings } from '@/constants/strings';
-import { getErrorMessage } from '@/lib/errors';
 import { formatKg } from '@/lib/format';
 import { readProductsById, useLocalRead } from '@/lib/localCatalogNames';
 import { useRefreshOnFocus } from '@/lib/useRefreshOnFocus';
-import { usePalette } from '@/stores';
+import { useErrorToast, usePalette } from '@/stores';
 import { spacing } from '@/theme';
 
 const CLOSED_WORKDAYS = { status: 'CLOSED' } as const;
@@ -42,16 +40,12 @@ export default function HistoryScreen() {
     [closedWorkdays.data],
   );
 
+  // Con datos en caché y un refresco que falla (sin señal), se ven los dos:
+  // el aviso flotante y lo último que se trajo, abajo, intacto.
+  useErrorToast(closedWorkdays.error);
+
   return (
     <Screen edges={['bottom', 'left', 'right']}>
-      {/* Con datos en caché y un refresco que falla (sin señal), se ven los
-          dos: el aviso arriba y lo último que se trajo abajo. */}
-      {closedWorkdays.error ? (
-        <HelperText type="error">
-          {getErrorMessage(closedWorkdays.error)}
-        </HelperText>
-      ) : null}
-
       {closedWorkdays.isPending ? (
         <ActivityIndicator />
       ) : (

@@ -27,6 +27,7 @@ import { syncCatalogs } from '@/lib/catalogSync';
 import { getErrorMessage } from '@/lib/errors';
 import { parseDecimalInput, sanitizeDecimalInput } from '@/lib/format';
 import { useRefreshOnFocus } from '@/lib/useRefreshOnFocus';
+import { useErrorToast } from '@/stores';
 import { colors, spacing } from '@/theme';
 
 type UnitMode = 'COUNT' | 'WEIGHT';
@@ -74,6 +75,7 @@ export default function MeasurementUnitsScreen() {
   // Antes el error solo se pintaba dentro del formulario: si fallaba el ojo
   // (sin señal) o la carga de la lista, no aparecía nada en pantalla.
   const screenError = unitsQuery.error ?? toggleUnit.error;
+  useErrorToast(screenError);
 
   // Solo la que falló: reset() sobre una mutación en curso la desengancha, y
   // su onSuccess (cerrar el formulario, refrescar) no correría.
@@ -157,10 +159,6 @@ export default function MeasurementUnitsScreen() {
       <Text variant="headlineMedium" style={styles.title}>
         {strings.admin.measurementUnitsTitle}
       </Text>
-
-      {screenError ? (
-        <HelperText type="error">{getErrorMessage(screenError)}</HelperText>
-      ) : null}
 
       {unitsQuery.isPending ? (
         <ActivityIndicator />

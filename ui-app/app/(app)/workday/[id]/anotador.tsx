@@ -32,7 +32,6 @@ import {
   IconButton,
   Portal,
   SegmentedButtons,
-  Snackbar,
   Text,
   TextInput,
   TouchableRipple,
@@ -49,7 +48,6 @@ import {
   measurementUnits,
   workdays,
 } from '@/db/schema';
-import { getErrorMessage } from '@/lib/errors';
 import {
   formatKg,
   parseDecimalInput,
@@ -58,7 +56,12 @@ import {
 } from '@/lib/format';
 import { generateLocalId } from '@/lib/id';
 import { isFromPreviousDay } from '@/lib/workdayDate';
-import { usePalette } from '@/stores';
+import {
+  hideToast,
+  showErrorToast,
+  showToast,
+  usePalette,
+} from '@/stores';
 import { spacing } from '@/theme';
 
 type LocalHarvester = typeof harvestersTable.$inferSelect;
@@ -89,16 +92,6 @@ interface RecordedEntry {
   // Resuelve true cuando la escritura en SQLite terminó bien, false si falló
   // (y en ese caso la pantalla ya se revirtió sola).
   saved: Promise<boolean>;
-}
-
-interface Toast {
-  // Distinto en cada aviso: el Snackbar se remonta con esta key. Montado el
-  // mismo, un aviso nuevo heredaba el tiempo que le quedaba al anterior
-  // (Paper solo arranca el temporizador al pasar a visible).
-  id: string;
-  message: string;
-  duration: number;
-  recorded?: RecordedEntry;
 }
 
 const RECORDED_TOAST_MS = 4000;
@@ -134,7 +127,6 @@ export default function AnotadorScreen() {
     kgFactor: number | null;
   } | null>(null);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
 
   const [weightDialogHarvesterId, setWeightDialogHarvesterId] = useState<
     string | null
@@ -163,20 +155,11 @@ export default function AnotadorScreen() {
   // pantalla no necesita la fecha, por eso no estaba guardada.
   const [workdayDate, setWorkdayDate] = useState<string | null>(null);
 
-  // El aviso de abajo: la confirmación de cada anotación (con Deshacer) o
-  // el "mantén apretado" de un toque rápido. `toast` sigue guardado después
-  // de ocultarse para que el Snackbar se desvanezca con su texto.
-  const [toast, setToast] = useState<Toast | null>(null);
-  const [toastVisible, setToastVisible] = useState(false);
-  // El aviso vigente también en una ref: el catch de una escritura corre más
-  // tarde y tiene que ver el aviso de ese momento, no el de su render.
-  const toastRef = useRef<Toast | null>(null);
-
-  function showToast(next: Toast) {
-    toastRef.current = next;
-    setToast(next);
-    setToastVisible(true);
-  }
+  // El aviso de abajo es el mismo de toda la app (components/ToastHost.tsx).
+  // Acá se guarda cuál es el de la última anotación: el catch de una
+  // escritura corre más tarde y tiene que poder bajar ese aviso en
+  // particular, no el que esté puesto en ese momento.
+  const recordedToastRef = useRef<{ id: string; entryId: string } | null>(null);
 
   // Sin setLoading(true) acá, a propósito: `loading` nace en true y solo
   // cubre la primera carga. Esta función corre también cada vez que la
@@ -193,7 +176,7 @@ export default function AnotadorScreen() {
         .from(workdays)
         .where(eq(workdays.id, workdayId));
       if (!workdayRow) {
-        setError(strings.errors.generic);
+        showToast(strings.errors.generic);
         return;
       }
       setWorkdayDate(workdayRow.date);
@@ -275,7 +258,7 @@ export default function AnotadorScreen() {
           .sort((a, b) => a.workdayNumber - b.workdayNumber),
       );
     } catch (err) {
-      setError(getErrorMessage(err));
+      showErrorToast(err);
     } finally {
       setLoading(false);
     }
@@ -290,7 +273,11 @@ export default function AnotadorScreen() {
   useFocusEffect(
     useCallback(() => {
       load();
-      return () => setToastVisible(false);
+      return () => {
+        if (recordedToastRef.current) {
+          hideToast(recordedToastRef.current.id);
+        }
+      };
     }, [load]),
   );
 
@@ -343,10 +330,10 @@ export default function AnotadorScreen() {
           // lo optimista — no dejar la UI mostrando algo que no quedó
           // guardado, ni un "Anotado" encima.
           removeEntryFromState(harvesterId, entry);
-          if (toastRef.current?.recorded?.entry.id === entry.id) {
-            setToastVisible(false);
+          if (recordedToastRef.current?.entryId === entry.id) {
+            hideToast(recordedToastRef.current.id);
           }
-          setError(getErrorMessage(err));
+          showErrorToast(err);
           return false;
         },
       );
@@ -368,27 +355,30 @@ export default function AnotadorScreen() {
       defaultUnit.mode === 'WEIGHT'
         ? `${formatKg(Math.abs(entry.totalKg))} ${strings.anotador.kg}`
         : strings.anotador.containers(Math.abs(unitCount));
-    showToast({
-      id: entry.id,
-      message:
-        unitCount > 0
-          ? strings.anotador.recorded(amount, name)
-          : strings.anotador.discounted(amount, name),
-      duration: RECORDED_TOAST_MS,
-      recorded: { harvesterId, entry, saved },
-    });
+    const recorded: RecordedEntry = { harvesterId, entry, saved };
+    const toastId = showToast(
+      unitCount > 0
+        ? strings.anotador.recorded(amount, name)
+        : strings.anotador.discounted(amount, name),
+      {
+        duration: RECORDED_TOAST_MS,
+        action: {
+          label: strings.anotador.undo,
+          onPress: () => undoRecord(recorded),
+        },
+      },
+    );
+    recordedToastRef.current = { id: toastId, entryId: entry.id };
   }
 
   function showHoldHint() {
-    showToast({
-      id: `hint-${Date.now()}`,
-      message: strings.anotador.holdToRecordHint,
+    showToast(strings.anotador.holdToRecordHint, {
       duration: HINT_TOAST_MS,
     });
   }
 
   function undoRecord({ harvesterId, entry, saved }: RecordedEntry) {
-    setToastVisible(false);
+    hideToast();
     // Espera a que termine la escritura: si el borrado corriera antes que el
     // insert, no borraría nada y la anotación quedaría guardada aunque la
     // pantalla ya no la mostrara. Son milisegundos.
@@ -400,7 +390,7 @@ export default function AnotadorScreen() {
       try {
         await db.delete(harvestEntries).where(eq(harvestEntries.id, entry.id));
       } catch (err) {
-        setError(getErrorMessage(err));
+        showErrorToast(err);
         // La pantalla ya la sacó y la base la conserva: se relee la base,
         // que es la verdad, en vez de adivinar.
         load();
@@ -519,7 +509,7 @@ export default function AnotadorScreen() {
 
       closeMeasureDialog();
     } catch (err) {
-      setError(getErrorMessage(err));
+      showErrorToast(err);
     } finally {
       setSavingMeasure(false);
     }
@@ -629,8 +619,6 @@ export default function AnotadorScreen() {
         </Button>
       </View>
 
-      {error ? <HelperText type="error">{error}</HelperText> : null}
-
       <FlatList
         data={roster}
         keyExtractor={(item) => item.id}
@@ -725,29 +713,6 @@ export default function AnotadorScreen() {
           })
         }
       />
-
-      {toast ? (
-        <Snackbar
-          key={toast.id}
-          visible={toastVisible}
-          onDismiss={() => setToastVisible(false)}
-          duration={toast.duration}
-          action={
-            toast.recorded
-              ? {
-                  label: strings.anotador.undo,
-                  onPress: () => {
-                    if (toast.recorded) {
-                      undoRecord(toast.recorded);
-                    }
-                  },
-                }
-              : undefined
-          }
-        >
-          {toast.message}
-        </Snackbar>
-      ) : null}
 
       <Portal>
         {/* KeyboardAwareDialog: tiene el campo de peso adentro y en iOS el

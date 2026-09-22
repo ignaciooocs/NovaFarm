@@ -15,7 +15,7 @@ import {
 import { Button, HelperText, Text, TextInput } from 'react-native-paper';
 import { Screen } from '@/components/Screen';
 import { strings } from '@/constants/strings';
-import { getErrorMessage } from '@/lib/errors';
+import { showErrorToast } from '@/stores';
 import { auth } from '@/lib/firebase';
 import { colors, palettes, spacing } from '@/theme';
 
@@ -57,7 +57,6 @@ export function AuthForm({ initialMode }: AuthFormProps) {
   const [confirmPassword, setConfirmPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
-  const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
   // Confirmar contraseña (pedido del usuario, para evitar errores de tipeo
@@ -73,7 +72,6 @@ export function AuthForm({ initialMode }: AuthFormProps) {
     !loading;
 
   function handleSwitchMode() {
-    setError(null);
     router.replace({
       pathname: isSignup ? '/login' : '/signup',
       params: email.trim() ? { email: email.trim() } : {},
@@ -81,7 +79,6 @@ export function AuthForm({ initialMode }: AuthFormProps) {
   }
 
   async function handleSubmit() {
-    setError(null);
     setLoading(true);
     try {
       if (isSignup) {
@@ -94,7 +91,7 @@ export function AuthForm({ initialMode }: AuthFormProps) {
       // farmId, onboarding si no).
       router.replace('/');
     } catch (err) {
-      setError(getErrorMessage(err));
+      showErrorToast(err);
     } finally {
       setLoading(false);
     }
@@ -181,8 +178,6 @@ export function AuthForm({ initialMode }: AuthFormProps) {
                 ) : null}
               </>
             ) : null}
-
-            {error ? <HelperText type="error">{error}</HelperText> : null}
           </View>
 
           <View style={styles.footer}>

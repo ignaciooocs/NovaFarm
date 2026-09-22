@@ -36,7 +36,6 @@ import {
   measurementUnits,
   workdays,
 } from '@/db/schema';
-import { getErrorMessage } from '@/lib/errors';
 import { formatCLP, formatKg, sanitizeIntegerInput } from '@/lib/format';
 import {
   computePay,
@@ -47,7 +46,7 @@ import {
 } from '@/lib/pay';
 import { summarizeWeighing, type WeighingSummary } from '@/lib/weighing';
 import { pushPendingWorkdays } from '@/lib/workdaySync';
-import { usePalette } from '@/stores';
+import { showErrorToast, showToast, usePalette } from '@/stores';
 import { colors, spacing } from '@/theme';
 
 type WorkdayRow = typeof workdays.$inferSelect;
@@ -89,8 +88,6 @@ export default function CloseWorkdayScreen() {
   const [pendingCount, setPendingCount] = useState(0);
   const [localTotalKg, setLocalTotalKg] = useState(0);
   const [loading, setLoading] = useState(true);
-  // Solo el error de la tarifa: el del cierre es closeWorkday.error.
-  const [error, setError] = useState<string | null>(null);
 
   const [payDialogOpen, setPayDialogOpen] = useState(false);
   const [payAmountInput, setPayAmountInput] = useState('');
@@ -209,7 +206,7 @@ export default function CloseWorkdayScreen() {
           .sort((a, b) => a.workdayNumber - b.workdayNumber),
       );
     } catch (err) {
-      setError(getErrorMessage(err));
+      showErrorToast(err);
     } finally {
       setLoading(false);
     }
@@ -233,6 +230,10 @@ export default function CloseWorkdayScreen() {
   // reintentar es seguro, el cierre del server es idempotente.
   const closeWorkday = useWorkdaysControllerClose({
     mutation: {
+      // El aviso también va acá y no en el mutate(): si el cierre falla
+      // después de volverse atrás, el error se ve igual en la pantalla en
+      // que haya quedado, que es donde está mirando.
+      onError: showErrorToast,
       onSuccess: async (result) => {
         await db
           .update(workdays)
@@ -259,7 +260,6 @@ export default function CloseWorkdayScreen() {
     if (!workday?.serverId) {
       return;
     }
-    setError(null);
     closeWorkday.mutate({ id: workday.serverId });
   }
 
@@ -278,12 +278,6 @@ export default function CloseWorkdayScreen() {
   // cosa (y esta misma pantalla ya bloquea cerrar hasta sincronizar).
   async function savePay(payRate: number | null) {
     setSavingPay(true);
-    setError(null);
-    // Un solo aviso a la vez, el del último intento (como antes). Nunca
-    // resetear un cierre en curso: se desengancharía su onSuccess.
-    if (closeWorkday.isError) {
-      closeWorkday.reset();
-    }
     try {
       const payBasis =
         payRate == null
@@ -301,12 +295,12 @@ export default function CloseWorkdayScreen() {
 
       const { rejectedReasons } = await pushPendingWorkdays();
       if (rejectedReasons.length > 0) {
-        setError(rejectedReasons[0]);
+        showToast(rejectedReasons[0]);
       }
 
       await load();
     } catch (err) {
-      setError(getErrorMessage(err));
+      showErrorToast(err);
     } finally {
       setSavingPay(false);
     }
@@ -319,9 +313,6 @@ export default function CloseWorkdayScreen() {
   const payDefined = hasPay(pay);
   const totalPay = sumPay(pay, roster);
   const dialogRate = payAmountInput ? Number(payAmountInput) : null;
-  const errorMessage = closeWorkday.error
-    ? getErrorMessage(closeWorkday.error)
-    : error;
 
   return (
     <Screen edges={['bottom', 'left', 'right']}>
@@ -454,9 +445,6 @@ export default function CloseWorkdayScreen() {
               <Text style={styles.blockedText}>
                 {strings.workday.pendingBeforeClose(pendingCount)}
               </Text>
-              {errorMessage ? (
-                <HelperText type="error">{errorMessage}</HelperText>
-              ) : null}
               <Button
                 mode="contained"
                 onPress={() => router.push('/sync')}
@@ -470,9 +458,6 @@ export default function CloseWorkdayScreen() {
               <Text style={styles.confirmText}>
                 {strings.workday.closeConfirm}
               </Text>
-              {errorMessage ? (
-                <HelperText type="error">{errorMessage}</HelperText>
-              ) : null}
               <Button
                 mode="contained"
                 onPress={handleClose}

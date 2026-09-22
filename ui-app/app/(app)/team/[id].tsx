@@ -20,10 +20,10 @@ import {
   useUsersControllerUpdateRoles,
 } from '@/api/generated/users/users';
 import { useWorkdaysControllerFindAll } from '@/api/generated/workdays/workdays';
+import { LoadError } from '@/components/LoadError';
 import { Screen } from '@/components/Screen';
 import { DEFAULT_PRODUCT_ICON } from '@/constants/productIcon';
 import { strings } from '@/constants/strings';
-import { getErrorMessage } from '@/lib/errors';
 import { readProductsById, useLocalRead } from '@/lib/localCatalogNames';
 import { useCapabilities } from '@/lib/permissions';
 import {
@@ -33,7 +33,7 @@ import {
   type AssignableRole,
 } from '@/lib/teamRoles';
 import { useRefreshOnFocus } from '@/lib/useRefreshOnFocus';
-import { usePalette } from '@/stores';
+import { useErrorToast, usePalette } from '@/stores';
 import { spacing } from '@/theme';
 
 const OPEN_WORKDAYS = { status: 'OPEN' } as const;
@@ -102,6 +102,7 @@ export default function TeamMemberScreen() {
   const isAdminMember = member?.roles.includes('admin') ?? false;
   const error =
     updateRoles.error ?? usersQuery.error ?? openWorkdaysQuery.error;
+  useErrorToast(error);
 
   function openRolesEditor() {
     if (!member) {
@@ -159,11 +160,7 @@ export default function TeamMemberScreen() {
         <Stack.Screen
           options={{ headerShown: true, title: strings.admin.teamTitle }}
         />
-        <HelperText type="error">
-          {/* Sin error de red y sin la persona: la lista llegó pero ya no
-              está en ella. */}
-          {error ? getErrorMessage(error) : strings.errors.generic}
-        </HelperText>
+        <LoadError />
       </Screen>
     );
   }
@@ -182,12 +179,6 @@ export default function TeamMemberScreen() {
             <Text style={styles.inactive}>{strings.common.inactive}</Text>
           ) : null}
         </View>
-
-        {/* Con datos en caché y un refresco o un guardado que falla, el aviso
-            va arriba sin tapar lo que ya se tenía. */}
-        {error ? (
-          <HelperText type="error">{getErrorMessage(error)}</HelperText>
-        ) : null}
 
         <View style={styles.divider} />
         <Text style={styles.sectionLabel}>

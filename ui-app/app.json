@@ -1,16 +1,18 @@
 {
   "expo": {
-    "name": "ui-app",
-    "slug": "ui-app",
+    "name": "NovaFarm",
+    "slug": "novafarm",
     "version": "1.0.0",
-    "scheme": "anotaya",
+    "scheme": "novafarm",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "bundleIdentifier": "com.novafarm.app"
     },
     "android": {
+      "package": "com.novafarm.app",
       "adaptiveIcon": {
         "backgroundColor": "#E6F4FE",
         "foregroundImage": "./assets/android-icon-foreground.png",
@@ -24,10 +26,20 @@
     },
     "plugins": [
       "expo-sqlite",
-      "expo-router"
+      "expo-router",
+      "expo-status-bar",
+      "expo-font",
+      "expo-sharing"
     ],
     "experiments": {
       "typedRoutes": true
-    }
+    },
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "c0f8c4f9-7fec-4524-8855-7a90139d4080"
+      }
+    },
+    "owner": "ignacioocode"
   }
 }

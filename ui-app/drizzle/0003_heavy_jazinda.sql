@@ -1,0 +1,1 @@
+ALTER TABLE `harvesters` ADD `synced` integer DEFAULT true NOT NULL;

@@ -1,20 +1,23 @@
-import { StatusBar } from 'expo-status-bar';
-import { StyleSheet, Text, View } from 'react-native';
+import { Redirect } from 'expo-router';
+import { LoadingScreen } from '@/components/LoadingScreen';
+import { useAuthStore } from '@/stores';
 
+// Punto de entrada real de la app: decide a dónde mandar al usuario según
+// el estado de sesión — nunca renderiza contenido propio.
 export default function Index() {
-  return (
-    <View style={styles.container}>
-      <Text>AnotaYa</Text>
-      <StatusBar style="auto" />
-    </View>
-  );
-}
+  const { user, claims, isBootstrapping } = useAuthStore();
 
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#fff',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-});
+  if (isBootstrapping) {
+    return <LoadingScreen />;
+  }
+
+  if (!user) {
+    return <Redirect href="/login" />;
+  }
+
+  if (!claims.farmId) {
+    return <Redirect href="/role" />;
+  }
+
+  return <Redirect href="/home" />;
+}

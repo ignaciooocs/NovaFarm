@@ -1,5 +1,5 @@
 # Documento de Requerimientos del Sistema (SRS)
-## Sistema Digital de Control de Cosecha (AnotaCampo / AnotaAgro)
+## Sistema Digital de Control de Cosecha (NovaFarm)
 
 ---
 

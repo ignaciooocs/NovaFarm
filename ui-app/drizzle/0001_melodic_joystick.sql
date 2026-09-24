@@ -1,0 +1,1 @@
+ALTER TABLE `workdays` ADD `created_by_uid` text DEFAULT '' NOT NULL;

@@ -31,7 +31,7 @@ Full requirements: [docs/REQUIREMENTS.md](docs/REQUIREMENTS.md) (written in Span
 
 ## Project Overview
 
-NovaFarm (formerly AnotaYa, also referred to during earlier planning as AnotaCampo / AnotaAgro) digitizes manual fruit-harvest tracking currently done on paper in the field. It replaces pen-and-paper tally marks with a fast mobile interface for recording harvest deliveries per worker, while working fully offline in areas without network coverage.
+NovaFarm (formerly AnotaYa, also referred to during earlier planning as AnotaCampo / AnotaAgro) digitizes manual fruit-harvest tracking currently done on paper in the field. **Three identifiers still carry the old name on purpose** — the on-device SQLite file (`anotaya.db`) and the two AsyncStorage keys in `stores/` — because they're storage paths, not branding: renaming them would make every phone open a fresh empty database (stranding an unsynced workday) or reset the chosen theme and active role. Each one says so at its definition; don't "fix" them. It replaces pen-and-paper tally marks with a fast mobile interface for recording harvest deliveries per worker, while working fully offline in areas without network coverage.
 
 ## Architecture
 

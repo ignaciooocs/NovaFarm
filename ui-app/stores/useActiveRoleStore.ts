@@ -23,6 +23,9 @@ export const useActiveRoleStore = create<ActiveRoleState>()(
       setActiveRole: (role) => set({ activeRole: role }),
     }),
     {
+      // Conserva el nombre anterior de la app a propósito, igual que la
+      // llave del tema y el archivo de la base: cambiarla le resetea el modo
+      // activo a quien tenga más de un rol.
       name: 'anotaya-active-role',
       storage: createJSONStorage(() => AsyncStorage),
     },

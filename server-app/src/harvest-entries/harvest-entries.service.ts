@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { AnyBulkWriteOperation, Model, Types } from 'mongoose';
+import type { ErrorCode } from '../common/errors/error-codes';
 import { logSyncBatch } from '../common/logging/sync-batch-log';
 import { HarvesterWorkdayService } from '../harvester-workday/harvester-workday.service';
 import { HarvestersService } from '../harvesters/harvesters.service';
@@ -61,7 +62,11 @@ export class HarvestEntriesService {
 
     if (!workday) {
       const rejectedAll = entries.map((entry) =>
-        this.rejected(entry.clientEntryId, 'Workday not found'),
+        this.rejected(
+          entry.clientEntryId,
+          'WORKDAY_NOT_FOUND',
+          'Workday not found',
+        ),
       );
       logSyncBatch(scope, context, rejectedAll, startedAt);
       return rejectedAll;
@@ -69,7 +74,11 @@ export class HarvestEntriesService {
 
     if (workday.status === 'CLOSED') {
       const rejectedAll = entries.map((entry) =>
-        this.rejected(entry.clientEntryId, 'Workday is already closed'),
+        this.rejected(
+          entry.clientEntryId,
+          'WORKDAY_CLOSED',
+          'Workday is already closed',
+        ),
       );
       logSyncBatch(scope, context, rejectedAll, startedAt);
       return rejectedAll;
@@ -154,6 +163,7 @@ export class HarvestEntriesService {
         results.push(
           this.rejected(
             entry.clientEntryId,
+            'HARVESTER_NOT_FOUND',
             'Harvester not found in the caller farm roster',
           ),
         );
@@ -164,6 +174,7 @@ export class HarvestEntriesService {
         results.push(
           this.rejected(
             entry.clientEntryId,
+            'HARVESTER_NOT_IN_ROSTER',
             'Harvester is not on this workday roster',
           ),
         );
@@ -175,6 +186,7 @@ export class HarvestEntriesService {
         results.push(
           this.rejected(
             entry.clientEntryId,
+            'UNIT_NOT_FOUND',
             'Measurement unit not found in the caller farm catalog',
           ),
         );
@@ -193,6 +205,7 @@ export class HarvestEntriesService {
         results.push(
           this.rejected(
             entry.clientEntryId,
+            'MEASURED_KG_NOT_ALLOWED',
             'measuredKg only applies to COUNT units — a WEIGHT unit already carries its real weight in weightKg',
           ),
         );
@@ -202,12 +215,17 @@ export class HarvestEntriesService {
       const totalKg = this.resolveTotalKg(entry, measurementUnit);
       if (totalKg === null) {
         results.push(
-          this.rejected(
-            entry.clientEntryId,
-            measurementUnit.mode === 'WEIGHT'
-              ? 'weightKg is required for entries made with a WEIGHT measurement unit'
-              : 'Measurement unit has no kgFactor configured',
-          ),
+          measurementUnit.mode === 'WEIGHT'
+            ? this.rejected(
+                entry.clientEntryId,
+                'WEIGHT_KG_REQUIRED',
+                'weightKg is required for entries made with a WEIGHT measurement unit',
+              )
+            : this.rejected(
+                entry.clientEntryId,
+                'UNIT_KG_FACTOR_MISSING',
+                'Measurement unit has no kgFactor configured',
+              ),
         );
         continue;
       }
@@ -342,12 +360,15 @@ export class HarvestEntriesService {
     return Math.round(value * 10) / 10;
   }
 
-  // Arma un resultado de tipo "rechazado" con su razón.
+  // Arma un resultado de tipo "rechazado". El código es el contrato con
+  // ui-app (que lo traduce a español); el texto queda para el log del
+  // server, igual que en las AppException.
   private rejected(
     clientEntryId: string,
+    reasonCode: ErrorCode,
     reason: string,
   ): SyncHarvestEntryResponseDto {
-    return { clientEntryId, status: 'rejected', reason };
+    return { clientEntryId, status: 'rejected', reasonCode, reason };
   }
 
   // Chequea si todo lo que falló en un bulkWrite fueron choques de llave

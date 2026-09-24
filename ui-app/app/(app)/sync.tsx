@@ -20,7 +20,7 @@ import {
   harvesterWorkday,
   workdays,
 } from '@/db/schema';
-import { getErrorMessage } from '@/lib/errors';
+import { getErrorMessage, getRejectionMessage } from '@/lib/errors';
 import { roundToOneDecimal } from '@/lib/format';
 import { pushPendingHarvesters } from '@/lib/harvesterSync';
 import { startSyncLog, summarizeBatch } from '@/lib/syncLog';
@@ -281,7 +281,7 @@ export default function SyncScreen() {
 
         for (const result of results) {
           if (result.status === 'rejected') {
-            reasons.push(result.reason ?? strings.errors.generic);
+            reasons.push(getRejectionMessage(result));
           } else {
             await db
               .update(harvesterWorkday)
@@ -337,7 +337,7 @@ export default function SyncScreen() {
 
           for (const result of results) {
             if (result.status === 'rejected') {
-              reasons.push(result.reason ?? strings.errors.generic);
+              reasons.push(getRejectionMessage(result));
             } else {
               await db
                 .update(harvestEntries)

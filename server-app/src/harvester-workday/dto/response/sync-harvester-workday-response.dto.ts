@@ -1,4 +1,5 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
+import type { ErrorCode } from '../../../common/errors/error-codes';
 
 /**
  * Per-item result for POST /api/v1/harvester-workday/sync. Standalone shape
@@ -26,6 +27,13 @@ export class SyncHarvesterWorkdayResponseDto {
     example: 'Harvester not found in the caller farm roster',
   })
   reason?: string;
+
+  @ApiPropertyOptional({
+    description:
+      'Código estable del rechazo, presente cuando status es "rejected". Es el contrato con el cliente: el de reason es texto en inglés para el log. Valores en common/errors/error-codes.ts.',
+    example: 'WORKDAY_CLOSED',
+  })
+  reasonCode?: ErrorCode;
 
   @ApiPropertyOptional({
     description: 'Server-assigned id, present when status is not "rejected"',

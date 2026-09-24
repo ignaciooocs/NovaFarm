@@ -64,6 +64,7 @@ describe('HarvesterWorkdayService', () => {
         {
           clientEntryId: 'local-1',
           status: 'rejected',
+          reasonCode: 'WORKDAY_NOT_FOUND',
           reason: 'Workday not found',
         },
       ]);
@@ -83,6 +84,7 @@ describe('HarvesterWorkdayService', () => {
         {
           clientEntryId: 'local-1',
           status: 'rejected',
+          reasonCode: 'WORKDAY_CLOSED',
           reason: 'Workday is already closed',
         },
       ]);
@@ -163,6 +165,7 @@ describe('HarvesterWorkdayService', () => {
         {
           clientEntryId: 'local-1',
           status: 'rejected',
+          reasonCode: 'HARVESTER_NOT_FOUND',
           reason: 'Harvester not found in the caller farm roster',
         },
       ]);
@@ -193,6 +196,7 @@ describe('HarvesterWorkdayService', () => {
         {
           clientEntryId: 'local-1',
           status: 'rejected',
+          reasonCode: 'HARVESTER_ALREADY_IN_ROSTER',
           reason: 'Harvester is already on this workday roster',
         },
       ]);
@@ -219,7 +223,7 @@ describe('HarvesterWorkdayService', () => {
       );
 
       expect(result[0].status).toEqual('rejected');
-      expect(result[0].reason).toMatch(/workdayNumber/);
+      expect(result[0].reasonCode).toEqual('WORKDAY_NUMBER_TAKEN');
     });
   });
 

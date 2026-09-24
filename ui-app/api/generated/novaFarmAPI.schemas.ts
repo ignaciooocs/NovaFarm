@@ -997,6 +997,8 @@ export interface SyncHarvesterWorkdayResponseDto {
   status: SyncHarvesterWorkdayResponseDtoStatus;
   /** Present when status is "rejected" */
   reason?: string;
+  /** Código estable del rechazo, presente cuando status es "rejected". Es el contrato con el cliente: el de reason es texto en inglés para el log. Valores en common/errors/error-codes.ts. */
+  reasonCode?: string;
   /** Server-assigned id, present when status is not "rejected" */
   _id?: string;
 }
@@ -1066,6 +1068,8 @@ export interface SyncHarvestEntryResponseDto {
   status: SyncHarvestEntryResponseDtoStatus;
   /** Present when status is "rejected" */
   reason?: string;
+  /** Código estable del rechazo, presente cuando status es "rejected". Es el contrato con el cliente: el de reason es texto en inglés para el log. Valores en common/errors/error-codes.ts. */
+  reasonCode?: string;
   /** Server-assigned id, present when status is not "rejected" */
   _id?: string;
 }

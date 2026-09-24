@@ -62,7 +62,7 @@ De paso, los mensajes pasaron de 6 a 25: los 403 de rol y de onboarding sin term
 
 **Un 401 no manda al login solo**, a propósito: muestra "Tu sesión venció. Vuelve a iniciar sesión.". Un redirect automático ante cualquier 401 puede cortar la sesión a media jornada por algo transitorio — los datos están a salvo en SQLite, pero es una patada fea en terreno. Si alguna vez se quiere automático, va en el interceptor de `api/axios-instance.ts`, no en cada pantalla.
 
-**Sigue pendiente:** los rechazos del sync (`reason` por fila) viajan en inglés y `sync.tsx` los muestra tal cual — "Workday is already closed" en la cara de un cosechador chileno. Necesita un campo de código en los DTO de respuesta del server y regenerar orval.
+**Los rechazos del sync van por el mismo mapa** (2026-09-23). No son excepciones —el lote vuelve con 200 y cada fila trae su resultado— pero para quien anota son lo mismo, así que cada rechazo viaja con `reasonCode` y se traduce con `getRejectionMessage()`. Era el único texto del server que se mostraba tal cual en pantalla: un cosechador chileno leía "Workday is already closed" (RNF-02). El `reason` en inglés sigue viajando para el log del server y la app no lo lee en ninguna parte.
 
 El "Anotado… Deshacer" del Anotador usa este mismo host: tenía su propio `Snackbar` y habrían convivido dos en la pantalla más usada del día. La lógica de Deshacer no cambió — la pantalla guarda en una ref el id del aviso de la última anotación, para poder bajar **ese** si la escritura falla o si se pierde el foco (ver "Anotar se mantiene apretado" más abajo: Deshacer no puede sobrevivir a salir de la pantalla).
 

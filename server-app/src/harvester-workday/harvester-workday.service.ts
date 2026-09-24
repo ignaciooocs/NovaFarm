@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model, Types } from 'mongoose';
+import type { ErrorCode } from '../common/errors/error-codes';
 import { logSyncBatch } from '../common/logging/sync-batch-log';
 import { HarvestersService } from '../harvesters/harvesters.service';
 import { WorkdaysService } from '../workdays/workdays.service';
@@ -50,7 +51,11 @@ export class HarvesterWorkdayService {
 
     if (!workday) {
       const rejectedAll = entries.map((entry) =>
-        this.rejected(entry.clientEntryId, 'Workday not found'),
+        this.rejected(
+          entry.clientEntryId,
+          'WORKDAY_NOT_FOUND',
+          'Workday not found',
+        ),
       );
       logSyncBatch(scope, context, rejectedAll, startedAt);
       return rejectedAll;
@@ -58,7 +63,11 @@ export class HarvesterWorkdayService {
 
     if (workday.status === 'CLOSED') {
       const rejectedAll = entries.map((entry) =>
-        this.rejected(entry.clientEntryId, 'Workday is already closed'),
+        this.rejected(
+          entry.clientEntryId,
+          'WORKDAY_CLOSED',
+          'Workday is already closed',
+        ),
       );
       logSyncBatch(scope, context, rejectedAll, startedAt);
       return rejectedAll;
@@ -168,6 +177,7 @@ export class HarvesterWorkdayService {
     if (!harvester) {
       return this.rejected(
         entry.clientEntryId,
+        'HARVESTER_NOT_FOUND',
         'Harvester not found in the caller farm roster',
       );
     }
@@ -206,6 +216,7 @@ export class HarvesterWorkdayService {
       if (this.isDuplicateKeyOn(error, 'harvesterId')) {
         return this.rejected(
           entry.clientEntryId,
+          'HARVESTER_ALREADY_IN_ROSTER',
           'Harvester is already on this workday roster',
         );
       }
@@ -213,6 +224,7 @@ export class HarvesterWorkdayService {
       if (this.isDuplicateKeyOn(error, 'workdayNumber')) {
         return this.rejected(
           entry.clientEntryId,
+          'WORKDAY_NUMBER_TAKEN',
           'workdayNumber is already assigned to a different harvester in this workday',
         );
       }
@@ -221,12 +233,15 @@ export class HarvesterWorkdayService {
     }
   }
 
-  // Arma un resultado de tipo "rechazado" con su razón.
+  // Arma un resultado de tipo "rechazado". El código es el contrato con
+  // ui-app (que lo traduce a español); el texto queda para el log del
+  // server, igual que en las AppException.
   private rejected(
     clientEntryId: string,
+    reasonCode: ErrorCode,
     reason: string,
   ): SyncHarvesterWorkdayResponseDto {
-    return { clientEntryId, status: 'rejected', reason };
+    return { clientEntryId, status: 'rejected', reasonCode, reason };
   }
 
   // Chequea si el error de Mongo es un choque de índice único sobre un

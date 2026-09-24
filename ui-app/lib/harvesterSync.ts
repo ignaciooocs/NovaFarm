@@ -4,6 +4,7 @@ import {
 } from '@/api/generated/harvesters/harvesters';
 import { db } from '@/db/client';
 import { harvestEntries, harvesters, harvesterWorkday } from '@/db/schema';
+import { getRejectionMessage } from '@/lib/errors';
 import { useAuthStore } from '@/stores';
 
 // Sube los cosechadores registrados offline en el campo (add-harvester.tsx)
@@ -53,8 +54,8 @@ export async function pushPendingHarvesters(): Promise<{
   db.transaction((tx) => {
     for (const result of results) {
       if (result.status === 'rejected' || !result._id) {
-        if (result.reason) {
-          rejectedReasons.push(result.reason);
+        if (result.status === 'rejected') {
+          rejectedReasons.push(getRejectionMessage(result));
         }
         continue;
       }

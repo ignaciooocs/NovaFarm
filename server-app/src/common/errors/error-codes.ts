@@ -45,6 +45,18 @@ export type ErrorCode =
   | 'WORKDAY_NOT_FOUND'
   | 'WORKDAY_CLOSED_PAY'
   | 'PAY_BASIS_INVALID'
+  // Rechazos por fila de los endpoints de sync. No son excepciones: viajan
+  // en `reasonCode` dentro de cada resultado (ver los Sync*ResponseDto),
+  // porque un lote puede traer unas filas aceptadas y otras rechazadas.
+  // Comparten este mismo enum a propósito — para `ui-app` es un error del
+  // server igual que cualquier otro, y sale por el mismo mapa de mensajes.
+  | 'WORKDAY_CLOSED'
+  | 'HARVESTER_NOT_IN_ROSTER'
+  | 'HARVESTER_ALREADY_IN_ROSTER'
+  | 'WORKDAY_NUMBER_TAKEN'
+  | 'MEASURED_KG_NOT_ALLOWED'
+  | 'WEIGHT_KG_REQUIRED'
+  | 'UNIT_KG_FACTOR_MISSING'
   // Genéricos: los pone el filtro para lo que no tira una AppException —
   // el ValidationPipe, el throttler, una ruta que no existe, un 500.
   | 'VALIDATION_FAILED'

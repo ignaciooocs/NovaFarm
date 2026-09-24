@@ -27,7 +27,7 @@ Every business error throws `AppException` (`src/common/errors/app.exception.ts`
 
 Adding an error means: a code in `error-codes.ts`, the throw, and its Spanish message in `ui-app/constants/strings.ts` + the map in `ui-app/lib/errors.ts`. Service specs assert the code (`rejects.toMatchObject({ code: 'WORKDAY_NOT_FOUND' })`), not the exception class — that's what keeps the contract honest. Full reasoning: [arquitectura.md §2](../../docs/diagrams/arquitectura.md).
 
-**Still on the old contract:** the per-item `reason` strings in the sync responses (`harvest-entries`/`harvester-workday`) travel as English text and `ui-app` shows them verbatim to the field worker ("Workday is already closed"), which breaks RNF-02. Fixing it means a code field on those response DTOs plus an orval regen.
+**The sync endpoints follow the same rule without throwing.** A rejected row isn't an exception — the batch still returns 200 and each row carries its own outcome — so `Sync*ResponseDto` has a `reasonCode` (same `ErrorCode` enum) next to the English `reason`, and the services' private `rejected()` helper takes the code as an argument. `ui-app` translates by `reasonCode` and never renders `reason`, which it used to show verbatim to the field worker ("Workday is already closed", RNF-02). `POST /harvesters/sync` has no rejection path at all today.
 
 ## Mongoose gotcha worth knowing
 

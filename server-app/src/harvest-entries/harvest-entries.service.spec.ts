@@ -166,6 +166,7 @@ describe('HarvestEntriesService', () => {
         {
           clientEntryId: 'local-1',
           status: 'rejected',
+          reasonCode: 'WORKDAY_NOT_FOUND',
           reason: 'Workday not found',
         },
       ]);
@@ -183,7 +184,7 @@ describe('HarvestEntriesService', () => {
       );
 
       expect(result[0].status).toEqual('rejected');
-      expect(result[0].reason).toEqual('Workday is already closed');
+      expect(result[0].reasonCode).toEqual('WORKDAY_CLOSED');
       expect(harvestEntryModel.bulkWrite).not.toHaveBeenCalled();
     });
 

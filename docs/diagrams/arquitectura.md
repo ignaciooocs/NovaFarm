@@ -40,6 +40,8 @@ This replaced matching the message with regular expressions on the client, which
 
 Mechanics: `AppException` (a subclass of Nest's `HttpException`, with constructors per status) carries the code, and a global `AllExceptionsFilter` adds one to **everything else** too — the `ValidationPipe`'s 400, the throttler's 429, an unmatched route's 404, and any unhandled 500 (which goes out generic, never leaking internals, and gets one log line plus the stack). That last distinction matters: since every business 404 now throws `AppException`, a bare 404 means the URL was wrong, which the client used to misread as a business error.
 
+The sync endpoints carry the same contract without throwing: a rejected row comes back inside a 200 response (see "Partial failure" below), so each per-item result has a `reasonCode` from the same enum alongside its English `reason`. That half mattered most in practice — those reasons were the one server text rendered verbatim on screen, so a Chilean field worker was reading "Workday is already closed" (RNF-02).
+
 Same reasoning as the API version prefix above: the client is a mobile app, so old binaries keep running against new servers. A contract made of prose doesn't survive that. Adding an error means adding a code here and its Spanish message in `ui-app` — an unknown code falls back to a generic message rather than breaking.
 
 ### Offline-sync design (the part that can't be hand-waved)

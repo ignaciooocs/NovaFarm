@@ -82,6 +82,17 @@ const MESSAGE_BY_CODE: Record<string, string> = {
   WORKDAY_CLOSED_PAY: strings.errors.workdayClosedPay,
   PAY_BASIS_INVALID: strings.errors.payBasisInvalid,
 
+  // Rechazos fila por fila del sync (`reasonCode`, ver getRejectionMessage).
+  // Comparten este mapa porque para el usuario son lo mismo: algo que el
+  // server no aceptó. Los tres "not found" de arriba también les sirven.
+  WORKDAY_CLOSED: strings.errors.workdayClosed,
+  HARVESTER_NOT_IN_ROSTER: strings.errors.harvesterNotInRoster,
+  HARVESTER_ALREADY_IN_ROSTER: strings.errors.harvesterAlreadyInRoster,
+  WORKDAY_NUMBER_TAKEN: strings.errors.workdayNumberTaken,
+  MEASURED_KG_NOT_ALLOWED: strings.errors.measuredKgNotAllowed,
+  WEIGHT_KG_REQUIRED: strings.errors.weightKgRequired,
+  UNIT_KG_FACTOR_MISSING: strings.errors.unitKgFactorMissing,
+
   // ROUTE_NOT_FOUND e INTERNAL quedan fuera a propósito: son errores
   // nuestros, no del usuario, y no hay nada que pueda hacer con el detalle.
 };
@@ -103,6 +114,24 @@ export function getErrorCode(error: unknown): string | null {
  */
 export function isExpiredInvitationCodeError(error: unknown): boolean {
   return getErrorCode(error) === 'INVITATION_CODE_EXPIRED';
+}
+
+/**
+ * El mensaje de una fila que el sync rechazó.
+ *
+ * Un rechazo no es una excepción —el lote vuelve con 200 y cada fila trae su
+ * resultado— pero para quien anota es lo mismo: algo que el server no
+ * aceptó. Se traduce por `reasonCode`, igual que todo lo demás; el `reason`
+ * que viene al lado es texto en inglés para el log del server y **nunca** se
+ * muestra en pantalla (durante un tiempo sí se mostró, y un cosechador
+ * chileno leía "Workday is already closed").
+ */
+export function getRejectionMessage(rejection: {
+  reasonCode?: string;
+  reason?: string;
+}): string {
+  const code = rejection.reasonCode;
+  return (code && MESSAGE_BY_CODE[code]) || strings.errors.generic;
 }
 
 // Punto de entrada único: recibe cualquier error atrapado en un catch (de

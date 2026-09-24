@@ -494,5 +494,20 @@ export const strings = {
       'Si el envase se pesa en cada vuelta, el pago tiene que ser por kilo.',
     validationFailed:
       'Hay algo que no cuadra en los datos. Revísalos e intenta de nuevo.',
+    // Rechazos fila por fila del sync. Hasta ahora se mostraban con el texto
+    // en inglés que mandaba el server, en la cara de quien anota.
+    workdayClosed:
+      'Esta jornada ya está cerrada en el servidor, así que no acepta más anotaciones.',
+    harvesterNotInRoster:
+      'Ese cosechador no está en la lista de esta jornada.',
+    harvesterAlreadyInRoster:
+      'Ese cosechador ya estaba en la lista de esta jornada.',
+    workdayNumberTaken:
+      'Ese número de la jornada ya lo tiene otro cosechador.',
+    measuredKgNotAllowed:
+      'El pesaje de control no corre en un envase que se pesa en cada vuelta: ahí el peso real ya es el de la entrega.',
+    weightKgRequired: 'A esta vuelta le falta el peso.',
+    unitKgFactorMissing:
+      'Esa unidad de medida no tiene definidos sus kilos por envase.',
   },
 } as const;

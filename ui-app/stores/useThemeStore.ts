@@ -26,6 +26,9 @@ export const useThemeStore = create<ThemeState>()(
       setPalette: (palette) => set({ palette }),
     }),
     {
+      // Conserva el nombre anterior de la app a propósito: es una llave de
+      // almacenamiento, no una marca. Cambiarla le resetea el tema a todos
+      // los que ya eligieron uno (mismo criterio que db/client.ts).
       name: 'anotaya-theme-palette',
       storage: createJSONStorage(() => AsyncStorage),
     },

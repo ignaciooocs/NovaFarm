@@ -6,8 +6,6 @@ En un packing la cuenta se lleva a mano: el anotador marca rayas en una hoja cad
 
 NovaFarm hace esa misma pega en el celular, **sin necesitar señal**: en el campo casi nunca hay.
 
-> El repositorio se llama `AnotaYa`, que fue el nombre del proyecto durante la etapa de diseño.
-
 ---
 
 ## Qué hace
